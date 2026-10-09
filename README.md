@@ -8,7 +8,7 @@ Paraná — Unidade Regional de Umuarama.
 
 O sistema permite:
 
-- Login de servidores (perfil administrador e perfil comum).
+- Login de servidores (perfil administrador e perfil comum) ou com o Google.
 - Painel com visão geral, calendário de férias e tarefas.
 - Solicitações de férias (pendentes, aprovadas e recusadas).
 - Lançamento de férias e controle de saldos.
@@ -33,17 +33,35 @@ Todos os dados são mantidos localmente no navegador
 > Dica: como não há backend, um servidor local simples também funciona, por
 > exemplo `python -m http.server` na pasta do projeto.
 
-## Configuração (senha do administrador)
+## Configuração local
 
-A senha inicial do administrador (usuário `centralrh`) **não** fica no código
-versionado. Ela é lida do arquivo local `config.local.js`, que está no
+A senha inicial do administrador e as chaves do Google **não** ficam no código
+versionado. Elas são lidas do arquivo `config.local.js`, que está no
 `.gitignore`.
 
 1. Copie `config.local.example.js` para `config.local.js`.
-2. Edite `config.local.js` e defina `initialAdminPassword`.
+2. Edite `config.local.js`:
+
+| Chave | Descrição |
+|---|---|
+| `initialAdminPassword` | Senha inicial do administrador (usuário `centralrh`) |
+| `googleClientId` | Client ID do Google OAuth (Web). Sem ele, o botão "Entrar com Google" não aparece |
+| `googleAdminEmails` | E-mails do Google que entram como administrador |
 
 Sem esse arquivo, o login administrativo com senha padrão fica desabilitado
 até que uma senha seja configurada/alterada.
+
+### Entrar com Google
+
+O botão usa o **Google Identity Services** (fluxo client-side, sem backend).
+Após o login, o e-mail verificado é comparado com `googleAdminEmails`: se
+estiver na lista, a sessão vira administrador; caso contrário, usuário comum.
+
+Para funcionar, é preciso:
+
+- Um **Client ID OAuth** (tipo "Aplicativo da Web") no Google Cloud Console.
+- As **Origens JavaScript autorizadas** com a URL onde o site é servido
+  (ex.: `http://localhost`, `http://127.0.0.1`, ou o domínio de produção).
 
 ## Estrutura
 
@@ -55,7 +73,7 @@ até que uma senha seja configurada/alterada.
 | `recusada.html` | Tela de solicitação recusada |
 | `intranet.html` | Página da intranet |
 | `brasao_ok.png` | Brasão institucional |
-| `config.local.js` | Configuração local com a senha do administrador (não versionada) |
+| `config.local.js` | Configuração local: senha do admin e Google (não versionada) |
 | `config.local.example.js` | Modelo da configuração local |
 | `run-site.bat` | Atalho para iniciar o site no Windows |
 | `VS- CODE.code-workspace` | Workspace do VS Code |
@@ -64,3 +82,5 @@ até que uma senha seja configurada/alterada.
 
 Projeto de uso interno/institucional. A autenticação é **local e de
 demonstração** e não deve ser usada como controle de segurança em produção.
+O login com Google confirma o e-mail, mas o perfil (admin/usuário) é decidido
+no navegador, portanto não é um controle de acesso seguro.

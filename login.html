@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="login.css" />
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="config.local.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="login.js" defer></script>
   </head>
   <body>
@@ -50,6 +51,11 @@
               <p class="form-message" id="form-message" role="status" aria-live="polite"></p>
               <button class="submit-button" type="submit"><span>Acessar sistema</span><i data-lucide="arrow-right"></i></button>
             </form>
+            <div class="google-block" id="google-block" hidden>
+              <div class="auth-divider"><span>ou</span></div>
+              <div class="google-signin-button" id="google-signin-button"></div>
+              <p class="form-message" id="google-message" role="status" aria-live="polite"></p>
+            </div>
             <button class="signup-toggle" id="signup-toggle" type="button" aria-expanded="false">Não tem cadastro? Cadastre-se</button>
             <form class="signup-form" id="signup-form" hidden>
               <label class="field-label" for="signup-name">Nome</label>

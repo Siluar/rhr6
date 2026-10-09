@@ -346,4 +346,75 @@ if (signupForm) signupForm.addEventListener("submit", async event => {
   window.location.href = userRole === "admin" ? "index.html" : "solicitacao-ferias.html";
 });
 
+// ---- Login com Google (Google Identity Services) ----
+
+function decodeJwtPayload(token) {
+  const part = String(token || "").split(".")[1];
+  if (!part) throw new Error("Token inválido.");
+  const base64 = part.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  const binary = atob(padded);
+  const json = decodeURIComponent(
+    Array.from(binary, char => "%" + char.charCodeAt(0).toString(16).padStart(2, "0")).join("")
+  );
+  return JSON.parse(json);
+}
+
+function handleGoogleCredential(response) {
+  const googleMessage = document.getElementById("google-message");
+  try {
+    const payload = decodeJwtPayload(response.credential);
+    const email = String(payload.email || "").toLowerCase();
+    const verified = payload.email_verified === true || payload.email_verified === "true";
+    if (!email || !verified) {
+      if (googleMessage) setFormMessage(googleMessage, "Não foi possível confirmar seu e-mail do Google.", true);
+      return;
+    }
+    const config = window.RH_CONFIG || {};
+    const adminEmails = (config.googleAdminEmails || []).map(item => String(item).toLowerCase());
+    const role = adminEmails.includes(email) ? "admin" : "usuario";
+    try {
+      sessionStorage.setItem("brisa-demo-user", role);
+      sessionStorage.setItem("brisa-demo-username", email);
+      sessionStorage.setItem("brisa-demo-profile", JSON.stringify({ name: payload.name || email, email, role }));
+    } catch {
+      if (googleMessage) setFormMessage(googleMessage, "Não foi possível iniciar a sessão neste navegador.", true);
+      return;
+    }
+    window.location.href = role === "admin" ? "index.html" : "solicitacao-ferias.html";
+  } catch {
+    if (googleMessage) setFormMessage(googleMessage, "Falha ao processar o login do Google.", true);
+  }
+}
+
+function setupGoogleSignIn() {
+  const block = document.getElementById("google-block");
+  const buttonHost = document.getElementById("google-signin-button");
+  const clientId = (window.RH_CONFIG && window.RH_CONFIG.googleClientId) || "";
+  if (!block || !buttonHost || !clientId) return;
+
+  const tryRender = () => {
+    if (!(window.google && window.google.accounts && window.google.accounts.id)) {
+      window.setTimeout(tryRender, 150);
+      return;
+    }
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: handleGoogleCredential
+    });
+    window.google.accounts.id.renderButton(buttonHost, {
+      theme: "outline",
+      size: "large",
+      text: "signin_with",
+      shape: "rectangular",
+      width: 320
+    });
+    block.hidden = false;
+    if (window.lucide) window.lucide.createIcons();
+  };
+  tryRender();
+}
+
+setupGoogleSignIn();
+
 if (window.lucide) window.lucide.createIcons();

@@ -523,6 +523,46 @@ button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid 
   color: #8a7045;
 }
 
+.google-block {
+  margin-top: 18px;
+}
+
+.google-block[hidden] {
+  display: none;
+}
+
+.auth-divider {
+  position: relative;
+  margin-bottom: 14px;
+  text-align: center;
+}
+
+.auth-divider::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--line);
+}
+
+.auth-divider span {
+  position: relative;
+  padding: 0 10px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.google-signin-button {
+  display: flex;
+  justify-content: center;
+}
+
 
 .portal-footer {
   display: flex;
