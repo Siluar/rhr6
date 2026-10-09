@@ -46,7 +46,7 @@ As configurações vêm de dois arquivos, carregados nesta ordem:
 |---|---|---|
 | `initialAdminPassword` | `config.local.js` | Senha inicial do administrador (usuário `centralrh`) |
 | `googleClientId` | `config.js` | Client ID do Google OAuth (Web). Sem ele, o botão "Entrar com Google" não aparece |
-| `googleAdminEmails` | `config.js` | E-mails do Google que entram como administrador |
+| `googleAdminEmails` | `config.js` | E-mails do Google com acesso de administrador (proprietários) |
 
 1. Copie `config.local.example.js` para `config.local.js`.
 2. Ajuste os valores necessários.
@@ -89,12 +89,15 @@ Como ativar:
 
 Depois disso:
 - O login com Google também autentica no Firebase.
+- O acesso administrativo passa a ser **exclusivamente pelo Google**: a senha do
+  usuário `centralrh` deixa de valer e a tela orienta a usar "Entrar com Google".
 - As solicitações são gravadas na coleção `requests`.
 - O painel do admin lê em tempo real (`onSnapshot`): o que o usuário envia
   aparece para o administrador.
 
 > Regras (`firestore.rules`): qualquer usuário autenticado pode ler/criar
-> solicitações; apenas o e-mail em `isAdmin()` pode aprovar, editar ou apagar.
+> solicitações; apenas os e-mails de `isAdmin()` (proprietários) podem aprovar,
+> editar ou apagar.
 
 ## Publicação (GitHub Pages)
 

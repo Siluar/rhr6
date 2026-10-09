@@ -777,9 +777,11 @@
         }
 
         if (window.RH_SYNC && window.RH_SYNC.enabled) {
-          window.RH_SYNC.addRequest(request).catch(error => {
+          window.RH_SYNC.waitForAuth().then(user => {
+            if (!user) return; // login por CPF/senha: mantém apenas local por enquanto
+            return window.RH_SYNC.addRequest(request);
+          }).catch(error => {
             console.warn('Não foi possível enviar a solicitação online:', error);
-            alert('Solicitação salva neste navegador, mas não foi possível enviar ao servidor. Verifique a conexão.');
           });
         }
 

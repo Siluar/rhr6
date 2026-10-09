@@ -6,9 +6,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // E-mail que pode aprovar/recusar (administrador).
+    // E-mails que podem aprovar/recusar (proprietarios/administradores).
     function isAdmin() {
-      return isSignedIn() && request.auth.token.email == 'imc.sidnei@gmail.com';
+      return isSignedIn() && request.auth.token.email in [
+        'imc.sidnei@gmail.com',
+        'sidnei@policiapenal.pr.gov.br'
+      ];
     }
 
     // Solicitacoes de ferias/licencas.

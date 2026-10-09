@@ -11,8 +11,11 @@ window.RH_CONFIG = Object.assign({}, window.RH_CONFIG, {
   // Client ID do Google OAuth (tipo "Aplicativo da Web").
   googleClientId: "367687879133-t5cp1h2pgq64qqglv1405bpr3g1ikdcr.apps.googleusercontent.com",
 
-  // E-mails do Google que entram como administrador.
-  googleAdminEmails: ["imc.sidnei@gmail.com"],
+  // E-mails do Google que entram como administrador (proprietários).
+  googleAdminEmails: [
+    "imc.sidnei@gmail.com",
+    "sidnei@policiapenal.pr.gov.br"
+  ],
 
   // Configuracao do Firebase (Console > Configuracoes do projeto > Seus apps > Web).
   // Enquanto estiver null, o app usa apenas o armazenamento local do navegador.

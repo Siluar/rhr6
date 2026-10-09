@@ -137,6 +137,12 @@ async function submitCredentials(username, password) {
   const cpfDigits = digitsOnly(username);
   let isAdmin = false;
   if (normalizedUsername === "centralrh") {
+    // Com o backend (Firebase) ativo, o acesso administrativo é exclusivamente
+    // pelo login com Google (os e-mails definidos em googleAdminEmails).
+    if (window.RH_SYNC && window.RH_SYNC.enabled) {
+      setFormMessage(formMessage, 'O acesso administrativo agora é feito pelo botão "Entrar com Google".', true);
+      return null;
+    }
     try {
       const savedCredential = localStorage.getItem(adminPasswordStorageKey);
       if (savedCredential) {

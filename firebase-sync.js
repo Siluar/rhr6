@@ -44,6 +44,17 @@
     return RH_SYNC._auth.currentUser;
   };
 
+  // Aguarda o Firebase restaurar a sessão e resolve com o usuário (ou null).
+  RH_SYNC.waitForAuth = function () {
+    return new Promise(resolve => {
+      const unsubscribe = RH_SYNC._auth.onAuthStateChanged(user => {
+        unsubscribe();
+        RH_SYNC.user = user;
+        resolve(user);
+      }, () => resolve(null));
+    });
+  };
+
   RH_SYNC.signInWithGoogle = function (idToken) {
     const credential = firebase.auth.GoogleAuthProvider.credential(idToken);
     return RH_SYNC._auth.signInWithCredential(credential);
