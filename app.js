@@ -409,7 +409,10 @@ function renderUsuarios() {
     const statusClass = user.ativo ? "status-approved" : "status-rejected";
     const ownerBadge = isOwnerEmail(user.email) ? "<small>Proprietário</small>" : "";
     const locked = isOwnerEmail(user.email);
-    return `<tr><td><div class="person-cell"><span><strong>${escapeHtml(user.name)}</strong>${ownerBadge}</span></div></td><td>${escapeHtml(user.email)}</td><td><span class="status-pill ${user.perfil === "admin" ? "status-away" : "status-approved"}">${roleLabel}</span></td><td><span class="status-pill ${statusClass}">${statusLabel}</span></td><td><div class="request-actions">${locked
+    const perfilCell = locked
+      ? `<span class="status-pill status-away">${roleLabel}</span>`
+      : `<select class="usuario-perfil-select" data-usuario-perfil="${escapeHtml(user.id)}" aria-label="Perfil de ${escapeHtml(user.name)}"><option value="usuario"${user.perfil === "usuario" ? " selected" : ""}>Usuário</option><option value="admin"${user.perfil === "admin" ? " selected" : ""}>Administrador</option></select>`;
+    return `<tr><td><div class="person-cell"><span><strong>${escapeHtml(user.name)}</strong>${ownerBadge}</span></div></td><td>${escapeHtml(user.email)}</td><td>${perfilCell}</td><td><span class="status-pill ${statusClass}">${statusLabel}</span></td><td><div class="request-actions">${locked
       ? `<span class="status-pill status-approved">--</span>`
       : `<button class="action-icon approve" type="button" data-edit-usuario="${escapeHtml(user.id)}" aria-label="Editar usuário ${escapeHtml(user.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-usuario="${escapeHtml(user.id)}" aria-label="Remover usuário ${escapeHtml(user.name)}" title="Remover"><i data-lucide="trash-2"></i></button>`}</div></td></tr>`;
   }).join("");
@@ -2415,6 +2418,20 @@ serverDataCancelEdit.addEventListener("click", resetServerDataEdit);
 document.getElementById("usuario-add").addEventListener("click", () => openUsuarioDialog(null));
 document.getElementById("usuario-cancel").addEventListener("click", () => document.getElementById("usuario-dialog").close());
 document.getElementById("usuarios-search").addEventListener("input", renderUsuarios);
+document.getElementById("usuarios-body").addEventListener("change", event => {
+  const perfilSelect = event.target.closest("[data-usuario-perfil]");
+  if (!perfilSelect) return;
+  const user = usuarios.find(item => item.id === perfilSelect.dataset.usuarioPerfil);
+  if (!user || isOwnerEmail(user.email)) {
+    renderUsuarios();
+    return;
+  }
+  const previousPerfil = user.perfil;
+  user.perfil = perfilSelect.value === "admin" ? "admin" : "usuario";
+  saveUsuarios();
+  renderUsuarios();
+  showToast(`Perfil de ${user.name} atualizado para ${user.perfil === "admin" ? "Administrador" : "Usuário"}.`);
+});
 document.getElementById("usuarios-body").addEventListener("click", event => {
   const editButton = event.target.closest("[data-edit-usuario]");
   const removeButton = event.target.closest("[data-remove-usuario]");

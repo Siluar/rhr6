@@ -103,10 +103,9 @@ editar e excluir), persistida nas coleções do Firestore:
 
 - **Solicitações** — além de aprovar/recusar, o admin pode **editar** os dados
   de um pedido ou **excluí-lo** (coleção `requests`).
-- **Servidores** — o cadastro de dados dos servidores e as contas de acesso já
-  existentes passam a ser sincronizados com as coleções `servidores` e `contas`
-  (o cadastro continua igual, agora compartilhado e com exclusão também na
-  nuvem).
+- **Servidores** — o cadastro de dados dos servidores e as Funções Gratificadas
+  já existentes passam a ser sincronizados com a coleção `servidores` (a guia
+  "Cadastro de Login", obsoleta com o acesso só-Google, foi removida do menu).
 - **Usuários & Acessos** — nova seção no menu (reproduz o item "GESTÃO") para
   gerenciar quem pode entrar com o Google: nome, e-mail, perfil (usuário ou
   administrador) e situação (ativo/inativo), na coleção `usuarios`. O perfil
