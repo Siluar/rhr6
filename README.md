@@ -8,7 +8,7 @@ Paraná — Unidade Regional de Umuarama.
 
 O sistema permite:
 
-- Login de servidores (perfil administrador e perfil comum) ou com o Google.
+- Entrada com conta Google (proprietários entram como administradores).
 - Painel com visão geral, calendário de férias e tarefas.
 - Solicitações de férias (pendentes, aprovadas e recusadas).
 - Lançamento de férias e controle de saldos.
@@ -16,8 +16,9 @@ O sistema permite:
 - Relatórios por mês, ano, unidade e servidor.
 - Licença-capacitação e licença especial.
 
-Todos os dados são mantidos localmente no navegador
-(`localStorage` / `sessionStorage`) — **não há servidor nem banco de dados**.
+Por padrão, os dados são mantidos no navegador (`localStorage` / `sessionStorage`).
+Com o backend opcional do **Firebase** (seção abaixo), as solicitações são
+compartilhadas entre todos os usuários via Firestore.
 
 ## Tecnologias
 

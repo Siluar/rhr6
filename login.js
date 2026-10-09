@@ -98,20 +98,22 @@ function getLocalDateKey() {
 
 try {
   const savedCpf = localStorage.getItem("brisa-demo-email");
-  if (savedCpf) {
+  if (savedCpf && emailInput && rememberEmail) {
     emailInput.value = savedCpf;
     rememberEmail.checked = true;
   }
 } catch {}
 
-passwordToggle.addEventListener("click", () => {
-  const shouldShow = passwordInput.type === "password";
-  passwordInput.type = shouldShow ? "text" : "password";
-  passwordToggle.setAttribute("aria-label", shouldShow ? "Ocultar senha" : "Mostrar senha");
-  passwordToggle.setAttribute("aria-pressed", String(shouldShow));
-  passwordToggle.innerHTML = `<i data-lucide="${shouldShow ? "eye-off" : "eye"}"></i>`;
-  if (window.lucide) window.lucide.createIcons();
-});
+if (passwordToggle) {
+  passwordToggle.addEventListener("click", () => {
+    const shouldShow = passwordInput.type === "password";
+    passwordInput.type = shouldShow ? "text" : "password";
+    passwordToggle.setAttribute("aria-label", shouldShow ? "Ocultar senha" : "Mostrar senha");
+    passwordToggle.setAttribute("aria-pressed", String(shouldShow));
+    passwordToggle.innerHTML = `<i data-lucide="${shouldShow ? "eye-off" : "eye"}"></i>`;
+    if (window.lucide) window.lucide.createIcons();
+  });
+}
 
 if (signupToggle && signupForm) {
   signupToggle.addEventListener("click", () => {
@@ -210,27 +212,29 @@ async function submitCredentials(username, password) {
   return userRole;
 }
 
-loginForm.addEventListener("submit", async event => {
-  event.preventDefault();
-  const username = emailInput.value.trim();
-  const password = passwordInput.value;
+if (loginForm) {
+  loginForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    const username = emailInput.value.trim();
+    const password = passwordInput.value;
 
-  if (!username || !password) {
-    setFormMessage(formMessage, "Informe CPF e senha.", true);
-    return;
-  }
+    if (!username || !password) {
+      setFormMessage(formMessage, "Informe CPF e senha.", true);
+      return;
+    }
 
-  const loggedUser = await submitCredentials(username, password);
-  if (!loggedUser) return;
-  if (loggedUser === "both") {
-    setFormMessage(formMessage, "Escolha como deseja acessar o sistema.");
-    document.getElementById("access-choice-dialog")?.showModal();
-    return;
-  }
+    const loggedUser = await submitCredentials(username, password);
+    if (!loggedUser) return;
+    if (loggedUser === "both") {
+      setFormMessage(formMessage, "Escolha como deseja acessar o sistema.");
+      document.getElementById("access-choice-dialog")?.showModal();
+      return;
+    }
 
-  setFormMessage(formMessage, loggedUser === "admin" ? "Acessando o painel administrativo..." : "Acessando o sistema...");
-  window.location.href = loggedUser === "admin" ? "index.html" : "solicitacao-ferias.html";
-});
+    setFormMessage(formMessage, loggedUser === "admin" ? "Acessando o painel administrativo..." : "Acessando o sistema...");
+    window.location.href = loggedUser === "admin" ? "index.html" : "solicitacao-ferias.html";
+  });
+}
 
 document.querySelectorAll("[data-access-role]").forEach(button => {
   button.addEventListener("click", () => chooseAccessRole(button.dataset.accessRole));
