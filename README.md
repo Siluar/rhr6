@@ -110,8 +110,10 @@ editar e excluir), persistida nas coleções do Firestore:
   gerenciar quem pode entrar com o Google: nome, e-mail, perfil (usuário ou
   administrador) e situação (ativo/inativo), na coleção `usuarios`. O perfil
   decidido aqui vale no login: um e-mail marcado como **inativo** é bloqueado.
-  Os e-mails proprietários (`googleAdminEmails`) permanecem sempre
-  administradores e não podem ser removidos.
+  Todos os usuários — inclusive os e-mails proprietários — podem ser editados,
+  ter o perfil trocado ou ser removidos. A segurança de fundo continua firme:
+  os proprietários (`googleAdminEmails`) sempre são tratados como
+  administradores pelo login e pelas regras do Firestore.
 
 > Regras (`firestore.rules`): qualquer usuário autenticado pode ler/criar
 > solicitações; apenas `isAdmin()` (proprietários **ou** usuários com perfil

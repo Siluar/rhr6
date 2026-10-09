@@ -403,17 +403,11 @@ function renderUsuarios() {
     return;
   }
   container.innerHTML = filtered.map(user => {
-    const roleLabel = user.perfil === "admin" ? "Administrador" : "Usuário";
     const statusLabel = user.ativo ? "Ativo" : "Inativo";
     const statusClass = user.ativo ? "status-approved" : "status-rejected";
     const ownerBadge = isOwnerEmail(user.email) ? "<small>Proprietário</small>" : "";
-    const locked = isOwnerEmail(user.email);
-    const perfilCell = locked
-      ? `<span class="status-pill status-away">${roleLabel}</span>`
-      : `<select class="usuario-perfil-select" data-usuario-perfil="${escapeHtml(user.id)}" aria-label="Perfil de ${escapeHtml(user.name)}"><option value="usuario"${user.perfil === "usuario" ? " selected" : ""}>Usuário</option><option value="admin"${user.perfil === "admin" ? " selected" : ""}>Administrador</option></select>`;
-    return `<tr><td><div class="person-cell"><span><strong>${escapeHtml(user.name)}</strong>${ownerBadge}</span></div></td><td>${escapeHtml(user.email)}</td><td>${perfilCell}</td><td><span class="status-pill ${statusClass}">${statusLabel}</span></td><td><div class="request-actions">${locked
-      ? `<span class="status-pill status-approved">--</span>`
-      : `<button class="action-icon approve" type="button" data-edit-usuario="${escapeHtml(user.id)}" aria-label="Editar usuário ${escapeHtml(user.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-usuario="${escapeHtml(user.id)}" aria-label="Remover usuário ${escapeHtml(user.name)}" title="Remover"><i data-lucide="trash-2"></i></button>`}</div></td></tr>`;
+    const perfilCell = `<select class="usuario-perfil-select" data-usuario-perfil="${escapeHtml(user.id)}" aria-label="Perfil de ${escapeHtml(user.name)}"><option value="usuario"${user.perfil === "usuario" ? " selected" : ""}>Usuário</option><option value="admin"${user.perfil === "admin" ? " selected" : ""}>Administrador</option></select>`;
+    return `<tr><td><div class="person-cell"><span><strong>${escapeHtml(user.name)}</strong>${ownerBadge}</span></div></td><td>${escapeHtml(user.email)}</td><td>${perfilCell}</td><td><span class="status-pill ${statusClass}">${statusLabel}</span></td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-usuario="${escapeHtml(user.id)}" aria-label="Editar usuário ${escapeHtml(user.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-usuario="${escapeHtml(user.id)}" aria-label="Remover usuário ${escapeHtml(user.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
   }).join("");
   refreshIcons();
 }
@@ -2364,7 +2358,7 @@ document.getElementById("usuarios-body").addEventListener("change", event => {
   const perfilSelect = event.target.closest("[data-usuario-perfil]");
   if (!perfilSelect) return;
   const user = usuarios.find(item => item.id === perfilSelect.dataset.usuarioPerfil);
-  if (!user || isOwnerEmail(user.email)) {
+  if (!user) {
     renderUsuarios();
     return;
   }
@@ -2386,10 +2380,6 @@ document.getElementById("usuarios-body").addEventListener("click", event => {
   const userId = removeButton.dataset.removeUsuario;
   const user = usuarios.find(item => item.id === userId);
   if (!user) return;
-  if (isOwnerEmail(user.email)) {
-    showToast("O e-mail de um proprietário não pode ser removido.");
-    return;
-  }
   if (!window.confirm(`Remover o acesso de ${user.name} (${user.email})?`)) return;
   usuarios = usuarios.filter(item => item.id !== userId);
   saveUsuarios();
@@ -2415,18 +2405,13 @@ document.getElementById("usuario-form").addEventListener("submit", event => {
     setUsuarioMessage("Já existe um usuário cadastrado com esse e-mail.", true);
     return;
   }
-  if (isOwnerEmail(email) && perfil !== "admin") {
-    setUsuarioMessage("O e-mail de um proprietário permanece sempre como administrador.", true);
-    return;
-  }
-  const ownerEmail = isOwnerEmail(email);
   const currentDate = dateKey(new Date());
   if (editingUsuarioId) {
     usuarios = usuarios.map(user => user.id === editingUsuarioId
-      ? Object.assign({}, user, { id: email, name, email, perfil: ownerEmail ? "admin" : perfil, ativo: ownerEmail ? true : ativo, criadoEm: user.criadoEm || currentDate })
+      ? Object.assign({}, user, { id: email, name, email, perfil, ativo, criadoEm: user.criadoEm || currentDate })
       : user);
   } else {
-    usuarios.push({ id: email, name, email, perfil: ownerEmail ? "admin" : perfil, ativo: ownerEmail ? true : ativo, criadoEm: currentDate });
+    usuarios.push({ id: email, name, email, perfil, ativo, criadoEm: currentDate });
   }
   saveUsuarios();
   form.closest("dialog").close();
