@@ -56,17 +56,37 @@ let selectedEspecialMonth = "";
 let toastTimer;
 
 function loadRequests() {
-  return legacyLoadRequests();
+  if (window.RH_SYNC && window.RH_SYNC.enabled) {
+    return window.RH_SYNC.loadRequests()
+      .then(list => (list.length ? list : legacyLoadRequests()).map(normalizeRequest))
+      .catch(error => {
+        console.warn("Falha ao carregar as solicitações do Firestore:", error);
+        showToast("Não foi possível carregar as solicitações online.");
+        return legacyLoadRequests();
+      });
+  }
+  return Promise.resolve(legacyLoadRequests());
 }
 
 function saveRequests() {
+  let localFailed = false;
   try {
     localStorage.setItem(storageKey, JSON.stringify(requests));
-    return true;
   } catch {
+    localFailed = true;
+  }
+  if (window.RH_SYNC && window.RH_SYNC.enabled) {
+    window.RH_SYNC.saveRequests(requests).catch(error => {
+      console.warn("Falha ao salvar no Firestore:", error);
+      showToast("Falha ao salvar online. Verifique a conexão e as regras do Firestore.");
+    });
+    return true;
+  }
+  if (localFailed) {
     showToast("Não foi possível salvar neste navegador.");
     return false;
   }
+  return true;
 }
 
 function loadTasks() {
@@ -2051,6 +2071,7 @@ document.addEventListener("click", event => {
       sessionStorage.removeItem("brisa-demo-username");
       sessionStorage.removeItem("brisa-demo-profile");
     } catch {}
+    if (window.RH_SYNC && window.RH_SYNC.enabled) window.RH_SYNC.signOut();
     window.location.href = "login.html";
     return;
   }
@@ -2348,6 +2369,12 @@ async function initializeApp() {
   renderLoggedInProfile();
   renderAll();
   renderTasks();
+  if (window.RH_SYNC && window.RH_SYNC.enabled) {
+    window.RH_SYNC.subscribeRequests(list => {
+      requests = (list.length ? list : requests).map(normalizeRequest);
+      renderAll();
+    }, error => console.warn("Assinatura do Firestore falhou:", error));
+  }
 }
 
 initializeApp();

@@ -521,6 +521,12 @@
       </form>
     </dialog>
 
+    <script src="config.js"></script>
+    <script src="config.local.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+    <script src="firebase-sync.js"></script>
     <script>
       const loggedUser = sessionStorage.getItem('brisa-demo-user');
       let serverProfile = null;
@@ -768,6 +774,13 @@
           localStorage.setItem(storageKey, JSON.stringify(existing));
         } catch (error) {
           console.warn('Não foi possível salvar a solicitação no armazenamento local:', error);
+        }
+
+        if (window.RH_SYNC && window.RH_SYNC.enabled) {
+          window.RH_SYNC.addRequest(request).catch(error => {
+            console.warn('Não foi possível enviar a solicitação online:', error);
+            alert('Solicitação salva neste navegador, mas não foi possível enviar ao servidor. Verifique a conexão.');
+          });
         }
 
         const subject = encodeURIComponent(`Solicitação de ${tipoSolicitacao} - ${nome}`);

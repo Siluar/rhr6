@@ -12,7 +12,20 @@ window.RH_CONFIG = Object.assign({}, window.RH_CONFIG, {
   googleClientId: "367687879133-t5cp1h2pgq64qqglv1405bpr3g1ikdcr.apps.googleusercontent.com",
 
   // E-mails do Google que entram como administrador.
-  googleAdminEmails: ["imc.sidnei@gmail.com"]
+  googleAdminEmails: ["imc.sidnei@gmail.com"],
+
+  // Configuracao do Firebase (Console > Configuracoes do projeto > Seus apps > Web).
+  // Enquanto estiver null, o app usa apenas o armazenamento local do navegador.
+  // Exemplo:
+  // firebase: {
+  //   apiKey: "...",
+  //   authDomain: "rhr6-xxxx.firebaseapp.com",
+  //   projectId: "rhr6-xxxx",
+  //   storageBucket: "rhr6-xxxx.appspot.com",
+  //   messagingSenderId: "...",
+  //   appId: "..."
+  // }
+  firebase: null
 
   // A senha inicial do administrador NÃO fica aqui. Defina-a apenas em
   // "config.local.js" (que está no .gitignore).

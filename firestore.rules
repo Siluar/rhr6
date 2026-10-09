@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // E-mail que pode aprovar/recusar (administrador).
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email == 'imc.sidnei@gmail.com';
+    }
+
+    // Solicitacoes de ferias/licencas.
+    match /requests/{requestId} {
+      // Qualquer usuario autenticado pode ler e criar solicitacoes.
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      // Somente o administrador pode aprovar, recusar, editar ou apagar.
+      allow update, delete: if isAdmin();
+    }
+  }
+}

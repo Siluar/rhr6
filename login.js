@@ -360,7 +360,7 @@ function decodeJwtPayload(token) {
   return JSON.parse(json);
 }
 
-function handleGoogleCredential(response) {
+async function handleGoogleCredential(response) {
   const googleMessage = document.getElementById("google-message");
   try {
     const payload = decodeJwtPayload(response.credential);
@@ -369,6 +369,15 @@ function handleGoogleCredential(response) {
     if (!email || !verified) {
       if (googleMessage) setFormMessage(googleMessage, "Não foi possível confirmar seu e-mail do Google.", true);
       return;
+    }
+    if (window.RH_SYNC && window.RH_SYNC.enabled) {
+      try {
+        await window.RH_SYNC.signInWithGoogle(response.credential);
+      } catch (error) {
+        console.warn("Falha ao autenticar no Firebase:", error);
+        if (googleMessage) setFormMessage(googleMessage, "Não foi possível autenticar no servidor. Tente novamente.", true);
+        return;
+      }
     }
     const config = window.RH_CONFIG || {};
     const adminEmails = (config.googleAdminEmails || []).map(item => String(item).toLowerCase());

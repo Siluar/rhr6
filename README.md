@@ -67,6 +67,35 @@ Para funcionar, é preciso:
 - As **Origens JavaScript autorizadas** com a URL onde o site é servido
   (ex.: `http://localhost:8000`, `https://siluar.github.io`).
 
+## Backend opcional (Firebase)
+
+Por padrão o app funciona só com o armazenamento local do navegador — ou seja,
+cada navegador vê apenas os seus próprios dados. Para que as **solicitações
+enviadas por outras pessoas cheguem ao painel do administrador**, é preciso um
+backend compartilhado. O projeto já vem com suporte ao **Firebase (Auth +
+Firestore)**, ativado apenas quando `window.RH_CONFIG.firebase` está preenchido
+em `config.js`. Sem essa configuração, tudo continua funcionando localmente.
+
+Como ativar:
+
+1. Crie um projeto no **https://console.firebase.google.com/**.
+2. **Build → Firestore Database → Criar banco de dados** (modo produção).
+3. **Build → Authentication → Vamos começar → Google** (habilitar provedor).
+4. **Configurações do projeto → Seus apps → Web** e copie o `firebaseConfig`.
+5. Cole esse objeto em `config.js`, na chave `firebase`.
+6. Em **Firestore → Regras**, cole o conteúdo de `firestore.rules` e publique.
+7. Em **Authentication → Configurações → Domínios autorizados**, adicione os
+   domínios do site (ex.: `siluar.github.io`, `rhr6.vercel.app`, `localhost`).
+
+Depois disso:
+- O login com Google também autentica no Firebase.
+- As solicitações são gravadas na coleção `requests`.
+- O painel do admin lê em tempo real (`onSnapshot`): o que o usuário envia
+  aparece para o administrador.
+
+> Regras (`firestore.rules`): qualquer usuário autenticado pode ler/criar
+> solicitações; apenas o e-mail em `isAdmin()` pode aprovar, editar ou apagar.
+
 ## Publicação (GitHub Pages)
 
 O site pode ser publicado diretamente do repositório via **GitHub Pages**
@@ -88,9 +117,11 @@ O site pode ser publicado diretamente do repositório via **GitHub Pages**
 | `recusada.html` | Tela de solicitação recusada |
 | `intranet.html` | Página da intranet |
 | `brasao_ok.png` | Brasão institucional |
-| `config.js` | Configuração pública (Client ID do Google, e-mails admin) |
+| `config.js` | Configuração pública (Client ID do Google, e-mails admin, Firebase) |
 | `config.local.js` | Configuração local/secreta: senha do admin (não versionada) |
 | `config.local.example.js` | Modelo da configuração local |
+| `firebase-sync.js` | Camada de sincronização com o Firestore (backend opcional) |
+| `firestore.rules` | Regras de segurança do Firestore |
 | `run-site.bat` | Atalho para iniciar o site no Windows |
 | `VS- CODE.code-workspace` | Workspace do VS Code |
 
