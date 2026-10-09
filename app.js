@@ -1403,9 +1403,12 @@ function renderRequests(elementId, compact) {
   }
   container.innerHTML = list.map(request => {
     const statusLabel = { pending: "Pendente", approved: "Aprovada", rejected: "Recusada" }[request.status];
-    const actions = request.status === "pending" ? `<div class="request-actions"><button class="action-icon approve" data-request-action="approve" data-request-id="${escapeHtml(request.id)}" aria-label="Aprovar ${escapeHtml(request.person)}" title="Aprovar"><i data-lucide="check"></i></button><button class="action-icon reject" data-request-action="reject" data-request-id="${escapeHtml(request.id)}" aria-label="Recusar ${escapeHtml(request.person)}" title="Recusar"><i data-lucide="x"></i></button></div>` : "";
+    const statusActions = request.status === "pending"
+      ? `<button class="action-icon approve" data-request-action="approve" data-request-id="${escapeHtml(request.id)}" aria-label="Aprovar ${escapeHtml(request.person)}" title="Aprovar"><i data-lucide="check"></i></button><button class="action-icon reject" data-request-action="reject" data-request-id="${escapeHtml(request.id)}" aria-label="Recusar ${escapeHtml(request.person)}" title="Recusar"><i data-lucide="x"></i></button>`
+      : "";
     if (compact) {
       const summary = formatRequestPeriod(request);
+      const actions = `<div class="request-actions">${statusActions}</div>`;
       return `<article class="request-item">${avatar(request.initials, request.color, "request-person-avatar")}<div class="request-copy"><strong>${escapeHtml(request.person)}</strong><span>${escapeHtml(summary)}</span>${request.note ? `<small>“${escapeHtml(request.note)}”</small>` : ""}</div>${actions}</article>`;
     }
     const unit = String(request.unidade || request.unit || "Não informada");
@@ -1413,6 +1416,8 @@ function renderRequests(elementId, compact) {
     const monthValue = hasRequestCycle(request) ? getRequestMonthCycleDisplay(request) : getRequestMonthDisplay(request);
     const period = getRequestPeriodDisplay(request);
     const details = `<span class="request-details"><span><strong>Unidade:</strong> ${escapeHtml(unit)}</span><span><strong>${monthLabel}:</strong> ${escapeHtml(monthValue)}</span>${period ? `<span><strong>Período:</strong> ${escapeHtml(period)}</span>` : ""}</span>`;
+    const manageActions = `<button class="action-icon approve" type="button" data-request-edit="${escapeHtml(request.id)}" aria-label="Editar solicitação de ${escapeHtml(request.person)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-request-remove="${escapeHtml(request.id)}" aria-label="Excluir solicitação de ${escapeHtml(request.person)}" title="Excluir"><i data-lucide="trash-2"></i></button>`;
+    const actions = `<div class="request-actions">${statusActions}${manageActions}</div>`;
     return `<article class="request-item"><button class="request-detail-trigger" type="button" data-request-details="${escapeHtml(request.id)}" aria-label="Abrir solicitação de ${escapeHtml(request.person || "servidor")}"><span>${avatar(request.initials, request.color, "request-person-avatar")}</span><span class="request-copy"><strong>${escapeHtml(request.person || "Não identificado")}</strong>${details}</span><span class="request-status-wrap"><span class="status-pill status-${request.status}">${statusLabel}</span></span></button>${actions}</article>`;
   }).join("");
 }
