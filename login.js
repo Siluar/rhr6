@@ -366,16 +366,34 @@ function decodeJwtPayload(token) {
   return JSON.parse(json);
 }
 
+function applyGoogleUser(email, verified, name) {
+  const googleMessage = document.getElementById("google-message");
+  const normalizedEmail = String(email || "").toLowerCase();
+  if (!normalizedEmail || verified === false) {
+    if (googleMessage) setFormMessage(googleMessage, "Não foi possível confirmar seu e-mail do Google.", true);
+    return false;
+  }
+  const config = window.RH_CONFIG || {};
+  const adminEmails = (config.googleAdminEmails || []).map(item => String(item).toLowerCase());
+  const role = adminEmails.includes(normalizedEmail) ? "admin" : "usuario";
+  try {
+    sessionStorage.setItem("brisa-demo-user", role);
+    sessionStorage.setItem("brisa-demo-username", normalizedEmail);
+    sessionStorage.setItem("brisa-demo-profile", JSON.stringify({ name: name || normalizedEmail, email: normalizedEmail, role }));
+  } catch {
+    if (googleMessage) setFormMessage(googleMessage, "Não foi possível iniciar a sessão neste navegador.", true);
+    return false;
+  }
+  window.location.href = role === "admin" ? "index.html" : "solicitacao-ferias.html";
+  return true;
+}
+
 async function handleGoogleCredential(response) {
   const googleMessage = document.getElementById("google-message");
   try {
     const payload = decodeJwtPayload(response.credential);
     const email = String(payload.email || "").toLowerCase();
     const verified = payload.email_verified === true || payload.email_verified === "true";
-    if (!email || !verified) {
-      if (googleMessage) setFormMessage(googleMessage, "Não foi possível confirmar seu e-mail do Google.", true);
-      return;
-    }
     if (window.RH_SYNC && window.RH_SYNC.enabled) {
       try {
         await window.RH_SYNC.signInWithGoogle(response.credential);
@@ -385,28 +403,48 @@ async function handleGoogleCredential(response) {
         return;
       }
     }
-    const config = window.RH_CONFIG || {};
-    const adminEmails = (config.googleAdminEmails || []).map(item => String(item).toLowerCase());
-    const role = adminEmails.includes(email) ? "admin" : "usuario";
-    try {
-      sessionStorage.setItem("brisa-demo-user", role);
-      sessionStorage.setItem("brisa-demo-username", email);
-      sessionStorage.setItem("brisa-demo-profile", JSON.stringify({ name: payload.name || email, email, role }));
-    } catch {
-      if (googleMessage) setFormMessage(googleMessage, "Não foi possível iniciar a sessão neste navegador.", true);
-      return;
-    }
-    window.location.href = role === "admin" ? "index.html" : "solicitacao-ferias.html";
+    applyGoogleUser(email, verified, payload.name);
   } catch {
     if (googleMessage) setFormMessage(googleMessage, "Falha ao processar o login do Google.", true);
+  }
+}
+
+async function handleFirebasePopup() {
+  const googleMessage = document.getElementById("google-message");
+  if (googleMessage) setFormMessage(googleMessage, "Conectando ao Google...");
+  try {
+    const result = await window.RH_SYNC.signInWithPopup();
+    const user = result.user || {};
+    applyGoogleUser(user.email, user.emailVerified !== false, user.displayName);
+  } catch (error) {
+    console.warn("Falha no login Google (Firebase):", error);
+    const cancelled = error && (error.code === "auth/popup-closed-by-user" || error.code === "auth/cancelled-popup-request");
+    if (googleMessage) setFormMessage(googleMessage, cancelled ? "" : "Não foi possível entrar com o Google. Tente novamente.", !cancelled);
   }
 }
 
 function setupGoogleSignIn() {
   const block = document.getElementById("google-block");
   const buttonHost = document.getElementById("google-signin-button");
+  if (!block || !buttonHost) return;
+
+  // Com o backend ativo, usa o login Google nativo do Firebase (popup).
+  if (window.RH_SYNC && window.RH_SYNC.enabled) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "google-popup-button";
+    button.innerHTML = '<span class="google-popup-icon" aria-hidden="true">G</span><span>Entrar com Google</span>';
+    button.addEventListener("click", handleFirebasePopup);
+    buttonHost.innerHTML = "";
+    buttonHost.appendChild(button);
+    block.hidden = false;
+    if (window.lucide) window.lucide.createIcons();
+    return;
+  }
+
+  // Sem Firebase: fluxo antigo via Google Identity Services.
   const clientId = (window.RH_CONFIG && window.RH_CONFIG.googleClientId) || "";
-  if (!block || !buttonHost || !clientId) return;
+  if (!clientId) return;
 
   const tryRender = () => {
     if (!(window.google && window.google.accounts && window.google.accounts.id)) {

@@ -19,16 +19,15 @@ window.RH_CONFIG = Object.assign({}, window.RH_CONFIG, {
 
   // Configuracao do Firebase (Console > Configuracoes do projeto > Seus apps > Web).
   // Enquanto estiver null, o app usa apenas o armazenamento local do navegador.
-  // Exemplo:
-  // firebase: {
-  //   apiKey: "...",
-  //   authDomain: "rhr6-xxxx.firebaseapp.com",
-  //   projectId: "rhr6-xxxx",
-  //   storageBucket: "rhr6-xxxx.appspot.com",
-  //   messagingSenderId: "...",
-  //   appId: "..."
-  // }
-  firebase: null
+  firebase: {
+    apiKey: "AIzaSyAETanh8tzlMUA3yDV-ZrEH-KTkn4cecYo",
+    authDomain: "rhr6-5b275.firebaseapp.com",
+    projectId: "rhr6-5b275",
+    storageBucket: "rhr6-5b275.firebasestorage.app",
+    messagingSenderId: "1042158027390",
+    appId: "1:1042158027390:web:f8d88c64722178d9704e2f",
+    measurementId: "G-VDC22YZ20F"
+  }
 
   // A senha inicial do administrador NÃO fica aqui. Defina-a apenas em
   // "config.local.js" (que está no .gitignore).

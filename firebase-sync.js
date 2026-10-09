@@ -6,7 +6,9 @@
  *
  * Expoe window.RH_SYNC com:
  *   enabled            -> true quando o Firestore/Auth estao ativos
- *   signInWithGoogle() -> troca o token do Google por uma sessao do Firebase
+ *   signInWithPopup()  -> login Google nativo do Firebase (popup)
+ *   signInWithGoogle() -> troca o token do GIS por uma sessao do Firebase
+ *   waitForAuth()      -> resolve com o usuario apos restaurar a sessao
  *   signOut()
  *   loadRequests()     -> Promise<array>
  *   addRequest(req)    -> Promise<req> (usado pela pagina de solicitacao)
@@ -60,12 +62,20 @@
     return RH_SYNC._auth.signInWithCredential(credential);
   };
 
+  // Login Google nativo do Firebase (popup). Dispensa o Client ID do GIS e
+  // evita o erro origin_mismatch.
+  RH_SYNC.signInWithPopup = function () {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+    return RH_SYNC._auth.signInWithPopup(provider);
+  };
+
   RH_SYNC.signOut = function () {
     return RH_SYNC._auth.signOut().catch(() => {});
   };
 
   RH_SYNC.loadRequests = function () {
-    return requestsCol().get().then(snapshot =>
+    return RH_SYNC.waitForAuth().then(() => requestsCol().get()).then(snapshot =>
       snapshot.docs.map(doc => Object.assign({}, doc.data(), { id: doc.data().id || doc.id }))
     );
   };
@@ -73,17 +83,21 @@
   RH_SYNC.addRequest = function (request) {
     const docId = request.id || requestsCol().doc().id;
     const payload = Object.assign({}, request, { id: docId });
-    return requestsCol().doc(docId).set(payload, { merge: true }).then(() => payload);
+    return RH_SYNC.waitForAuth().then(() =>
+      requestsCol().doc(docId).set(payload, { merge: true })
+    ).then(() => payload);
   };
 
   RH_SYNC.saveRequests = function (requests) {
-    const batch = RH_SYNC._db.batch();
-    const col = requestsCol();
-    requests.forEach(request => {
-      const docId = request.id || col.doc().id;
-      batch.set(col.doc(docId), Object.assign({}, request, { id: docId }), { merge: true });
+    return RH_SYNC.waitForAuth().then(() => {
+      const batch = RH_SYNC._db.batch();
+      const col = requestsCol();
+      requests.forEach(request => {
+        const docId = request.id || col.doc().id;
+        batch.set(col.doc(docId), Object.assign({}, request, { id: docId }), { merge: true });
+      });
+      return batch.commit();
     });
-    return batch.commit();
   };
 
   RH_SYNC.subscribeRequests = function (onData, onError) {
