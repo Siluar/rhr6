@@ -32,14 +32,8 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
-    // Cadastro de servidores e contas de acesso: somente admin.
+    // Cadastro de servidores: somente admin.
     match /servidores/{id} {
-      allow read, list: if isAdmin();
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    match /contas/{id} {
       allow read, list: if isAdmin();
       allow create, update: if isAdmin();
       allow delete: if isAdmin();
