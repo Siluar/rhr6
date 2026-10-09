@@ -35,6 +35,7 @@ const serverAccountsStorageKey = "brisa-server-accounts-v1";
 const adminPasswordStorageKey = "brisa-admin-password-v1";
 const initialAdminPassword = (window.RH_CONFIG && window.RH_CONFIG.initialAdminPassword) || "";
 const serverDataStorageKey = "brisa-server-personal-data-v1";
+const usuariosStorageKey = "brisa-usuarios-v1";
 const requestAttachmentsDatabaseName = "brisa-request-attachments-v1";
 const requestAttachmentsStoreName = "attachments";
 let requests = [];
@@ -42,6 +43,9 @@ let tasks = loadTasks();
 let fgServerRoster = loadFgServerRoster();
 let serverAccounts = loadServerAccounts();
 let serverPersonalData = loadServerPersonalData();
+let usuarios = loadLocalUsuarios();
+let editingUsuarioId = null;
+let editingRequestId = null;
 let shownMonth = new Date(2026, 9, 1);
 let shownTaskMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let selectedTaskDate = null;
@@ -288,11 +292,12 @@ function loadServerAccounts() {
 function saveServerAccounts() {
   try {
     localStorage.setItem(serverAccountsStorageKey, JSON.stringify(serverAccounts));
-    return true;
   } catch {
     showToast("Não foi possível salvar o cadastro neste navegador.");
     return false;
   }
+  syncServerDataToFirestore("contas", serverAccounts, account => String(account.cpf || account.username || "").replace(/\D/g, ""));
+  return true;
 }
 
 function loadServerPersonalData() {
@@ -307,11 +312,185 @@ function loadServerPersonalData() {
 function saveServerPersonalData() {
   try {
     localStorage.setItem(serverDataStorageKey, JSON.stringify(serverPersonalData));
-    return true;
   } catch {
     showToast("Não foi possível salvar os dados do servidor neste navegador.");
     return false;
   }
+  syncServerDataToFirestore("servidores", serverPersonalData);
+  return true;
+}
+
+function syncServerDataToFirestore(collection, docs, idFor) {
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
+  const normalized = docs.map(doc => {
+    const id = idFor ? idFor(doc) : doc.id;
+    return Object.assign({}, doc, { id: id || undefined });
+  });
+  window.RH_SYNC.saveDocs(collection, normalized)
+    .then(() => {})
+    .catch(error => {
+      const detail = error instanceof Error ? ` ${error.message}` : "";
+      console.warn(`Falha ao sincronizar ${collection} no Firestore:`, error);
+      showToast(`Cadastro salvo apenas neste navegador.${detail}`);
+    });
+}
+
+function loadLocalUsuarios() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(usuariosStorageKey) || "[]");
+    if (Array.isArray(saved) && saved.length > 0) return saved.map(normalizeUsuario);
+  } catch {
+    // Ignora e usa a lista inicial abaixo.
+  }
+  return seedUsuarios();
+}
+
+function seedUsuarios() {
+  const config = window.RH_CONFIG || {};
+  const ownerEmails = Array.isArray(config.googleAdminEmails) ? config.googleAdminEmails : [];
+  return ownerEmails.map(email => ({
+    id: String(email).toLowerCase(),
+    name: String(email).toLowerCase().startsWith("imc.") ? "Sidnei (IMC)" : "Sidnei (Polícia Penal)",
+    email: String(email).toLowerCase(),
+    perfil: "admin",
+    ativo: true,
+    criadoEm: dateKey(new Date())
+  }));
+}
+
+function normalizeUsuario(raw) {
+  return {
+    id: String(raw.id || raw.email || "").toLowerCase(),
+    name: String(raw.name || ""),
+    email: String(raw.email || raw.id || "").toLowerCase(),
+    perfil: raw.perfil === "admin" ? "admin" : "usuario",
+    ativo: raw.ativo !== false,
+    criadoEm: raw.criadoEm || dateKey(new Date())
+  };
+}
+
+function isOwnerEmail(email) {
+  const config = window.RH_CONFIG || {};
+  const owners = Array.isArray(config.googleAdminEmails) ? config.googleAdminEmails.map(value => String(value).toLowerCase()) : [];
+  return owners.includes(String(email || "").toLowerCase());
+}
+
+function saveUsuarios() {
+  try {
+    localStorage.setItem(usuariosStorageKey, JSON.stringify(usuarios));
+  } catch {
+    showToast("Não foi possível salvar os usuários neste navegador.");
+  }
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
+  window.RH_SYNC.saveDocs("usuarios", usuarios)
+    .then(() => {})
+    .catch(error => {
+      const detail = error instanceof Error ? ` ${error.message}` : "";
+      console.warn("Falha ao salvar usuários no Firestore:", error);
+      showToast(`Usuários salvos apenas neste navegador.${detail}`);
+    });
+}
+
+function renderUsuarios() {
+  const container = document.getElementById("usuarios-body");
+  if (!container) return;
+  const query = (document.getElementById("usuarios-search")?.value || "").trim().toLocaleLowerCase("pt-BR");
+  const filtered = usuarios
+    .filter(user => `${user.name} ${user.email}`.toLocaleLowerCase("pt-BR").includes(query))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
+  if (filtered.length === 0) {
+    container.innerHTML = `<tr><td colspan="5" class="team-empty">Nenhum usuário encontrado.</td></tr>`;
+    refreshIcons();
+    return;
+  }
+  container.innerHTML = filtered.map(user => {
+    const roleLabel = user.perfil === "admin" ? "Administrador" : "Usuário";
+    const statusLabel = user.ativo ? "Ativo" : "Inativo";
+    const statusClass = user.ativo ? "status-approved" : "status-rejected";
+    const ownerBadge = isOwnerEmail(user.email) ? "<small>Proprietário</small>" : "";
+    const locked = isOwnerEmail(user.email);
+    return `<tr><td><div class="person-cell"><span><strong>${escapeHtml(user.name)}</strong>${ownerBadge}</span></div></td><td>${escapeHtml(user.email)}</td><td><span class="status-pill ${user.perfil === "admin" ? "status-away" : "status-approved"}">${roleLabel}</span></td><td><span class="status-pill ${statusClass}">${statusLabel}</span></td><td><div class="request-actions">${locked
+      ? `<span class="status-pill status-approved">--</span>`
+      : `<button class="action-icon approve" type="button" data-edit-usuario="${escapeHtml(user.id)}" aria-label="Editar usuário ${escapeHtml(user.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-usuario="${escapeHtml(user.id)}" aria-label="Remover usuário ${escapeHtml(user.name)}" title="Remover"><i data-lucide="trash-2"></i></button>`}</div></td></tr>`;
+  }).join("");
+  refreshIcons();
+}
+
+function setUsuarioMessage(message, isError) {
+  const element = document.getElementById("usuario-message");
+  if (!element) return;
+  element.textContent = message || "";
+  element.classList.toggle("error", Boolean(isError));
+}
+
+function openUsuarioDialog(user) {
+  const dialog = document.getElementById("usuario-dialog");
+  const title = document.getElementById("usuario-dialog-title");
+  const form = document.getElementById("usuario-form");
+  if (user) {
+    editingUsuarioId = user.id;
+    title.textContent = "Editar usuário";
+    document.getElementById("usuario-nome").value = user.name || "";
+    document.getElementById("usuario-email").value = user.email || "";
+    document.getElementById("usuario-perfil").value = user.perfil === "admin" ? "admin" : "usuario";
+    document.getElementById("usuario-ativo").value = user.ativo ? "ativo" : "inativo";
+  } else {
+    editingUsuarioId = null;
+    title.textContent = "Adicionar usuário";
+    form.reset();
+    document.getElementById("usuario-perfil").value = "usuario";
+    document.getElementById("usuario-ativo").value = "ativo";
+  }
+  setUsuarioMessage("");
+  dialog.showModal();
+  refreshIcons();
+}
+
+function setRequestEditMessage(message, isError) {
+  const element = document.getElementById("request-edit-message");
+  if (!element) return;
+  element.textContent = message || "";
+  element.classList.toggle("error", Boolean(isError));
+}
+
+function openRequestEditDialog(requestId) {
+  const request = requests.find(item => item.id === requestId);
+  if (!request) {
+    showToast("Não foi possível localizar os dados desta solicitação.");
+    return;
+  }
+  editingRequestId = requestId;
+  document.getElementById("request-edit-person").value = request.person || "";
+  document.getElementById("request-edit-start").value = request.start || "";
+  document.getElementById("request-edit-end").value = request.end || "";
+  document.getElementById("request-edit-note").value = request.note || "";
+  setRequestEditMessage("");
+  document.getElementById("request-edit-dialog").showModal();
+  refreshIcons();
+}
+
+async function removeRequest(requestId) {
+  const request = requests.find(item => item.id === requestId);
+  if (!request) return;
+  if (!window.confirm(`Excluir a solicitação de ${request.person || "servidor"}? Esta ação não pode ser desfeita.`)) return;
+  const previousRequests = requests;
+  requests = requests.filter(item => item.id !== requestId);
+  if (!saveRequests()) {
+    requests = previousRequests;
+    renderAll();
+    return;
+  }
+  if (window.RH_SYNC && window.RH_SYNC.enabled) {
+    window.RH_SYNC.deleteDoc("requests", requestId).catch(error => {
+      const detail = error instanceof Error ? ` ${error.message}` : "";
+      console.warn("Falha ao excluir a solicitação no Firestore:", error);
+      showToast(`Solicitação excluída apenas deste navegador.${detail}`);
+    });
+  }
+  const dialog = document.getElementById("request-details-dialog");
+  if (dialog?.open) dialog.close();
+  renderAll();
+  showToast("Solicitação excluída.");
 }
 
 function toHex(bytes) {
@@ -1151,6 +1330,7 @@ function renderAll() {
   renderReportUnit();
   renderReportPerson();
   renderReportFg();
+  renderUsuarios();
   updateCounts();
   updateSelectedDay();
   refreshIcons();
@@ -1407,9 +1587,12 @@ function openRequestDetails(requestId) {
     ? `<div class="request-attachment-detail"><strong>Anexo da recusa</strong><span>${escapeHtml(attachment.name)}</span><button class="button button-secondary" type="button" data-request-attachment="${escapeHtml(request.id)}"><i data-lucide="download"></i><span>Baixar arquivo</span></button></div>`
     : "";
   content.innerHTML = `<dl class="request-details-list">${detailRows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>${attachmentMarkup}`;
-  actions.innerHTML = request.status === "pending"
+  actions.innerHTML = `
+    <button class="button button-secondary" type="button" data-request-edit="${escapeHtml(request.id)}"><i data-lucide="pen-line"></i><span>Editar</span></button>
+    <button class="button button-secondary" type="button" data-request-remove="${escapeHtml(request.id)}"><i data-lucide="trash-2"></i><span>Excluir</span></button>
+    ${request.status === "pending"
     ? `<button class="button button-secondary" type="button" data-request-action="reject" data-request-id="${escapeHtml(request.id)}"><i data-lucide="x"></i><span>Recusar</span></button><button class="button button-primary" type="button" data-request-action="approve" data-request-id="${escapeHtml(request.id)}"><i data-lucide="check"></i><span>Aprovar</span></button>`
-    : "";
+    : ""}`;
   dialog.showModal();
   refreshIcons();
 }
@@ -1565,7 +1748,7 @@ function setView(view) {
     toggle.setAttribute("aria-expanded", String(hasActiveItem));
     submenu.hidden = !hasActiveItem;
   });
-  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."], servers: ["Servidores", "Cadastro de Login", "Consulte os dados cadastrados e altere somente o tipo de acesso."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatório - Servidores", "Relatório - Servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-especial": ["Licença especial", "Relatório de licença especial", "Consulte as solicitações de licença especial aprovadas."] };
+  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."], servers: ["Servidores", "Cadastro de Login", "Consulte os dados cadastrados e altere somente o tipo de acesso."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatório - Servidores", "Relatório - Servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-especial": ["Licença especial", "Relatório de licença especial", "Consulte as solicitações de licença especial aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
   const [breadcrumb, title, subtitle] = titles[view] || (view === "tasks" ? ["Gestão", "Lista de tarefas", "Registre e acompanhe suas tarefas."] : view === "meta4" ? ["Solicitações", "META 4", "Consulte os pedidos de férias enviados pelos usuários."] : view === "protocols-fg" ? ["Solicitações", "Protocolos F.G", "Acompanhe o status e o número dos protocolos de férias com Função Gratificada."] : titles.overview);
   document.getElementById("breadcrumb-current").textContent = breadcrumb;
   const pageTitle = document.getElementById("page-title");
@@ -1587,6 +1770,7 @@ function setView(view) {
   if (view === "report-servers") renderServerDirectoryReport();
   if (view === "report-capacitacao") renderReportCapacitacao();
   if (view === "report-especial") renderReportEspecial();
+  if (view === "usuarios") renderUsuarios();
   if (view === "calendar") {
     document.getElementById("page-subtitle").textContent = "Escala de trabalho: 24h de serviço e 72h de descanso, distribuídas entre as equipes Alfa, Bravo, Charlie e Delta.";
   }
@@ -2030,6 +2214,16 @@ document.addEventListener("click", event => {
     openRequestDetails(requestDetailsButton.dataset.requestDetails);
     return;
   }
+  const requestEditButton = event.target.closest("[data-request-edit]");
+  if (requestEditButton) {
+    openRequestEditDialog(requestEditButton.dataset.requestEdit);
+    return;
+  }
+  const requestRemoveButton = event.target.closest("[data-request-remove]");
+  if (requestRemoveButton) {
+    removeRequest(requestRemoveButton.dataset.requestRemove);
+    return;
+  }
   const editServerDataButton = event.target.closest("[data-edit-server-data]");
   if (editServerDataButton) {
     const record = serverPersonalData.find(item => item.id === editServerDataButton.dataset.editServerData);
@@ -2182,6 +2376,10 @@ document.addEventListener("click", event => {
     if (editingServerDataId === recordId) resetServerDataEdit();
     renderServerPersonalData();
     renderServerAccounts();
+    if (window.RH_SYNC && window.RH_SYNC.enabled) {
+      window.RH_SYNC.deleteDoc("servidores", recordId).catch(() => {});
+      if (removedCpf) window.RH_SYNC.deleteDoc("contas", removedCpf).catch(() => {});
+    }
   }
 });
 serverRegistryBody.addEventListener("change", event => {
@@ -2214,6 +2412,106 @@ serverRegistryBody.addEventListener("change", event => {
   showToast(`Acesso de ${record.name} atualizado para ${roleLabel}.`);
 });
 serverDataCancelEdit.addEventListener("click", resetServerDataEdit);
+document.getElementById("usuario-add").addEventListener("click", () => openUsuarioDialog(null));
+document.getElementById("usuario-cancel").addEventListener("click", () => document.getElementById("usuario-dialog").close());
+document.getElementById("usuarios-search").addEventListener("input", renderUsuarios);
+document.getElementById("usuarios-body").addEventListener("click", event => {
+  const editButton = event.target.closest("[data-edit-usuario]");
+  const removeButton = event.target.closest("[data-remove-usuario]");
+  if (editButton) {
+    const user = usuarios.find(item => item.id === editButton.dataset.editUsuario);
+    if (user) openUsuarioDialog(user);
+    return;
+  }
+  if (!removeButton) return;
+  const userId = removeButton.dataset.removeUsuario;
+  const user = usuarios.find(item => item.id === userId);
+  if (!user) return;
+  if (isOwnerEmail(user.email)) {
+    showToast("O e-mail de um proprietário não pode ser removido.");
+    return;
+  }
+  if (!window.confirm(`Remover o acesso de ${user.name} (${user.email})?`)) return;
+  usuarios = usuarios.filter(item => item.id !== userId);
+  saveUsuarios();
+  renderUsuarios();
+  showToast("Usuário removido.");
+});
+document.getElementById("usuario-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const name = String(form.elements.nome.value).trim();
+  const email = String(form.elements.email.value).trim().toLowerCase();
+  const perfil = form.elements.perfil.value === "admin" ? "admin" : "usuario";
+  const ativo = form.elements.ativo.value !== "inativo";
+  if (!name) {
+    setUsuarioMessage("Informe o nome do usuário.", true);
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    setUsuarioMessage("Informe um e-mail válido.", true);
+    return;
+  }
+  if (usuarios.some(user => user.id !== editingUsuarioId && user.email === email)) {
+    setUsuarioMessage("Já existe um usuário cadastrado com esse e-mail.", true);
+    return;
+  }
+  if (isOwnerEmail(email) && perfil !== "admin") {
+    setUsuarioMessage("O e-mail de um proprietário permanece sempre como administrador.", true);
+    return;
+  }
+  const ownerEmail = isOwnerEmail(email);
+  const currentDate = dateKey(new Date());
+  if (editingUsuarioId) {
+    usuarios = usuarios.map(user => user.id === editingUsuarioId
+      ? Object.assign({}, user, { id: email, name, email, perfil: ownerEmail ? "admin" : perfil, ativo: ownerEmail ? true : ativo, criadoEm: user.criadoEm || currentDate })
+      : user);
+  } else {
+    usuarios.push({ id: email, name, email, perfil: ownerEmail ? "admin" : perfil, ativo: ownerEmail ? true : ativo, criadoEm: currentDate });
+  }
+  saveUsuarios();
+  form.closest("dialog").close();
+  renderUsuarios();
+  showToast(editingUsuarioId ? "Usuário atualizado." : "Usuário adicionado.");
+});
+document.getElementById("request-edit-cancel").addEventListener("click", () => document.getElementById("request-edit-dialog").close());
+document.getElementById("request-edit-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const request = requests.find(item => item.id === editingRequestId);
+  if (!request) {
+    setRequestEditMessage("Não foi possível localizar a solicitação.", true);
+    return;
+  }
+  const person = String(form.elements.person.value).trim();
+  const start = String(form.elements.start.value || "");
+  const end = String(form.elements.end.value || "");
+  const note = String(form.elements.note.value).trim();
+  if (!person) {
+    setRequestEditMessage("Informe o nome do servidor.", true);
+    return;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+    setRequestEditMessage("Informe as datas de início e término.", true);
+    return;
+  }
+  if (end < start) {
+    setRequestEditMessage("O término não pode ser anterior ao início.", true);
+    return;
+  }
+  const days = Math.round((new Date(`${end}T12:00:00`) - new Date(`${start}T12:00:00`)) / 86400000) + 1;
+  const previousRequests = requests.map(item => ({ ...item }));
+  const updated = Object.assign({}, request, { person, start, end, days, note });
+  requests = requests.map(item => item.id === request.id ? updated : item);
+  if (!saveRequests()) {
+    requests = previousRequests;
+    renderAll();
+    return;
+  }
+  form.closest("dialog").close();
+  renderAll();
+  showToast("Solicitação atualizada.");
+});
 document.addEventListener("keydown", event => {
   if (event.key !== "Escape") return;
   const openSubmenuToggle = document.querySelector('[data-submenu-toggle][aria-expanded="true"]');
@@ -2374,7 +2672,58 @@ async function initializeApp() {
       requests = (list.length ? list : requests).map(normalizeRequest);
       renderAll();
     }, error => console.warn("Assinatura do Firestore falhou:", error));
+    loadUsuariosFromFirestore();
+    loadServerRegistryFromFirestore();
   }
+}
+
+async function loadUsuariosFromFirestore() {
+  try {
+    const remote = await window.RH_SYNC.loadDocs("usuarios");
+    if (remote && remote.length > 0) {
+      usuarios = remote.map(normalizeUsuario);
+    } else if (usuarios.length > 0) {
+      saveUsuarios();
+    }
+  } catch (error) {
+    const detail = error instanceof Error ? ` ${error.message}` : "";
+    console.warn("Falha ao carregar usuários do Firestore:", error);
+    showToast(`Não foi possível carregar os usuários da nuvem.${detail}`);
+  }
+  renderUsuarios();
+}
+
+async function loadServerRegistryFromFirestore() {
+  try {
+    const [remoteServidores, remoteContas] = await Promise.all([
+      window.RH_SYNC.loadDocs("servidores"),
+      window.RH_SYNC.loadDocs("contas")
+    ]);
+    if (remoteServidores && remoteServidores.length > 0) {
+      serverPersonalData = mergeServerRecords(serverPersonalData, remoteServidores, record => record.id);
+    }
+    if (remoteContas && remoteContas.length > 0) {
+      serverAccounts = mergeServerRecords(serverAccounts, remoteContas, account => String(account.cpf || account.username || "").replace(/\D/g, ""));
+    }
+  } catch (error) {
+    const detail = error instanceof Error ? ` ${error.message}` : "";
+    console.warn("Falha ao carregar cadastros do Firestore:", error);
+    showToast(`Cadastros carregados apenas deste navegador.${detail}`);
+  }
+  renderServerPersonalData();
+  renderServerAccounts();
+}
+
+function mergeServerRecords(localList, remoteList, keyFor) {
+  const merged = localList.map(item => ({ ...item }));
+  const localKeys = new Set(merged.map(keyFor));
+  remoteList.forEach(remote => {
+    const remoteKey = keyFor(remote);
+    const index = merged.findIndex(item => keyFor(item) === remoteKey);
+    if (index >= 0) merged[index] = remote;
+    else if (remoteKey && !localKeys.has(remoteKey)) merged.push(remote);
+  });
+  return merged;
 }
 
 initializeApp();

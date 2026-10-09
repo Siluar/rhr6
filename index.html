@@ -71,6 +71,7 @@
               <button class="nav-submenu-link" type="button" data-view="server-fg">Cadastro de Servidores com Função Gratificada</button>
             </div>
           </div>
+          <button class="nav-link" type="button" data-view="usuarios"><i data-lucide="users-round"></i><span>Usuários &amp; Acessos</span></button>
           <p class="nav-label nav-label-spaced">RELATÓRIOS</p>
           <div class="nav-menu-item" id="reports-nav-item">
             <button class="nav-link nav-menu-toggle" type="button" data-submenu-toggle="reports" aria-label="Relatórios, abrir submenu" aria-expanded="false" aria-controls="reports-submenu"><i data-lucide="chart-no-axes-column-increasing"></i><span>Relatórios</span><i class="nav-menu-chevron" data-lucide="chevron-down"></i></button>
@@ -263,6 +264,19 @@
             </section>
           </section>
 
+          <section class="view-panel" id="view-usuarios" aria-label="Usuários e Acessos">
+            <section class="panel detailed-reports-panel" aria-labelledby="usuarios-title">
+              <div class="panel-heading"><div><p class="section-kicker">CONTAS E PERMISSÕES</p><h2 id="usuarios-title">Usuários &amp; Acessos</h2><p class="server-registry-description">Gerencie quem acessa o sistema com o Google e qual perfil cada um possui. O papel de administrador também pode ser concedido aqui.</p></div></div>
+              <div class="server-data-content">
+                <div class="server-data-toolbar">
+                  <label class="table-search server-registry-search" id="usuarios-search-wrap"><i data-lucide="search"></i><input id="usuarios-search" type="search" placeholder="Filtrar por nome ou e-mail" aria-label="Filtrar usuários por nome ou e-mail" /></label>
+                  <button class="button button-primary" id="usuario-add" type="button"><i data-lucide="user-round-plus"></i><span>Adicionar usuário</span></button>
+                </div>
+                <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Nome</th><th scope="col">E-mail</th><th scope="col">Perfil</th><th scope="col">Situação</th><th scope="col">Ação</th></tr></thead><tbody id="usuarios-body"></tbody></table></div>
+              </div>
+            </section>
+          </section>
+
           <section class="view-panel" id="view-reports" aria-label="Relatórios de Férias">
             <section class="panel current-vacations-panel" aria-labelledby="current-vacations-title">
               <div class="panel-heading"><div><p class="section-kicker">SERVIDORES</p><h2 id="current-vacations-title">Férias no mês</h2></div><span class="current-month-label" id="current-month-label"></span></div>
@@ -380,6 +394,34 @@
         <label for="account-confirm-password">Confirme a nova senha<input id="account-confirm-password" type="password" autocomplete="new-password" minlength="6" required /></label>
         <p id="account-password-message" role="status" aria-live="polite"></p>
         <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="account-password-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="key-round"></i><span>Salvar nova senha</span></button></div>
+      </form>
+    </dialog>
+    <dialog class="account-password-dialog crud-dialog" id="usuario-dialog" aria-labelledby="usuario-dialog-title">
+      <div class="request-details-dialog-heading"><div><p class="section-kicker">ACESSO</p><h2 id="usuario-dialog-title">Adicionar usuário</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
+      <form id="usuario-form">
+        <label for="usuario-nome">Nome<input id="usuario-nome" name="nome" type="text" autocomplete="off" required /></label>
+        <label for="usuario-email">E-mail do Google<input id="usuario-email" name="email" type="email" autocomplete="off" placeholder="nome@gmail.com" required /></label>
+        <label for="usuario-perfil">Perfil<select id="usuario-perfil" name="perfil" required>
+          <option value="usuario">Usuário</option>
+          <option value="admin">Administrador</option>
+        </select></label>
+        <label for="usuario-ativo">Situação<select id="usuario-ativo" name="ativo" required>
+          <option value="ativo">Ativo</option>
+          <option value="inativo">Inativo</option>
+        </select></label>
+        <p id="usuario-message" role="status" aria-live="polite"></p>
+        <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="usuario-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="user-round-check"></i><span>Salvar usuário</span></button></div>
+      </form>
+    </dialog>
+    <dialog class="account-password-dialog crud-dialog" id="request-edit-dialog" aria-labelledby="request-edit-title">
+      <div class="request-details-dialog-heading"><div><p class="section-kicker">EDIÇÃO</p><h2 id="request-edit-title">Editar solicitação</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
+      <form id="request-edit-form">
+        <label for="request-edit-person">Servidor<input id="request-edit-person" name="person" type="text" autocomplete="off" required /></label>
+        <label for="request-edit-start">Início<input id="request-edit-start" name="start" type="date" required /></label>
+        <label for="request-edit-end">Término<input id="request-edit-end" name="end" type="date" required /></label>
+        <label for="request-edit-note">Observações<textarea id="request-edit-note" name="note" rows="3" maxlength="200"></textarea></label>
+        <p id="request-edit-message" role="status" aria-live="polite"></p>
+        <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="request-edit-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="save"></i><span>Salvar alterações</span></button></div>
       </form>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"><i data-lucide="circle-check"></i><span></span></div>

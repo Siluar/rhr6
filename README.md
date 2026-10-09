@@ -96,9 +96,28 @@ Depois disso:
 - O painel do admin lê em tempo real (`onSnapshot`): o que o usuário envia
   aparece para o administrador.
 
+### CRUD no painel do administrador
+
+Com o Firebase ativo, o painel ganha uma gestão **completa** (criar, ler,
+editar e excluir), persistida nas coleções do Firestore:
+
+- **Solicitações** — além de aprovar/recusar, o admin pode **editar** os dados
+  de um pedido ou **excluí-lo** (coleção `requests`).
+- **Servidores** — o cadastro de dados dos servidores e as contas de acesso já
+  existentes passam a ser sincronizados com as coleções `servidores` e `contas`
+  (o cadastro continua igual, agora compartilhado e com exclusão também na
+  nuvem).
+- **Usuários & Acessos** — nova seção no menu (reproduz o item "GESTÃO") para
+  gerenciar quem pode entrar com o Google: nome, e-mail, perfil (usuário ou
+  administrador) e situação (ativo/inativo), na coleção `usuarios`. O perfil
+  decidido aqui vale no login: um e-mail marcado como **inativo** é bloqueado.
+  Os e-mails proprietários (`googleAdminEmails`) permanecem sempre
+  administradores e não podem ser removidos.
+
 > Regras (`firestore.rules`): qualquer usuário autenticado pode ler/criar
-> solicitações; apenas os e-mails de `isAdmin()` (proprietários) podem aprovar,
-> editar ou apagar.
+> solicitações; apenas `isAdmin()` (proprietários **ou** usuários com perfil
+> `admin` na coleção `usuarios`) pode aprovar, editar, apagar ou gerenciar os
+> cadastros. As coleções `servidores`, `contas` e `usuarios` são protegidas.
 
 ## Publicação (GitHub Pages)
 

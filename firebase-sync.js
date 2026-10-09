@@ -14,6 +14,10 @@
  *   addRequest(req)    -> Promise<req> (usado pela pagina de solicitacao)
  *   saveRequests(list) -> Promise (grava a lista inteira, com merge)
  *   subscribeRequests(onData, onError)
+ *   loadDocs(col)      -> Promise<array> (qualquer colecao, com id)
+ *   saveDocs(col, list)-> Promise (grava a lista inteira, com merge)
+ *   deleteDoc(col, id) -> Promise
+ *   subscribeDocs(col, onData, onError)
  */
 (function () {
   const config = (window.RH_CONFIG && window.RH_CONFIG.firebase) || null;
@@ -103,6 +107,37 @@
   RH_SYNC.subscribeRequests = function (onData, onError) {
     return requestsCol().onSnapshot(
       snapshot => onData(snapshot.docs.map(doc => Object.assign({}, doc.data(), { id: doc.data().id || doc.id }))),
+      error => { if (onError) onError(error); }
+    );
+  };
+
+  // ---- Helpers genéricos (qualquer coleção) ----
+
+  RH_SYNC.loadDocs = function (collection) {
+    return RH_SYNC.waitForAuth().then(() => RH_SYNC._db.collection(collection).get()).then(snapshot =>
+      snapshot.docs.map(doc => Object.assign({}, doc.data(), { id: doc.id }))
+    );
+  };
+
+  RH_SYNC.saveDocs = function (collection, docs) {
+    return RH_SYNC.waitForAuth().then(() => {
+      const batch = RH_SYNC._db.batch();
+      const col = RH_SYNC._db.collection(collection);
+      docs.forEach(doc => {
+        const id = doc.id || col.doc().id;
+        batch.set(col.doc(id), Object.assign({}, doc, { id }), { merge: true });
+      });
+      return batch.commit();
+    });
+  };
+
+  RH_SYNC.deleteDoc = function (collection, id) {
+    return RH_SYNC.waitForAuth().then(() => RH_SYNC._db.collection(collection).doc(id).delete());
+  };
+
+  RH_SYNC.subscribeDocs = function (collection, onData, onError) {
+    return RH_SYNC._db.collection(collection).onSnapshot(
+      snapshot => onData(snapshot.docs.map(doc => Object.assign({}, doc.data(), { id: doc.id }))),
       error => { if (onError) onError(error); }
     );
   };

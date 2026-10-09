@@ -341,6 +341,12 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 .account-password-dialog input { min-height: 40px; padding: 8px 10px; border: 1px solid #c4cbc3; border-radius: 5px; background: #fff; color: #20272c; font: inherit; }
 .account-password-dialog #account-password-message { min-height: 20px; margin: 0; color: #31664d; font-size: 12px; }
 .account-password-dialog #account-password-message.error { color: #a0352b; }
+
+.crud-dialog { width: min(520px, calc(100vw - 32px)); }
+.crud-dialog select, .crud-dialog textarea { min-height: 40px; padding: 8px 10px; border: 1px solid #c4cbc3; border-radius: 5px; background: #fff; color: #20272c; font: inherit; }
+.crud-dialog textarea { min-height: 84px; resize: vertical; }
+.crud-dialog #usuario-message, .crud-dialog #request-edit-message { min-height: 20px; margin: 0; color: #31664d; font-size: 12px; }
+.crud-dialog #usuario-message.error, .crud-dialog #request-edit-message.error { color: #a0352b; }
 .server-data-panel { margin-top: 14px; }
 .detailed-report-table-wrap, .current-vacations-table-wrap { max-width: 100%; overflow-x: auto; }
 .detailed-report-table, .current-vacations-table { min-width: max-content; }

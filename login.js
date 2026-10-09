@@ -370,16 +370,37 @@ function decodeJwtPayload(token) {
   return JSON.parse(json);
 }
 
-function applyGoogleUser(email, verified, name) {
+async function resolveGoogleRole(email) {
+  const config = window.RH_CONFIG || {};
+  const adminEmails = (config.googleAdminEmails || []).map(item => String(item).toLowerCase());
+  if (adminEmails.includes(email)) return { role: "admin", allowed: true };
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return { role: "usuario", allowed: true };
+  try {
+    await window.RH_SYNC.waitForAuth();
+    const users = await window.RH_SYNC.loadDocs("usuarios");
+    const match = users.find(user => String(user.email || user.id || "").toLowerCase() === email);
+    if (match && match.ativo === false) return { role: "usuario", allowed: false };
+    if (match && match.perfil === "admin") return { role: "admin", allowed: true };
+    return { role: "usuario", allowed: true };
+  } catch (error) {
+    console.warn("Falha ao consultar usuários no login:", error);
+    return { role: "usuario", allowed: true };
+  }
+}
+
+async function applyGoogleUser(email, verified, name) {
   const googleMessage = document.getElementById("google-message");
   const normalizedEmail = String(email || "").toLowerCase();
   if (!normalizedEmail || verified === false) {
     if (googleMessage) setFormMessage(googleMessage, "Não foi possível confirmar seu e-mail do Google.", true);
     return false;
   }
-  const config = window.RH_CONFIG || {};
-  const adminEmails = (config.googleAdminEmails || []).map(item => String(item).toLowerCase());
-  const role = adminEmails.includes(normalizedEmail) ? "admin" : "usuario";
+  const decision = await resolveGoogleRole(normalizedEmail);
+  if (!decision.allowed) {
+    if (googleMessage) setFormMessage(googleMessage, "Seu acesso está desativado. Fale com o administrador.", true);
+    return false;
+  }
+  const role = decision.role;
   try {
     sessionStorage.setItem("brisa-demo-user", role);
     sessionStorage.setItem("brisa-demo-username", normalizedEmail);
@@ -407,7 +428,7 @@ async function handleGoogleCredential(response) {
         return;
       }
     }
-    applyGoogleUser(email, verified, payload.name);
+    await applyGoogleUser(email, verified, payload.name);
   } catch {
     if (googleMessage) setFormMessage(googleMessage, "Falha ao processar o login do Google.", true);
   }
@@ -419,7 +440,7 @@ async function handleFirebasePopup() {
   try {
     const result = await window.RH_SYNC.signInWithPopup();
     const user = result.user || {};
-    applyGoogleUser(user.email, user.emailVerified !== false, user.displayName);
+    await applyGoogleUser(user.email, user.emailVerified !== false, user.displayName);
   } catch (error) {
     console.warn("Falha no login Google (Firebase):", error);
     const cancelled = error && (error.code === "auth/popup-closed-by-user" || error.code === "auth/cancelled-popup-request");
