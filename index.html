@@ -67,6 +67,8 @@
             <button class="nav-link nav-menu-toggle" type="button" data-submenu-toggle="servers" aria-label="Servidores, abrir submenu" aria-expanded="false" aria-controls="servers-submenu"><i data-lucide="contact-round"></i><span>Servidores</span><i class="nav-menu-chevron" data-lucide="chevron-down"></i></button>
             <div class="nav-submenu" id="servers-submenu" hidden>
               <button class="nav-submenu-link" type="button" data-view="server-data">Cadastro de Dados dos Servidores</button>
+              <button class="nav-submenu-link" type="button" data-view="cadastro-unidades">Cadastro de Unidades</button>
+              <button class="nav-submenu-link" type="button" data-view="cadastro-cargos">Cadastro de Cargos</button>
               <button class="nav-submenu-link" type="button" data-view="server-fg">Cadastro de Servidores com Função Gratificada</button>
             </div>
           </div>
@@ -174,28 +176,9 @@
                   <label>E-mail institucional<input name="email" type="email" autocomplete="email" placeholder="nome@instituicao.gov.br" required /></label>
                   <label>Unidade Penal<select name="unidadePenal" required>
                     <option value="">Selecione a unidade penal</option>
-                    <option>Sot - Umuarama</option>
-                    <option>Cadeia Pública de Umuarama</option>
-                    <option>RA-R6</option>
-                    <option>Penitenciária Estadual de Cruzeiro do Oeste</option>
-                    <option>Penitenciária Estadual de Guaíra</option>
-                    <option>Cadeia Pública de Cidade Gaúcha</option>
-                    <option>Cadeia Pública de Iporã</option>
-                    <option>Penitenciária de Campo Mourão</option>
-                    <option>Cadeia Pública de Campo Mourão</option>
-                    <option>Posto Avançado de Monitoramento - R6</option>
-                    <option>Cadeia Pública de Loanda</option>
-                    <option>Complexo Social de Campo Mourão</option>
-                    <option>Cadeia Pública de Goioerê</option>
-                    <option>Cadeia Pública de Altonia</option>
-                    <option>Cadeia Pública de Cianorte</option>
-                    <option>Complexo Social de Cruzeiro do Oeste</option>
                   </select></label>
                   <label>Cargo<select name="cargo" required>
                     <option value="">Selecione o cargo</option>
-                    <option>Policial Penal</option>
-                    <option>Agente de Execução</option>
-                    <option>Agente Profissional</option>
                   </select></label>
                   <label>Quadro<select name="quadro" required>
                     <option value="">Selecione primeiro o cargo</option>
@@ -247,6 +230,32 @@
                   <button class="button button-primary" type="submit"><i data-lucide="user-round-plus"></i><span>Adicionar servidor</span></button>
                 </form>
                 <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Servidor</th><th scope="col">CPF</th><th scope="col">Unidade</th><th scope="col">Ação</th></tr></thead><tbody id="server-fg-body"></tbody></table></div>
+              </div>
+            </section>
+          </section>
+
+          <section class="view-panel" id="view-cadastro-unidades" aria-label="Cadastro de Unidades">
+            <section class="panel detailed-reports-panel" aria-labelledby="cadastro-unidades-title">
+              <div class="panel-heading"><div><p class="section-kicker">CADASTRO BÁSICO</p><h2 id="cadastro-unidades-title">Cadastro de Unidades</h2><p class="server-registry-description">Unidades que ficam disponíveis no formulário de dados dos servidores e nos relatórios.</p></div></div>
+              <div class="server-data-content">
+                <div class="server-data-toolbar">
+                  <label class="table-search server-registry-search"><i data-lucide="search"></i><input id="unidades-search" type="search" placeholder="Filtrar unidade" aria-label="Filtrar unidades pelo nome" /></label>
+                  <button class="button button-primary" id="unidade-add" type="button"><i data-lucide="building-2"></i><span>Adicionar unidade</span></button>
+                </div>
+                <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Nome da unidade</th><th scope="col">Ação</th></tr></thead><tbody id="unidades-body"></tbody></table></div>
+              </div>
+            </section>
+          </section>
+
+          <section class="view-panel" id="view-cadastro-cargos" aria-label="Cadastro de Cargos">
+            <section class="panel detailed-reports-panel" aria-labelledby="cadastro-cargos-title">
+              <div class="panel-heading"><div><p class="section-kicker">CADASTRO BÁSICO</p><h2 id="cadastro-cargos-title">Cadastro de Cargos</h2><p class="server-registry-description">Cargos que ficam disponíveis no formulário de dados dos servidores. O quadro indicado é preenchido automaticamente.</p></div></div>
+              <div class="server-data-content">
+                <div class="server-data-toolbar">
+                  <label class="table-search server-registry-search"><i data-lucide="search"></i><input id="cargos-search" type="search" placeholder="Filtrar cargo" aria-label="Filtrar cargos pelo nome" /></label>
+                  <button class="button button-primary" id="cargo-add" type="button"><i data-lucide="briefcase-business"></i><span>Adicionar cargo</span></button>
+                </div>
+                <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Cargo</th><th scope="col">Quadro</th><th scope="col">Ação</th></tr></thead><tbody id="cargos-body"></tbody></table></div>
               </div>
             </section>
           </section>
@@ -398,6 +407,27 @@
         </select></label>
         <p id="usuario-message" role="status" aria-live="polite"></p>
         <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="usuario-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="user-round-check"></i><span>Salvar usuário</span></button></div>
+      </form>
+    </dialog>
+    <dialog class="account-password-dialog crud-dialog" id="unidade-dialog" aria-labelledby="unidade-dialog-title">
+      <div class="request-details-dialog-heading"><div><p class="section-kicker">UNIDADE</p><h2 id="unidade-dialog-title">Adicionar unidade</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
+      <form id="unidade-form">
+        <label for="unidade-nome">Nome da unidade<input id="unidade-nome" name="nome" type="text" autocomplete="off" placeholder="Ex.: Cadeia Pública de Maringá" required /></label>
+        <p id="unidade-message" role="status" aria-live="polite"></p>
+        <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="unidade-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="building-2"></i><span>Salvar unidade</span></button></div>
+      </form>
+    </dialog>
+    <dialog class="account-password-dialog crud-dialog" id="cargo-dialog" aria-labelledby="cargo-dialog-title">
+      <div class="request-details-dialog-heading"><div><p class="section-kicker">CARGO</p><h2 id="cargo-dialog-title">Adicionar cargo</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
+      <form id="cargo-form">
+        <label for="cargo-nome">Nome do cargo<input id="cargo-nome" name="nome" type="text" autocomplete="off" placeholder="Ex.: Auxiliar Administrativo" required /></label>
+        <label for="cargo-quadro">Quadro padrão (opcional)<select id="cargo-quadro" name="quadro">
+          <option value="">Sem quadro padrão</option>
+          <option value="QPPP">QPPP</option>
+          <option value="QPPE">QPPE</option>
+        </select></label>
+        <p id="cargo-message" role="status" aria-live="polite"></p>
+        <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="cargo-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="briefcase-business"></i><span>Salvar cargo</span></button></div>
       </form>
     </dialog>
     <dialog class="account-password-dialog crud-dialog" id="request-edit-dialog" aria-labelledby="request-edit-title">

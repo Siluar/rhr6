@@ -36,6 +36,8 @@ const adminPasswordStorageKey = "brisa-admin-password-v1";
 const initialAdminPassword = (window.RH_CONFIG && window.RH_CONFIG.initialAdminPassword) || "";
 const serverDataStorageKey = "brisa-server-personal-data-v1";
 const usuariosStorageKey = "brisa-usuarios-v1";
+const unidadesStorageKey = "brisa-unidades-v1";
+const cargosStorageKey = "brisa-cargos-v1";
 const requestAttachmentsDatabaseName = "brisa-request-attachments-v1";
 const requestAttachmentsStoreName = "attachments";
 let requests = [];
@@ -44,7 +46,11 @@ let fgServerRoster = loadFgServerRoster();
 let serverAccounts = loadServerAccounts();
 let serverPersonalData = loadServerPersonalData();
 let usuarios = loadLocalUsuarios();
+let unidades = loadLocalReferenceList(unidadesStorageKey, seedUnidades());
+let cargos = loadLocalReferenceList(cargosStorageKey, seedCargos());
 let editingUsuarioId = null;
+let editingUnidadeId = null;
+let editingCargoId = null;
 let editingRequestId = null;
 let shownMonth = new Date(2026, 9, 1);
 let shownTaskMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -334,6 +340,77 @@ function syncServerDataToFirestore(collection, docs, idFor) {
     });
 }
 
+function seedUnidades() {
+  return [
+    "Sot - Umuarama",
+    "Cadeia Pública de Umuarama",
+    "RA-R6",
+    "Penitenciária Estadual de Cruzeiro do Oeste",
+    "Penitenciária Estadual de Guaíra",
+    "Cadeia Pública de Cidade Gaúcha",
+    "Cadeia Pública de Iporã",
+    "Penitenciária de Campo Mourão",
+    "Cadeia Pública de Campo Mourão",
+    "Posto Avançado de Monitoramento - R6",
+    "Cadeia Pública de Loanda",
+    "Complexo Social de Campo Mourão",
+    "Cadeia Pública de Goioerê",
+    "Cadeia Pública de Altonia",
+    "Cadeia Pública de Cianorte",
+    "Complexo Social de Cruzeiro do Oeste"
+  ].map((name, index) => ({ id: `unidade-seed-${index}`, name }));
+}
+
+function seedCargos() {
+  return [
+    { name: "Policial Penal", quadro: "QPPP" },
+    { name: "Agente de Execução", quadro: "QPPE" },
+    { name: "Agente Profissional", quadro: "QPPE" }
+  ].map((item, index) => ({ id: `cargo-seed-${index}`, name: item.name, quadro: item.quadro }));
+}
+
+function loadLocalReferenceList(key, seeds) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || "[]");
+    if (Array.isArray(saved) && saved.length > 0) return normalizeReferenceList(saved);
+  } catch {
+    // Ignora e usa a lista inicial abaixo.
+  }
+  return seeds;
+}
+
+function normalizeReferenceList(list) {
+  return (Array.isArray(list) ? list : [])
+    .map(item => ({
+      id: String((item && item.id) || crypto.randomUUID()),
+      name: String((item && item.name) || "").trim(),
+      quadro: item && (item.quadro === "QPPP" || item.quadro === "QPPE") ? item.quadro : ""
+    }))
+    .filter(item => item.name);
+}
+
+function saveUnidades() {
+  try {
+    localStorage.setItem(unidadesStorageKey, JSON.stringify(unidades));
+  } catch {
+    showToast("Não foi possível salvar as unidades neste navegador.");
+    return false;
+  }
+  syncServerDataToFirestore("unidades", unidades);
+  return true;
+}
+
+function saveCargos() {
+  try {
+    localStorage.setItem(cargosStorageKey, JSON.stringify(cargos));
+  } catch {
+    showToast("Não foi possível salvar os cargos neste navegador.");
+    return false;
+  }
+  syncServerDataToFirestore("cargos", cargos);
+  return true;
+}
+
 function loadLocalUsuarios() {
   try {
     const saved = JSON.parse(localStorage.getItem(usuariosStorageKey) || "[]");
@@ -438,6 +515,115 @@ function openUsuarioDialog(user) {
     document.getElementById("usuario-ativo").value = "ativo";
   }
   setUsuarioMessage("");
+  dialog.showModal();
+  refreshIcons();
+}
+
+function renderUnidades() {
+  const container = document.getElementById("unidades-body");
+  if (!container) return;
+  const query = (document.getElementById("unidades-search")?.value || "").trim().toLocaleLowerCase("pt-BR");
+  const filtered = unidades
+    .filter(unidade => unidade.name.toLocaleLowerCase("pt-BR").includes(query))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
+  if (filtered.length === 0) {
+    container.innerHTML = `<tr><td colspan="2" class="team-empty">Nenhuma unidade cadastrada.</td></tr>`;
+    refreshIcons();
+    return;
+  }
+  container.innerHTML = filtered.map(unidade => `<tr><td><strong>${escapeHtml(unidade.name)}</strong></td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-unidade="${escapeHtml(unidade.id)}" aria-label="Editar unidade ${escapeHtml(unidade.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-unidade="${escapeHtml(unidade.id)}" aria-label="Remover unidade ${escapeHtml(unidade.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`).join("");
+  refreshIcons();
+  fillServerDataReferenceSelects();
+}
+
+function renderCargos() {
+  const container = document.getElementById("cargos-body");
+  if (!container) return;
+  const query = (document.getElementById("cargos-search")?.value || "").trim().toLocaleLowerCase("pt-BR");
+  const filtered = cargos
+    .filter(cargo => cargo.name.toLocaleLowerCase("pt-BR").includes(query))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
+  if (filtered.length === 0) {
+    container.innerHTML = `<tr><td colspan="3" class="team-empty">Nenhum cargo cadastrado.</td></tr>`;
+    refreshIcons();
+    return;
+  }
+  container.innerHTML = filtered.map(cargo => `<tr><td><strong>${escapeHtml(cargo.name)}</strong></td><td>${cargo.quadro ? `<span class="status-pill status-approved">${escapeHtml(cargo.quadro)}</span>` : "—"}</td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-cargo="${escapeHtml(cargo.id)}" aria-label="Editar cargo ${escapeHtml(cargo.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-cargo="${escapeHtml(cargo.id)}" aria-label="Remover cargo ${escapeHtml(cargo.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`).join("");
+  refreshIcons();
+  fillServerDataReferenceSelects();
+}
+
+function fillServerDataReferenceSelects() {
+  if (!serverDataForm) return;
+  const unidadeSelect = serverDataForm.elements.namedItem("unidadePenal");
+  const cargoSelect = serverDataForm.elements.namedItem("cargo");
+  if (unidadeSelect) {
+    const current = unidadeSelect.value;
+    unidadeSelect.innerHTML = `<option value="">Selecione a unidade penal</option>${unidades.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("")}`;
+    if (current && !Array.from(unidadeSelect.options).some(option => option.value === current)) {
+      unidadeSelect.add(new Option(`${current} (cadastro existente)`, current));
+    }
+    if (current) unidadeSelect.value = current;
+  }
+  if (cargoSelect) {
+    const current = cargoSelect.value;
+    cargoSelect.innerHTML = `<option value="">Selecione o cargo</option>${cargos.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("")}`;
+    if (current && !Array.from(cargoSelect.options).some(option => option.value === current)) {
+      cargoSelect.add(new Option(`${current} (cadastro existente)`, current));
+    }
+    if (current) cargoSelect.value = current;
+    const quadro = getServerDataQuadroForCargo(cargoSelect.value);
+    if (quadro) serverDataQuadro.value = quadro;
+  }
+}
+
+function setUnidadeMessage(message, isError) {
+  const element = document.getElementById("unidade-message");
+  if (!element) return;
+  element.textContent = message || "";
+  element.classList.toggle("error", Boolean(isError));
+}
+
+function openUnidadeDialog(unidade) {
+  const dialog = document.getElementById("unidade-dialog");
+  const title = document.getElementById("unidade-dialog-title");
+  const form = document.getElementById("unidade-form");
+  if (unidade) {
+    editingUnidadeId = unidade.id;
+    title.textContent = "Editar unidade";
+    document.getElementById("unidade-nome").value = unidade.name || "";
+  } else {
+    editingUnidadeId = null;
+    title.textContent = "Adicionar unidade";
+    form.reset();
+  }
+  setUnidadeMessage("");
+  dialog.showModal();
+  refreshIcons();
+}
+
+function setCargoMessage(message, isError) {
+  const element = document.getElementById("cargo-message");
+  if (!element) return;
+  element.textContent = message || "";
+  element.classList.toggle("error", Boolean(isError));
+}
+
+function openCargoDialog(cargo) {
+  const dialog = document.getElementById("cargo-dialog");
+  const title = document.getElementById("cargo-dialog-title");
+  const form = document.getElementById("cargo-form");
+  if (cargo) {
+    editingCargoId = cargo.id;
+    title.textContent = "Editar cargo";
+    document.getElementById("cargo-nome").value = cargo.name || "";
+    document.getElementById("cargo-quadro").value = cargo.quadro === "QPPP" || cargo.quadro === "QPPE" ? cargo.quadro : "";
+  } else {
+    editingCargoId = null;
+    title.textContent = "Adicionar cargo";
+    form.reset();
+  }
+  setCargoMessage("");
   dialog.showModal();
   refreshIcons();
 }
@@ -1300,6 +1486,8 @@ function renderAll() {
   renderReportPerson();
   renderReportFg();
   renderUsuarios();
+  renderUnidades();
+  renderCargos();
   updateCounts();
   updateSelectedDay();
   refreshIcons();
@@ -1722,7 +1910,7 @@ function setView(view) {
     toggle.setAttribute("aria-expanded", String(hasActiveItem));
     submenu.hidden = !hasActiveItem;
   });
-  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatório - Servidores", "Relatório - Servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-especial": ["Licença especial", "Relatório de licença especial", "Consulte as solicitações de licença especial aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
+  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Servidores", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Servidores", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatório - Servidores", "Relatório - Servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-especial": ["Licença especial", "Relatório de licença especial", "Consulte as solicitações de licença especial aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
   const [breadcrumb, title, subtitle] = titles[view] || (view === "tasks" ? ["Gestão", "Lista de tarefas", "Registre e acompanhe suas tarefas."] : view === "meta4" ? ["Solicitações", "META 4", "Consulte os pedidos de férias enviados pelos usuários."] : view === "protocols-fg" ? ["Solicitações", "Protocolos F.G", "Acompanhe o status e o número dos protocolos de férias com Função Gratificada."] : titles.overview);
   document.getElementById("breadcrumb-current").textContent = breadcrumb;
   const pageTitle = document.getElementById("page-title");
@@ -1736,6 +1924,8 @@ function setView(view) {
   if (view === "protocols-fg") renderFgProtocols();
   if (view === "server-data") renderServerPersonalData();
   if (view === "server-fg") renderFgServerRoster();
+  if (view === "cadastro-unidades") renderUnidades();
+  if (view === "cadastro-cargos") renderCargos();
   if (view === "vacation-launch") renderVacationLaunch();
   if (view === "report-year") renderReportYear();
   if (view === "report-unit") renderReportUnit();
@@ -2154,6 +2344,8 @@ serverDataFormToggle.addEventListener("click", () => {
 });
 
 function getServerDataQuadroForCargo(cargo) {
+  const registered = cargos.find(item => item.name === cargo && item.quadro);
+  if (registered) return registered.quadro;
   if (cargo === "Policial Penal") return "QPPP";
   if (cargo === "Agente de Execução" || cargo === "Agente Profissional") return "QPPE";
   return "";
@@ -2418,6 +2610,93 @@ document.getElementById("usuario-form").addEventListener("submit", event => {
   renderUsuarios();
   showToast(editingUsuarioId ? "Usuário atualizado." : "Usuário adicionado.");
 });
+document.getElementById("unidade-add").addEventListener("click", () => openUnidadeDialog(null));
+document.getElementById("unidade-cancel").addEventListener("click", () => document.getElementById("unidade-dialog").close());
+document.getElementById("unidades-search").addEventListener("input", renderUnidades);
+document.getElementById("unidades-body").addEventListener("click", event => {
+  const editButton = event.target.closest("[data-edit-unidade]");
+  const removeButton = event.target.closest("[data-remove-unidade]");
+  if (editButton) {
+    const unidade = unidades.find(item => item.id === editButton.dataset.editUnidade);
+    if (unidade) openUnidadeDialog(unidade);
+    return;
+  }
+  if (!removeButton) return;
+  const unidadeId = removeButton.dataset.removeUnidade;
+  const unidade = unidades.find(item => item.id === unidadeId);
+  if (!unidade) return;
+  if (!window.confirm(`Remover a unidade "${unidade.name}"?`)) return;
+  unidades = unidades.filter(item => item.id !== unidadeId);
+  saveUnidades();
+  renderUnidades();
+  showToast("Unidade removida.");
+});
+document.getElementById("unidade-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const name = String(form.elements.nome.value).trim();
+  if (!name) {
+    setUnidadeMessage("Informe o nome da unidade.", true);
+    return;
+  }
+  if (unidades.some(item => item.id !== editingUnidadeId && item.name.toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"))) {
+    setUnidadeMessage("Já existe uma unidade cadastrada com esse nome.", true);
+    return;
+  }
+  if (editingUnidadeId) {
+    unidades = unidades.map(item => item.id === editingUnidadeId ? Object.assign({}, item, { name }) : item);
+  } else {
+    unidades.push({ id: crypto.randomUUID(), name });
+  }
+  saveUnidades();
+  form.closest("dialog").close();
+  renderUnidades();
+  showToast(editingUnidadeId ? "Unidade atualizada." : "Unidade adicionada.");
+});
+document.getElementById("cargo-add").addEventListener("click", () => openCargoDialog(null));
+document.getElementById("cargo-cancel").addEventListener("click", () => document.getElementById("cargo-dialog").close());
+document.getElementById("cargos-search").addEventListener("input", renderCargos);
+document.getElementById("cargos-body").addEventListener("click", event => {
+  const editButton = event.target.closest("[data-edit-cargo]");
+  const removeButton = event.target.closest("[data-remove-cargo]");
+  if (editButton) {
+    const cargo = cargos.find(item => item.id === editButton.dataset.editCargo);
+    if (cargo) openCargoDialog(cargo);
+    return;
+  }
+  if (!removeButton) return;
+  const cargoId = removeButton.dataset.removeCargo;
+  const cargo = cargos.find(item => item.id === cargoId);
+  if (!cargo) return;
+  if (!window.confirm(`Remover o cargo "${cargo.name}"?`)) return;
+  cargos = cargos.filter(item => item.id !== cargoId);
+  saveCargos();
+  renderCargos();
+  showToast("Cargo removido.");
+});
+document.getElementById("cargo-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const name = String(form.elements.nome.value).trim();
+  const quadro = form.elements.quadro.value === "QPPP" || form.elements.quadro.value === "QPPE" ? form.elements.quadro.value : "";
+  if (!name) {
+    setCargoMessage("Informe o nome do cargo.", true);
+    return;
+  }
+  if (cargos.some(item => item.id !== editingCargoId && item.name.toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"))) {
+    setCargoMessage("Já existe um cargo cadastrado com esse nome.", true);
+    return;
+  }
+  if (editingCargoId) {
+    cargos = cargos.map(item => item.id === editingCargoId ? Object.assign({}, item, { name, quadro }) : item);
+  } else {
+    cargos.push({ id: crypto.randomUUID(), name, quadro });
+  }
+  saveCargos();
+  form.closest("dialog").close();
+  renderCargos();
+  showToast(editingCargoId ? "Cargo atualizado." : "Cargo adicionado.");
+});
 document.getElementById("request-edit-cancel").addEventListener("click", () => document.getElementById("request-edit-dialog").close());
 document.getElementById("request-edit-form").addEventListener("submit", event => {
   event.preventDefault();
@@ -2516,7 +2795,8 @@ serverDataForm.addEventListener("submit", event => {
     ? serverPersonalData.find(record => record.id === editingServerDataId)
     : null;
   if (!name || !rg || !birthDate || !phone || !email || !unidadePenal || !cargo || !quadro) return;
-  if (quadro !== getServerDataQuadroForCargo(cargo)) {
+  const expectedQuadro = getServerDataQuadroForCargo(cargo);
+  if (expectedQuadro && quadro !== expectedQuadro) {
     showToast("O quadro selecionado não corresponde ao cargo informado.");
     return;
   }
@@ -2610,6 +2890,7 @@ async function initializeApp() {
   renderLoggedInProfile();
   renderAll();
   renderTasks();
+  loadReferenceDataFromFirestore();
   if (window.RH_SYNC && window.RH_SYNC.enabled) {
     window.RH_SYNC.subscribeRequests(list => {
       requests = (list.length ? list : requests).map(normalizeRequest);
@@ -2648,6 +2929,26 @@ async function loadServerRegistryFromFirestore() {
     showToast(`Cadastros carregados apenas deste navegador.${detail}`);
   }
   renderServerPersonalData();
+}
+
+async function loadReferenceDataFromFirestore() {
+  if (window.RH_SYNC && window.RH_SYNC.enabled) {
+    try {
+      const [remoteUnidades, remoteCargos] = await Promise.all([
+        window.RH_SYNC.loadDocs("unidades"),
+        window.RH_SYNC.loadDocs("cargos")
+      ]);
+      if (remoteUnidades && remoteUnidades.length > 0) unidades = normalizeReferenceList(remoteUnidades);
+      if (remoteCargos && remoteCargos.length > 0) cargos = normalizeReferenceList(remoteCargos);
+    } catch (error) {
+      const detail = error instanceof Error ? ` ${error.message}` : "";
+      console.warn("Falha ao carregar unidades e cargos do Firestore:", error);
+      showToast(`Unidades e cargos carregados apenas deste navegador.${detail}`);
+    }
+  }
+  fillServerDataReferenceSelects();
+  renderUnidades();
+  renderCargos();
 }
 
 function mergeServerRecords(localList, remoteList, keyFor) {

@@ -106,6 +106,16 @@ editar e excluir), persistida nas coleções do Firestore:
 - **Servidores** — o cadastro de dados dos servidores e as Funções Gratificadas
   já existentes passam a ser sincronizados com a coleção `servidores` (a guia
   "Cadastro de Login", obsoleta com o acesso só-Google, foi removida do menu).
+- **Cadastro de Unidades** — nova seção no menu **Servidores** para criar,
+  editar e excluir as unidades penais (coleção `unidades`). As unidades
+  cadastradas alimentam o select "Unidade Penal" do formulário de dados dos
+  servidores e aparecem nos relatórios. Vem pré-populada com as unidades da
+  região.
+- **Cadastro de Cargos** — nova seção no menu **Servidores** para criar,
+  editar e excluir os cargos (coleção `cargos`). Cada cargo pode indicar o
+  **quadro padrão** (QPPP/QPPE), que preenche automaticamente o campo Quadro
+  no formulário de dados. O select "Cargo" do formulário passa a ser alimentado
+  por este cadastro.
 - **Usuários & Acessos** — nova seção no menu (reproduz o item "GESTÃO") para
   gerenciar quem pode entrar com o Google: nome, e-mail, perfil (usuário ou
   administrador) e situação (ativo/inativo), na coleção `usuarios`. O perfil
@@ -118,7 +128,8 @@ editar e excluir), persistida nas coleções do Firestore:
 > Regras (`firestore.rules`): qualquer usuário autenticado pode ler/criar
 > solicitações; apenas `isAdmin()` (proprietários **ou** usuários com perfil
 > `admin` na coleção `usuarios`) pode aprovar, editar, apagar ou gerenciar os
-> cadastros. As coleções `servidores`, `contas` e `usuarios` são protegidas.
+> cadastros. As coleções `servidores`, `unidades`, `cargos` e `usuarios` são
+> protegidas.
 
 ## Publicação (GitHub Pages)
 
