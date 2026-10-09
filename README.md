@@ -33,23 +33,27 @@ Todos os dados são mantidos localmente no navegador
 > Dica: como não há backend, um servidor local simples também funciona, por
 > exemplo `python -m http.server` na pasta do projeto.
 
-## Configuração local
+## Configuração
 
-A senha inicial do administrador e as chaves do Google **não** ficam no código
-versionado. Elas são lidas do arquivo `config.local.js`, que está no
-`.gitignore`.
+As configurações vêm de dois arquivos, carregados nesta ordem:
+
+| Arquivo | Versionado? | Conteúdo |
+|---|---|---|
+| `config.js` | Sim | Valores públicos: `googleClientId`, `googleAdminEmails` |
+| `config.local.js` | Não (`.gitignore`) | Segredos/overrides: `initialAdminPassword`, etc. |
+
+| Chave | Onde | Descrição |
+|---|---|---|
+| `initialAdminPassword` | `config.local.js` | Senha inicial do administrador (usuário `centralrh`) |
+| `googleClientId` | `config.js` | Client ID do Google OAuth (Web). Sem ele, o botão "Entrar com Google" não aparece |
+| `googleAdminEmails` | `config.js` | E-mails do Google que entram como administrador |
 
 1. Copie `config.local.example.js` para `config.local.js`.
-2. Edite `config.local.js`:
+2. Ajuste os valores necessários.
 
-| Chave | Descrição |
-|---|---|
-| `initialAdminPassword` | Senha inicial do administrador (usuário `centralrh`) |
-| `googleClientId` | Client ID do Google OAuth (Web). Sem ele, o botão "Entrar com Google" não aparece |
-| `googleAdminEmails` | E-mails do Google que entram como administrador |
-
-Sem esse arquivo, o login administrativo com senha padrão fica desabilitado
-até que uma senha seja configurada/alterada.
+Sem `config.local.js`, o login administrativo com senha padrão fica
+desabilitado (não há senha padrão) — o acesso de admin continua possível pelo
+login com Google.
 
 ### Entrar com Google
 
@@ -61,7 +65,18 @@ Para funcionar, é preciso:
 
 - Um **Client ID OAuth** (tipo "Aplicativo da Web") no Google Cloud Console.
 - As **Origens JavaScript autorizadas** com a URL onde o site é servido
-  (ex.: `http://localhost`, `http://127.0.0.1`, ou o domínio de produção).
+  (ex.: `http://localhost:8000`, `https://siluar.github.io`).
+
+## Publicação (GitHub Pages)
+
+O site pode ser publicado diretamente do repositório via **GitHub Pages**
+(branch `main`, raiz `/`):
+
+- URL: `https://siluar.github.io/rhr6/`
+- O login com Google exige que a origem `https://siluar.github.io` esteja nas
+  **Origens JavaScript autorizadas** do Client ID no Google Cloud.
+- Nesse modo **não** há senha padrão de administrador (`config.local.js` não é
+  publicado); o acesso admin é pelo login com Google do e-mail autorizado.
 
 ## Estrutura
 
@@ -73,7 +88,8 @@ Para funcionar, é preciso:
 | `recusada.html` | Tela de solicitação recusada |
 | `intranet.html` | Página da intranet |
 | `brasao_ok.png` | Brasão institucional |
-| `config.local.js` | Configuração local: senha do admin e Google (não versionada) |
+| `config.js` | Configuração pública (Client ID do Google, e-mails admin) |
+| `config.local.js` | Configuração local/secreta: senha do admin (não versionada) |
 | `config.local.example.js` | Modelo da configuração local |
 | `run-site.bat` | Atalho para iniciar o site no Windows |
 | `VS- CODE.code-workspace` | Workspace do VS Code |
