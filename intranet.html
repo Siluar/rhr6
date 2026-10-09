@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#343b3e" />
+    <script>
+      (function () {
+        const loggedUser = sessionStorage.getItem("brisa-demo-user");
+
+        if (loggedUser === "usuario") {
+          window.location.replace("solicitacao-ferias.html");
+          return;
+        }
+
+        if (loggedUser === "admin@intranet" || loggedUser === "admin") {
+          window.location.replace("index.html?demo=1");
+        }
+      })();
+    </script>
+    <title>Intranet | Polícia Penal do Paraná</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="login.css" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="config.local.js"></script>
+    <script src="login.js" defer></script>
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="portal-header">
+        <div class="portal-header-inner">
+          <a class="brand" href="login.html" aria-label="Voltar à Central de Recursos Humanos">
+            <span class="brand-mark"><i data-lucide="shield-check"></i></span>
+            <span class="brand-name">POLÍCIA PENAL<small>PARANÁ</small></span>
+          </a>
+          <div class="header-status"><i data-lucide="lock-keyhole"></i><span>ACESSO À INTRANET</span></div>
+        </div>
+      </header>
+
+      <div class="login-layout">
+        <section class="identity-panel" aria-labelledby="identity-title">
+          <div class="identity-copy">
+            <p class="welcome-eyebrow"><span></span> REDE INTERNA</p>
+            <h1 id="identity-title">Intranet<span>Polícia Penal do Paraná</span></h1>
+            <p>Acesse os serviços e as informações internas da instituição.</p>
+          </div>
+          <div class="identity-art">
+            <img class="identity-crest" src="brasao_ok.png" alt="Brasão da Polícia Penal do Paraná" />
+            <p>IDENTIDADE INSTITUCIONAL</p>
+          </div>
+        </section>
+
+        <section class="form-panel" aria-labelledby="login-title">
+          <div class="form-wrap">
+            <div class="form-heading"><p class="form-eyebrow">ACESSO RESTRITO</p><h2 id="login-title">Entrar na Intranet</h2><p>Use sua identificação funcional para continuar.</p></div>
+            <form id="login-form">
+              <label class="field-label" for="email">Matrícula ou usuário</label>
+              <div class="input-wrap"><i data-lucide="user-round"></i><input id="email" name="email" type="text" placeholder="Digite sua matrícula ou usuário" autocomplete="username" required /></div>
+
+              <div class="password-heading"><label class="field-label" for="password">Senha</label><span class="credential-hint"><i data-lucide="lock-keyhole"></i> CREDENCIAL PESSOAL</span></div>
+              <div class="input-wrap"><i data-lucide="key-round"></i><input id="password" name="password" type="password" placeholder="Digite sua senha" autocomplete="current-password" minlength="6" required /><button class="password-toggle" type="button" aria-label="Mostrar senha" aria-pressed="false"><i data-lucide="eye"></i></button></div>
+
+              <label class="remember-option"><input name="remember" type="checkbox" /><span class="custom-checkbox"><i data-lucide="check"></i></span><span>Manter identificação neste dispositivo</span></label>
+              <p class="form-message" id="form-message" role="status" aria-live="polite"></p>
+              <button class="submit-button" type="submit"><span>Entrar na Intranet</span><i data-lucide="arrow-right"></i></button>
+            </form>
+            <p class="demo-note"><i data-lucide="info"></i> Acesso administrativo disponível com as credenciais autorizadas.</p>
+          </div>
+        </section>
+      </div>
+
+      <footer class="portal-footer"><span>POLÍCIA PENAL DO PARANÁ</span><span>PARANÁ · BRASIL</span></footer>
+    </main>
+  </body>
+</html>

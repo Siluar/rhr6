@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f5f5f0" />
+    <title>Central de Recursos Humanos Umuarama | Gestão de férias</title>
+    <script>
+      (function () {
+        const loggedUser = sessionStorage.getItem("brisa-demo-user");
+        const isDemoPage = window.location.search.includes("demo=1");
+
+        if (!loggedUser && !isDemoPage) {
+          window.location.replace("login.html");
+          return;
+        }
+
+        if (loggedUser !== "admin@intranet" && loggedUser !== "admin") {
+          window.location.replace("solicitacao-ferias.html");
+        }
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="config.local.js"></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <a class="brand" href="#inicio" aria-label="Central de Recursos Humanos Umuarama, início">
+          <span class="brand-mark" aria-hidden="true">
+            <img src="brasao_ok.png" alt="Brasão da Polícia Penal do Paraná" />
+          </span>
+          <span>Central de Recursos Humanos Umuarama</span>
+        </a>
+        <div class="workspace-switcher">
+          <span class="workspace-avatar">P</span>
+          <span class="workspace-copy"><strong>Polícia Penal</strong><small>Administração</small></span>
+          <i data-lucide="chevrons-up-down"></i>
+        </div>
+        <nav class="side-nav" aria-label="Navegação principal">
+          <p class="nav-label">GESTÃO</p>
+          <button class="nav-link active" data-view="overview"><i data-lucide="layout-dashboard"></i><span>Visão geral</span></button>
+          <button class="nav-link" data-view="calendar"><i data-lucide="calendar-days"></i><span>Calendário</span></button>
+          <button class="nav-link" type="button" data-view="tasks"><i data-lucide="list-checks"></i><span>Tarefas</span></button>
+          <div class="nav-menu-item" id="requests-nav-item">
+            <button class="nav-link nav-menu-toggle" type="button" data-submenu-toggle="requests" aria-label="Solicitações, abrir submenu" aria-expanded="false" aria-controls="requests-submenu"><i data-lucide="inbox"></i><span>Solicitações</span><span class="nav-count attention-count" id="nav-pending-count">3</span><i class="nav-menu-chevron" data-lucide="chevron-down"></i></button>
+            <div class="nav-submenu" id="requests-submenu" hidden>
+              <button class="nav-submenu-link active" type="button" data-view="requests" data-request-filter="pending">Pendentes</button>
+              <button class="nav-submenu-link" type="button" data-view="requests" data-request-filter="approved">Aprovadas</button>
+              <button class="nav-submenu-link" type="button" data-view="requests" data-request-filter="rejected">Recusadas</button>
+              <button class="nav-submenu-link" type="button" data-view="vacation-launch">Lançar férias</button>
+            </div>
+          </div>
+          <button class="nav-link" type="button" data-view="meta4"><i data-lucide="clipboard-list"></i><span>META 4</span></button>
+          <button class="nav-link" type="button" data-view="protocols-fg"><i data-lucide="file-check-2"></i><span>Protocolos F.G</span></button>
+          <div class="nav-menu-item" id="servers-nav-item">
+            <button class="nav-link nav-menu-toggle" type="button" data-submenu-toggle="servers" aria-label="Servidores, abrir submenu" aria-expanded="false" aria-controls="servers-submenu"><i data-lucide="contact-round"></i><span>Servidores</span><i class="nav-menu-chevron" data-lucide="chevron-down"></i></button>
+            <div class="nav-submenu" id="servers-submenu" hidden>
+              <button class="nav-submenu-link" type="button" data-view="servers">Cadastro de Login</button>
+              <button class="nav-submenu-link" type="button" data-view="server-data">Cadastro de Dados dos Servidores</button>
+              <button class="nav-submenu-link" type="button" data-view="server-fg">Cadastro de Servidores com Função Gratificada</button>
+            </div>
+          </div>
+          <p class="nav-label nav-label-spaced">RELATÓRIOS</p>
+          <div class="nav-menu-item" id="reports-nav-item">
+            <button class="nav-link nav-menu-toggle" type="button" data-submenu-toggle="reports" aria-label="Relatórios, abrir submenu" aria-expanded="false" aria-controls="reports-submenu"><i data-lucide="chart-no-axes-column-increasing"></i><span>Relatórios</span><i class="nav-menu-chevron" data-lucide="chevron-down"></i></button>
+            <div class="nav-submenu" id="reports-submenu" hidden>
+              <button class="nav-submenu-link" type="button" data-view="reports">Relatório por mês</button>
+              <button class="nav-submenu-link" type="button" data-view="report-year">Relatório por ano</button>
+              <button class="nav-submenu-link" type="button" data-view="report-unit">Relatório por unidade</button>
+              <button class="nav-submenu-link" type="button" data-view="report-person">Relatório por servidor</button>
+            </div>
+          </div>
+          <button class="nav-link" type="button" data-view="report-capacitacao"><i data-lucide="file-check-2"></i><span>Licença-capacitação</span></button>
+          <button class="nav-link" type="button" data-view="report-especial"><i data-lucide="file-check-2"></i><span>Licença especial</span></button>
+          <div class="nav-menu-item report-servers-submenu-item">
+            <button class="nav-link nav-menu-toggle" type="button" data-submenu-toggle="report-servers" aria-label="Relatório - Servidores, abrir submenu" aria-expanded="false" aria-controls="report-servers-submenu"><i data-lucide="users"></i><span>Relatório - Servidores</span><i class="nav-menu-chevron" data-lucide="chevron-down"></i></button>
+            <div class="nav-submenu report-servers-filter-menu" id="report-servers-submenu" hidden>
+              <button class="nav-submenu-link" type="button" data-open-report="report-servers" data-report-count="unit">Unidade</button>
+              <button class="nav-submenu-link" type="button" data-open-report="report-servers" data-report-count="role">Cargo</button>
+              <button class="nav-submenu-link" type="button" data-open-report="report-servers" data-report-count="quadro">Quadro</button>
+            </div>
+          </div>
+        </nav>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <div class="breadcrumb"><span>Polícia Penal</span><i data-lucide="chevron-right"></i><strong id="breadcrumb-current">Visão geral</strong></div>
+          <div class="topbar-actions">
+            <label class="search-box"><i data-lucide="search"></i><input id="global-search" type="search" placeholder="Buscar pessoa..." aria-label="Buscar pessoa" /><kbd>⌘ K</kbd></label>
+            <button class="icon-button notification-button" aria-label="Notificações"><i data-lucide="bell"></i><span></span></button>
+            <div class="topbar-account">
+              <button class="topbar-profile" type="button" aria-label="Perfil do usuário"><span class="avatar avatar-profile" id="profile-avatar">A</span><span class="profile-copy"><strong id="profile-name">Administrador</strong><small id="profile-role">Acesso administrativo</small></span></button>
+              <button class="logout-button" id="open-password-change" type="button">Alterar senha</button>
+              <a class="logout-button topbar-logout" href="login.html" data-logout><i data-lucide="log-out"></i><span>Sair</span></a>
+            </div>
+          </div>
+        </header>
+
+        <div class="page-content">
+          <section class="page-heading">
+            <div><p class="eyebrow" id="current-date">QUINTA-FEIRA, 1 DE OUTUBRO</p><h1 id="page-title" hidden></h1><p class="page-subtitle" id="page-subtitle" hidden></p></div>
+            <div class="page-heading-crest"><img src="brasao_ok.png" alt="Brasão da Polícia Penal do Paraná" /></div>
+          </section>
+
+          <section class="view-panel active" id="view-overview" aria-label="Visão geral">
+            <div class="stats-grid">
+              <article class="stat-card stat-peach"><div class="stat-top"><span class="stat-icon"><i data-lucide="clock-3"></i></span><span class="stat-period">PRECISAM DE VOCÊ</span></div><p class="stat-label">Solicitações pendentes</p><div class="stat-value-row"><strong id="pending-stat">3</strong><span class="stat-change neutral">para revisar</span></div><div class="stat-foot"><span id="pending-foot">A mais antiga chegou há 2 dias</span><button class="text-action" data-go-view="requests">Revisar <i data-lucide="arrow-right"></i></button></div></article>
+              <article class="stat-card stat-yellow"><div class="stat-top"><span class="stat-icon"><i data-lucide="users-round"></i></span><span class="stat-period">HOJE</span></div><p class="stat-label">Pessoas de férias</p><div class="stat-value-row"><strong>2</strong><span class="stat-change neutral">de 12 pessoas</span></div><div class="stat-foot"><span class="avatar-stack"><i class="avatar-mini avatar-lu">LM</i><i class="avatar-mini avatar-ca">CA</i></span><span>Luiza e Caio estão fora</span></div></article>
+            </div>
+            <div class="content-grid overview-grid">
+              <section class="panel calendar-panel"><div class="panel-heading"><div><p class="section-kicker">ACOMPANHE O TIME</p><h2>Escala de trabalho</h2></div><button class="icon-button panel-more" aria-label="Abrir calendário" data-go-view="calendar"><i data-lucide="arrow-up-right"></i></button></div><div class="calendar-toolbar"><div class="month-control"><button class="icon-button small-icon" data-month-shift="-1" aria-label="Mês anterior"><i data-lucide="chevron-left"></i></button><strong id="overview-month-label">Outubro 2026</strong><button class="icon-button small-icon" data-month-shift="1" aria-label="Próximo mês"><i data-lucide="chevron-right"></i></button></div><button class="today-button" data-month-today>Hoje</button></div><div class="calendar-grid compact-calendar" id="overview-calendar"></div><div class="calendar-legend"><span><i class="legend-dot dot-green"></i>Turno ativo</span><span><i class="legend-dot dot-peach"></i>Escala pendente</span></div></section>
+              <section class="panel requests-panel"><div class="panel-heading"><div><p class="section-kicker">NA SUA FILA</p><h2>Para aprovar <span class="heading-count" id="request-heading-count">03</span></h2></div><button class="subtle-link" data-go-view="requests">Ver todas <i data-lucide="arrow-right"></i></button></div><div class="request-list compact-request-list" id="overview-requests"></div></section>
+            </div>
+          </section>
+
+          <section class="view-panel" id="view-calendar" aria-label="Escala de trabalho"><section class="panel full-calendar-panel"><div class="panel-heading"><div><p class="section-kicker">PLANEJAMENTO</p><h2>Escala da equipe</h2></div><div class="calendar-toolbar full-toolbar"><div class="month-control"><button class="icon-button small-icon" data-month-shift="-1" aria-label="Mês anterior"><i data-lucide="chevron-left"></i></button><strong id="full-month-label">Outubro 2026</strong><button class="icon-button small-icon" data-month-shift="1" aria-label="Próximo mês"><i data-lucide="chevron-right"></i></button></div><button class="today-button" data-month-today>Hoje</button></div></div><div class="calendar-grid full-calendar" id="full-calendar"></div><div class="calendar-legend"><span><i class="legend-dot dot-green"></i>Turno ativo</span><span><i class="legend-dot dot-peach"></i>Escala pendente</span></div></section><section class="panel selected-day-panel"><div class="panel-heading"><div><p class="section-kicker">DETALHES DO DIA</p><h2 id="selected-day-heading">Selecione uma data</h2></div></div><div id="selected-day-content" class="selected-day-content"><p class="empty-note">Escolha um dia no calendário para ver qual equipe estará em plantão.</p></div></section></section>
+
+          <section class="view-panel" id="view-tasks" aria-label="Lista de tarefas">
+            <section class="panel detailed-reports-panel task-list-panel" aria-labelledby="task-list-title">
+              <div class="panel-heading"><div><p class="section-kicker">ORGANIZAÇÃO</p><h2 id="task-list-title">Lista de tarefas</h2></div><span class="task-count" id="task-count">0 tarefas</span></div>
+              <form class="task-entry-form" id="task-entry-form">
+                <label for="task-entry">Nova tarefa</label>
+                <div class="task-entry-controls"><input id="task-entry" name="task" type="text" maxlength="160" placeholder="Descreva uma tarefa" required /><label class="task-date-field" for="task-date">Data<input id="task-date" name="date" type="date" required /></label><button class="button button-primary" type="submit"><i data-lucide="plus"></i><span>Adicionar</span></button></div>
+              </form>
+              <section class="task-calendar-section" aria-labelledby="task-calendar-title">
+                <div class="task-calendar-toolbar"><h3 id="task-calendar-title">Tarefas no calendário</h3><div class="task-calendar-controls"><button class="icon-button small-icon" id="task-calendar-prev" type="button" aria-label="Mês anterior"><i data-lucide="chevron-left"></i></button><strong id="task-calendar-month-label"></strong><button class="icon-button small-icon" id="task-calendar-next" type="button" aria-label="Próximo mês"><i data-lucide="chevron-right"></i></button><button class="today-button" id="task-calendar-today" type="button">Hoje</button></div></div>
+                <div class="task-calendar-grid" id="task-calendar" aria-live="polite"></div>
+              </section>
+              <div class="task-selected-date-toolbar" id="task-selected-date-toolbar" hidden><strong id="task-selected-date-label"></strong><button class="button button-quiet" id="task-clear-selected-date" type="button">Mostrar todas as tarefas</button></div>
+              <ul class="task-list" id="task-list" aria-live="polite"></ul>
+            </section>
+          </section>
+
+          <section class="view-panel" id="view-team" aria-label="Equipe"><section class="panel team-panel full-team-panel"><div class="panel-heading team-panel-heading"><div><p class="section-kicker">PESSOAS</p><h2>Sua equipe <span class="team-total">12 pessoas</span></h2></div><label class="table-search"><i data-lucide="search"></i><input id="team-search" type="search" placeholder="Filtrar por nome ou área" aria-label="Filtrar equipe" /></label></div><div class="team-table-wrap"><table class="team-table"><thead><tr><th>PESSOA</th><th>ÁREA</th><th>SALDO DE FÉRIAS</th><th>PRÓXIMAS FÉRIAS</th><th>STATUS</th></tr></thead><tbody id="full-team"></tbody></table></div></section></section>
+
+          <section class="view-panel" id="view-requests" aria-label="Solicitações"><section class="panel all-requests-panel"><div class="panel-heading"><div><p class="section-kicker">CAIXA DE ENTRADA</p><h2>Solicitações</h2></div></div><div class="request-list full-request-list" id="full-requests"></div></section></section>
+
+          <section class="view-panel" id="view-meta4" aria-label="META 4">
+            <section class="panel detailed-reports-panel" aria-labelledby="meta4-title">
+              <div class="panel-heading"><div><p class="section-kicker">PEDIDOS DE FÉRIAS</p><h2 id="meta4-title">META 4</h2></div><div class="name-filter-toolbar"><label class="table-search name-filter"><i data-lucide="search"></i><input id="meta4-search" type="search" placeholder="Filtrar por nome" aria-label="Filtrar META 4 pelo nome do solicitante" /></label><label class="report-period-field meta-period-filter" for="meta4-month-filter">Mês<select id="meta4-month-filter"><option value="">Todos os meses</option></select></label><label class="report-period-field meta-period-filter" for="meta4-year-filter">Ano<select id="meta4-year-filter"><option value="">Todos os anos</option></select></label><label class="report-period-field meta-period-filter" for="meta4-launch-filter">Lançamento<select id="meta4-launch-filter"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option></select></label><span class="task-count" id="meta4-count">0 pedidos</span></div></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table meta4-table"><thead><tr><th scope="col">Nome</th><th scope="col">CPF</th><th scope="col">Mês de férias</th><th scope="col">Ano</th><th scope="col">Início</th><th scope="col">Fim</th><th scope="col">Lançamento</th><th scope="col">M4</th></tr></thead><tbody id="meta4-body"></tbody></table></div>
+            </section>
+          </section>
+
+          <section class="view-panel" id="view-protocols-fg" aria-label="Protocolos de Função Gratificada">
+            <section class="panel detailed-reports-panel" aria-labelledby="protocols-fg-title">
+              <div class="panel-heading"><div><p class="section-kicker">FÉRIAS COM FUNÇÃO GRATIFICADA</p><h2 id="protocols-fg-title">Protocolos F.G</h2></div><div class="name-filter-toolbar"><label class="table-search name-filter"><i data-lucide="search"></i><input id="protocols-fg-search" type="search" placeholder="Filtrar por nome" aria-label="Filtrar Protocolos F.G por nome do solicitante ou substituto" /></label><label class="report-period-field meta-period-filter" for="protocols-fg-month-filter">Mês<select id="protocols-fg-month-filter"><option value="">Todos os meses</option></select></label><label class="report-period-field meta-period-filter" for="protocols-fg-year-filter">Ano<select id="protocols-fg-year-filter"><option value="">Todos os anos</option></select></label><label class="report-period-field meta-period-filter" for="protocols-fg-status-filter">Status<select id="protocols-fg-status-filter"><option value="">Todos</option><option value="fazer">Fazer protocolo</option><option value="feito">Protocolo feito</option></select></label><span class="task-count" id="protocols-fg-count">0 protocolos</span></div></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table protocols-fg-table"><thead><tr><th scope="col">Servidor solicitante</th><th scope="col">CPF do solicitante</th><th scope="col">Substituto</th><th scope="col">CPF do substituto</th><th scope="col">Mês</th><th scope="col">Ano</th><th scope="col">Início</th><th scope="col">Fim</th><th scope="col">Dias de fruição</th><th scope="col">Status do protocolo</th><th scope="col">Número do protocolo</th><th scope="col">Conferido</th></tr></thead><tbody id="protocols-fg-body"></tbody></table></div>
+            </section>
+          </section>
+
+          <section class="view-panel" id="view-servers" aria-label="Cadastro de Login">
+            <section class="panel detailed-reports-panel" aria-labelledby="server-registry-title">
+              <div class="panel-heading"><div><p class="section-kicker">ACESSO AO SISTEMA</p><h2 id="server-registry-title">Cadastro de Login</h2><p class="server-registry-description">A lista é preenchida com os servidores cadastrados. Altere somente o tipo de acesso.</p></div></div>
+              <div class="server-registry-content">
+                <div class="server-registry-filters">
+                  <label class="table-search server-registry-search"><i data-lucide="search"></i><input id="server-registry-search" type="search" placeholder="Filtrar por nome ou CPF" aria-label="Filtrar servidores por nome ou CPF" /></label>
+                  <label class="report-period-field" for="server-registry-role-filter">Tipo de acesso<select id="server-registry-role-filter"><option value="">Todos</option><option value="usuario">Usuário</option><option value="admin">Administrador</option><option value="both">Usuário e administrador</option></select></label>
+                </div>
+                <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Servidor</th><th scope="col">CPF</th><th scope="col">Tipo de acesso</th></tr></thead><tbody id="server-registry-body"></tbody></table></div>
+              </div>
+            </section>
+          </section>
+          <section class="view-panel" id="view-server-data" aria-label="Cadastro de Dados dos Servidores">
+            <section class="panel detailed-reports-panel server-data-panel" aria-labelledby="server-data-title">
+              <div class="panel-heading"><div><p class="section-kicker">DADOS FUNCIONAIS</p><h2 id="server-data-title"><button class="server-data-form-toggle" id="server-data-form-toggle" type="button" aria-expanded="false" aria-controls="server-data-form">Cadastro de Dados dos Servidores<i data-lucide="chevron-down" aria-hidden="true"></i></button></h2></div></div>
+              <div class="server-data-content">
+                <form class="server-data-form" id="server-data-form" hidden>
+                  <label>Nome<input name="name" type="text" autocomplete="name" required /></label>
+                  <label>CPF<input name="cpf" type="text" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="14" required /></label>
+                  <label>RG<input name="rg" type="text" autocomplete="off" required /></label>
+                  <label>Data de nascimento<input name="birthDate" type="date" autocomplete="bday" required /></label>
+                  <label>Telefone celular<input name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" required /></label>
+                  <label>E-mail institucional<input name="email" type="email" autocomplete="email" placeholder="nome@instituicao.gov.br" required /></label>
+                  <label>Unidade Penal<select name="unidadePenal" required>
+                    <option value="">Selecione a unidade penal</option>
+                    <option>Sot - Umuarama</option>
+                    <option>Cadeia Pública de Umuarama</option>
+                    <option>RA-R6</option>
+                    <option>Penitenciária Estadual de Cruzeiro do Oeste</option>
+                    <option>Penitenciária Estadual de Guaíra</option>
+                    <option>Cadeia Pública de Cidade Gaúcha</option>
+                    <option>Cadeia Pública de Iporã</option>
+                    <option>Penitenciária de Campo Mourão</option>
+                    <option>Cadeia Pública de Campo Mourão</option>
+                    <option>Posto Avançado de Monitoramento - R6</option>
+                    <option>Cadeia Pública de Loanda</option>
+                    <option>Complexo Social de Campo Mourão</option>
+                    <option>Cadeia Pública de Goioerê</option>
+                    <option>Cadeia Pública de Altonia</option>
+                    <option>Cadeia Pública de Cianorte</option>
+                    <option>Complexo Social de Cruzeiro do Oeste</option>
+                  </select></label>
+                  <label>Cargo<select name="cargo" required>
+                    <option value="">Selecione o cargo</option>
+                    <option>Policial Penal</option>
+                    <option>Agente de Execução</option>
+                    <option>Agente Profissional</option>
+                  </select></label>
+                  <label>Quadro<select name="quadro" required>
+                    <option value="">Selecione primeiro o cargo</option>
+                    <option value="QPPP">QPPP</option>
+                    <option value="QPPE">QPPE</option>
+                  </select></label>
+                  <div class="server-data-form-actions">
+                    <button class="button button-primary" id="server-data-submit" type="submit"><i data-lucide="user-round-plus"></i><span>Cadastrar dados</span></button>
+                    <button class="button button-secondary" id="server-data-cancel-edit" type="button" hidden>Cancelar edição</button>
+                  </div>
+                </form>
+              </div>
+            </section>
+            <section class="panel detailed-reports-panel server-data-list-panel" aria-labelledby="server-data-list-title">
+              <div class="panel-heading"><div><p class="section-kicker">REGISTROS</p><h2 id="server-data-list-title">Servidores cadastrados</h2></div></div>
+              <div class="server-data-content">
+                <div class="server-data-toolbar">
+                  <label class="table-search server-registry-search server-data-search"><i data-lucide="search"></i><input id="server-data-search" type="search" placeholder="Filtrar por nome ou CPF" aria-label="Filtrar servidores por nome ou CPF" /></label>
+                  <div class="server-data-export-actions">
+                    <button class="button button-secondary" id="server-data-export-csv" type="button"><i data-lucide="file-spreadsheet"></i><span>Exportar CSV</span></button>
+                    <button class="button button-secondary" id="server-data-export-pdf" type="button"><i data-lucide="file-text"></i><span>Gerar PDF</span></button>
+                  </div>
+                </div>
+                <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Nome</th><th scope="col">CPF</th><th scope="col">RG</th><th scope="col">Nascimento</th><th scope="col">Telefone</th><th scope="col">E-mail institucional</th><th scope="col">Unidade Penal</th><th scope="col">Cargo</th><th scope="col">Quadro</th><th scope="col">Ação</th></tr></thead><tbody id="server-data-body"></tbody></table></div>
+              </div>
+            </section>
+          </section>
+          <section class="view-panel" id="view-vacation-launch" aria-label="Lançar período de férias">
+            <section class="panel detailed-reports-panel vacation-launch-panel" aria-labelledby="vacation-launch-title">
+              <div class="panel-heading"><div><p class="section-kicker">LANÇAMENTO</p><h2 id="vacation-launch-title">Lançar período de férias</h2><p class="server-registry-description">Registre diretamente um período de férias para um servidor cadastrado. O lançamento já entra como aprovado nos relatórios.</p></div></div>
+              <form class="vacation-launch-form" id="vacation-launch-form">
+                <div class="vacation-launch-server-field"><label for="vacation-launch-server-search">Servidor</label><input id="vacation-launch-server-search" type="text" autocomplete="off" placeholder="Digite o nome do servidor" role="combobox" aria-autocomplete="list" aria-controls="vacation-launch-suggestions" aria-expanded="false" required /><input id="vacation-launch-server" type="hidden" /><ul class="vacation-launch-suggestions" id="vacation-launch-suggestions" role="listbox" hidden></ul></div>
+                <label for="vacation-launch-start">Início<input id="vacation-launch-start" type="date" required /></label>
+                <label for="vacation-launch-end">Término<input id="vacation-launch-end" type="date" required /></label>
+                <label class="vacation-launch-note" for="vacation-launch-note">Observação (opcional)<input id="vacation-launch-note" type="text" maxlength="160" placeholder="Ex.: férias lançadas conforme escala" /></label>
+                <label class="vacation-launch-fg-toggle" for="vacation-launch-fg"><input type="checkbox" id="vacation-launch-fg" /> <span>Servidor com Função Gratificada</span></label>
+                <label class="vacation-launch-fg-field" for="vacation-launch-function" hidden>Função exercida<input id="vacation-launch-function" type="text" maxlength="80" placeholder="Informe a função gratificada" /></label>
+                <label class="vacation-launch-fg-field" for="vacation-launch-substitute" hidden>Substituto<input id="vacation-launch-substitute" type="text" maxlength="80" placeholder="Informe o nome do substituto" /></label>
+                <button class="button button-primary" type="submit"><i data-lucide="calendar-plus"></i><span>Lançar férias</span></button>
+              </form>
+            </section>
+          </section>
+          <section class="view-panel" id="view-server-fg" aria-label="Cadastro de Servidores com Função Gratificada">
+            <section class="panel detailed-reports-panel server-fg-panel" aria-labelledby="server-fg-title">
+              <div class="panel-heading"><div><p class="section-kicker">FUNÇÕES GRATIFICADAS</p><h2 id="server-fg-title">Cadastro de Servidores com Função Gratificada</h2><p class="server-registry-description">Selecione servidores já cadastrados para manter esta relação administrativa, independente dos relatórios.</p></div></div>
+              <div class="server-fg-content">
+                <form class="server-fg-form" id="server-fg-form">
+                  <label for="server-fg-select">Servidor cadastrado<select id="server-fg-select" required><option value="">Selecione um servidor</option></select></label>
+                  <button class="button button-primary" type="submit"><i data-lucide="user-round-plus"></i><span>Adicionar servidor</span></button>
+                </form>
+                <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Servidor</th><th scope="col">CPF</th><th scope="col">Unidade</th><th scope="col">Ação</th></tr></thead><tbody id="server-fg-body"></tbody></table></div>
+              </div>
+            </section>
+          </section>
+
+          <section class="view-panel" id="view-reports" aria-label="Relatórios de Férias">
+            <section class="panel current-vacations-panel" aria-labelledby="current-vacations-title">
+              <div class="panel-heading"><div><p class="section-kicker">SERVIDORES</p><h2 id="current-vacations-title">Férias no mês</h2></div><span class="current-month-label" id="current-month-label"></span></div>
+              <div class="current-vacations-filters">
+                <label class="table-search current-vacations-filter"><i data-lucide="search"></i><input id="current-vacation-search" type="search" placeholder="Servidor" aria-label="Filtrar servidores pelo nome" /></label>
+                <label class="report-period-field" for="current-vacation-month">Mês<select id="current-vacation-month"></select></label>
+                <label class="report-period-field" for="current-vacation-year">Ano<select id="current-vacation-year"></select></label>
+              </div>
+              <div class="report-month-toolbar"><div class="report-month-group-titles" id="current-vacation-group-titles"></div><div class="report-export-actions" data-report-export-table="current-vacations-table,fg-vacation-report-table" data-report-export-labels="Servidores|Servidores com Função Gratificada" data-report-export-title="Férias no mês"></div></div>
+              <div class="current-vacations-table-wrap"><table class="current-vacations-table" id="current-vacations-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Unidade de Lotação</th><th scope="col">Mês de férias</th><th scope="col">Período</th></tr></thead><tbody id="current-month-vacations" aria-live="polite"></tbody></table></div>
+            </section>
+            <div class="report-grid"><article class="panel report-card vacation-count-card"><p class="section-kicker">SERVIDORES DE FÉRIAS NO PERÍODO</p><strong><span id="monthly-vacation-count">0</span> <small id="monthly-vacation-unit">servidores</small></strong><p>Com férias aprovadas no período selecionado.</p><ul class="vacation-count-split"><li>Sem Função Gratificada: <b id="monthly-vacation-count-regular">0</b></li><li>Com Função Gratificada: <b id="monthly-vacation-count-fg">0</b></li></ul></article></div>
+            <section class="panel current-vacations-panel fg-vacations-panel" aria-labelledby="fg-vacations-title">
+              <div class="report-month-toolbar"><div class="report-month-group-titles"><strong id="fg-vacations-title">Servidores com Função Gratificada</strong></div></div>
+              <div class="current-vacations-table-wrap"><table class="current-vacations-table fg-vacations-table" id="fg-vacation-report-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Unidade de Lotação</th><th scope="col">Mês de férias</th><th scope="col">Função exercida</th><th scope="col">Substituto</th><th scope="col">Período de férias</th></tr></thead><tbody id="fg-vacation-report"></tbody></table></div>
+            </section>
+          </section>
+          <section class="view-panel" id="view-report-year" aria-label="Relatório por ano">
+            <section class="panel detailed-reports-panel" aria-labelledby="report-year-title">
+              <div class="panel-heading"><div><p class="section-kicker">FÉRIAS APROVADAS</p><h2 id="report-year-title">Relatório por ano</h2></div></div>
+              <div class="report-filter"><label for="report-year-select">Ano do relatório</label><select id="report-year-select"></select></div>
+              <div class="report-export-actions" data-report-export-table="report-year-table" data-report-export-title="Relatório por ano"></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-year-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Unidade de Lotação</th><th scope="col">Período</th><th scope="col">Dias</th></tr></thead><tbody id="report-year-body"></tbody></table></div>
+            </section>
+          </section>
+          <section class="view-panel" id="view-report-unit" aria-label="Relatório por unidade">
+            <section class="panel detailed-reports-panel" aria-labelledby="report-unit-title">
+              <div class="panel-heading"><div><p class="section-kicker">FÉRIAS APROVADAS</p><h2 id="report-unit-title">Relatório por unidade</h2></div></div>
+              <div class="report-unit-filters">
+                <div class="report-unit-person-field">
+                  <label for="report-unit-person-search">Servidor</label>
+                  <label class="table-search report-filter-search report-unit-person-filter"><i data-lucide="search"></i><input id="report-unit-person-search" type="search" placeholder="Digite o nome do servidor" aria-label="Digite o nome do servidor" /></label>
+                </div>
+                <label class="report-unit-filter" for="report-unit-select">Unidade de Lotação<select id="report-unit-select"><option value="">Todas as unidades</option></select></label>
+              </div>
+              <div class="report-export-actions" data-report-export-table="report-unit-table" data-report-export-title="Relatório por unidade"></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-unit-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Unidade de Lotação</th><th scope="col">Período de férias</th></tr></thead><tbody id="report-unit-body"></tbody></table></div>
+            </section>
+          </section>
+          <section class="view-panel" id="view-report-person" aria-label="Relatório por servidor">
+            <section class="panel detailed-reports-panel" aria-labelledby="report-person-title">
+              <div class="panel-heading"><div><p class="section-kicker">FÉRIAS APROVADAS</p><h2 id="report-person-title">Relatório por servidor</h2></div></div>
+              <label class="table-search report-filter-search"><i data-lucide="search"></i><input id="report-person-search" type="search" placeholder="Filtrar servidor" aria-label="Filtrar servidor pelo nome" /></label>
+              <div class="report-export-actions" data-report-export-table="report-person-table" data-report-export-title="Relatório por servidor"></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-person-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Unidade de Lotação</th><th scope="col">Período</th><th scope="col">Dias</th></tr></thead><tbody id="report-person-body"></tbody></table></div>
+            </section>
+          </section>
+          <section class="view-panel" id="view-report-capacitacao" aria-label="Relatório de licença-capacitação">
+            <section class="panel detailed-reports-panel" aria-labelledby="report-capacitacao-title">
+              <div class="panel-heading"><div><p class="section-kicker">LICENÇAS APROVADAS</p><h2 id="report-capacitacao-title">Relatório de licença-capacitação</h2></div></div>
+              <div class="report-capacitacao-filters">
+                <label class="table-search report-capacitacao-name-filter"><i data-lucide="search"></i><input id="report-capacitacao-name" type="search" placeholder="Filtrar servidor pelo nome" aria-label="Filtrar servidor pelo nome" /></label>
+                <label class="report-unit-filter" for="report-capacitacao-month">Ciclo<select id="report-capacitacao-month"><option value="">Todos os ciclos</option></select></label>
+              </div>
+              <div class="report-export-actions" data-report-export-table="report-capacitacao-table" data-report-export-title="Relatório de licença-capacitação"></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-capacitacao-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Mês</th><th scope="col">Unidade</th><th scope="col">Período</th></tr></thead><tbody id="report-capacitacao-body"></tbody></table></div>
+            </section>
+          </section>
+          <section class="view-panel" id="view-report-especial" aria-label="Relatório de licença especial">
+            <section class="panel detailed-reports-panel" aria-labelledby="report-especial-title">
+              <div class="panel-heading"><div><p class="section-kicker">LICENÇAS APROVADAS</p><h2 id="report-especial-title">Relatório de licença especial</h2></div></div>
+              <div class="report-capacitacao-filters">
+                <label class="table-search report-capacitacao-name-filter"><i data-lucide="search"></i><input id="report-especial-name" type="search" placeholder="Filtrar servidor pelo nome" aria-label="Filtrar servidor pelo nome" /></label>
+                <label class="report-unit-filter" for="report-especial-month">Ciclo<select id="report-especial-month"><option value="">Todos os ciclos</option></select></label>
+              </div>
+              <div class="report-export-actions" data-report-export-table="report-especial-table" data-report-export-title="Relatório de licença especial"></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-especial-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Mês</th><th scope="col">Unidade</th><th scope="col">Período</th></tr></thead><tbody id="report-especial-body"></tbody></table></div>
+            </section>
+          </section>
+          <section class="view-panel" id="view-report-servers" aria-label="Relatório - Servidores">
+            <section class="panel detailed-reports-panel" aria-labelledby="report-servers-title">
+              <div class="panel-heading"><div><p class="section-kicker">SERVIDORES CADASTRADOS</p><h2 id="report-servers-title">Relatório - Servidores</h2></div></div>
+              <div class="report-servers-filters">
+                <label class="report-unit-filter" for="report-servers-select">Servidor<input id="report-servers-select" type="search" placeholder="Digite o nome do servidor" autocomplete="off"></label>
+                <label class="report-unit-filter" for="report-servers-unit">Unidade<select id="report-servers-unit"><option value="">Todas as unidades</option></select></label>
+              </div>
+              <div class="report-units-count" data-count-block="unit"><h3 class="report-units-count-title">Quantitativo por unidade</h3><div class="report-export-actions" data-report-export-table="report-units-count-table" data-report-export-title="Quantitativo de servidores por unidade"></div><div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-units-count-table"><thead><tr><th scope="col">Unidade</th><th scope="col">Quantidade de servidores</th></tr></thead><tbody id="report-units-count-body"></tbody><tfoot><tr><th scope="col">Total</th><td id="report-units-count-total">0</td></tr></tfoot></table></div></div>
+              <div class="report-units-count" data-count-block="role"><h3 class="report-units-count-title">Quantitativo por cargo</h3><div class="report-export-actions" data-report-export-table="report-roles-count-table" data-report-export-title="Quantitativo de servidores por cargo"></div><div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-roles-count-table"><thead><tr><th scope="col">Cargo</th><th scope="col">Quantidade de servidores</th></tr></thead><tbody id="report-roles-count-body"></tbody><tfoot><tr><th scope="col">Total</th><td id="report-roles-count-total">0</td></tr></tfoot></table></div></div>
+              <div class="report-units-count" data-count-block="quadro"><h3 class="report-units-count-title">Quantitativo por quadro</h3><div class="report-export-actions" data-report-export-table="report-quadros-count-table" data-report-export-title="Quantitativo de servidores por quadro"></div><div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-quadros-count-table"><thead><tr><th scope="col">Quadro</th><th scope="col">Quantidade de servidores</th></tr></thead><tbody id="report-quadros-count-body"></tbody><tfoot><tr><th scope="col">Total</th><td id="report-quadros-count-total">0</td></tr></tfoot></table></div></div>
+              <div class="report-export-actions" data-report-export-table="report-servers-table" data-report-export-title="Relatório - Servidores"></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-servers-table"><thead><tr><th scope="col">Nome</th><th scope="col" id="report-servers-second-head">Unidade</th></tr></thead><tbody id="report-servers-body"></tbody></table></div>
+            </section>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <dialog class="request-details-dialog" id="request-details-dialog" aria-labelledby="request-details-title">
+      <div class="request-details-dialog-heading">
+        <div><p class="section-kicker">DETALHES</p><h2 id="request-details-title">Solicitação</h2></div>
+        <form method="dialog"><button class="icon-button" aria-label="Fechar detalhes"><i data-lucide="x"></i></button></form>
+      </div>
+      <div id="request-details-content"></div>
+      <section class="request-rejection-section" id="request-rejection-section" hidden>
+        <h3>Justificativa da recusa</h3>
+        <form id="request-rejection-form">
+          <input name="requestId" type="hidden" />
+          <label for="request-rejection-reason">Informe o motivo da recusa</label>
+          <textarea id="request-rejection-reason" name="justification" rows="4" required></textarea>
+          <label for="request-rejection-attachment">Anexar arquivo (opcional)</label>
+          <input id="request-rejection-attachment" name="attachment" type="file" />
+          <div class="request-details-dialog-actions">
+            <button class="button button-secondary" type="button" data-request-action="cancel-reject">Voltar</button>
+            <button class="button button-primary" type="submit"><i data-lucide="send"></i><span>Confirmar recusa</span></button>
+          </div>
+        </form>
+      </section>
+      <div class="request-details-dialog-actions" id="request-details-actions"></div>
+    </dialog>
+    <dialog class="account-password-dialog" id="account-password-dialog" aria-labelledby="account-password-title">
+      <div class="request-details-dialog-heading"><div><p class="section-kicker">CONTA</p><h2 id="account-password-title">Alterar senha</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
+      <form id="account-password-form">
+        <label for="account-current-password">Senha atual<input id="account-current-password" type="password" autocomplete="current-password" minlength="6" required /></label>
+        <label for="account-new-password">Nova senha<input id="account-new-password" type="password" autocomplete="new-password" minlength="6" required /></label>
+        <label for="account-confirm-password">Confirme a nova senha<input id="account-confirm-password" type="password" autocomplete="new-password" minlength="6" required /></label>
+        <p id="account-password-message" role="status" aria-live="polite"></p>
+        <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="account-password-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="key-round"></i><span>Salvar nova senha</span></button></div>
+      </form>
+    </dialog>
+    <div class="toast" id="toast" role="status" aria-live="polite"><i data-lucide="circle-check"></i><span></span></div>
+  </body>
+</html>

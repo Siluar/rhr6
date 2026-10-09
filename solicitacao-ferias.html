@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Solicitações | Central de Recursos Humanos</title>
+    <style>
+      :root {
+        --bg: #e5e5e5;
+        --panel: #f2f2f2;
+        --ink: #1f1f1f;
+        --muted: #6a6a6a;
+        --line: rgba(0, 0, 0, 0.06);
+        --soft: #f3f3f3;
+        --green: #0f7b46;
+      }
+
+      * { box-sizing: border-box; }
+
+      html, body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: Arial, sans-serif;
+      }
+
+      body {
+        min-height: 100vh;
+      }
+
+      button, input, select {
+        font: inherit;
+      }
+
+      .request-page {
+        width: 100%;
+        min-height: 100vh;
+        background: var(--bg);
+      }
+
+      .request-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        min-height: 118px;
+        padding: 16px 36px 14px 26px;
+      }
+
+      .brand-zone {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 0;
+        flex: 0 0 auto;
+      }
+
+      .brand-image {
+        display: block;
+        width: 170px;
+        height: auto;
+        max-width: 100%;
+        filter: drop-shadow(0 2px 0 rgba(255,255,255,0.65));
+      }
+
+      .request-tabs {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+        gap: 52px;
+        padding: 0 18px;
+      }
+
+      .tab-link {
+        border: none;
+        background: transparent;
+        padding: 0;
+        color: rgba(0, 0, 0, 0.72);
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        cursor: pointer;
+        opacity: 0.9;
+        transition: opacity 0.15s ease, transform 0.15s ease;
+      }
+
+      .tab-link:hover {
+        opacity: 1;
+      }
+
+      .tab-link.active {
+        color: #1f1f1f;
+      }
+
+      .user-box {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 170px;
+        justify-content: flex-end;
+        color: #1f1f1f;
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      .user-avatar {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        background: #0d7c48;
+        border-radius: 50%;
+        color: white;
+        font-size: 18px;
+        box-shadow: inset 0 0 0 2px rgba(255,255,255,0.7);
+      }
+
+      .user-name {
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .logout-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 10px;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.45);
+        color: #1f1f1f;
+        font-size: 13px;
+        font-weight: 700;
+        text-decoration: none;
+        cursor: pointer;
+      }
+
+      .user-actions { display: flex; align-items: center; gap: 8px; }
+      .password-change-dialog {
+        width: min(100% - 32px, 480px);
+        padding: 22px;
+        border: 1px solid rgba(0,0,0,0.14);
+        border-radius: 10px;
+        background: var(--panel);
+        color: var(--ink);
+        box-shadow: 0 20px 60px rgba(0,0,0,0.24);
+      }
+      .password-change-dialog::backdrop { background: rgba(20,25,22,0.55); }
+      .password-change-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+      .password-change-heading h2 { margin: 0 0 5px; font-size: 1.2rem; }
+      .password-change-heading p { margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
+      .password-change-close { width: 32px; height: 32px; flex: 0 0 auto; border: 0; border-radius: 6px; background: #e6e6e6; color: var(--ink); cursor: pointer; font-size: 20px; line-height: 1; }
+      .password-change-form { display: grid; gap: 12px; }
+      .password-change-message { min-height: 20px; margin: 0; color: var(--green); font-size: 0.88rem; }
+      .password-change-message.error { color: #a0352b; }
+
+      .logout-button:hover {
+        background: rgba(255, 255, 255, 0.8);
+      }
+
+      .logout-button svg {
+        width: 16px;
+        height: 16px;
+      }
+
+      .request-main {
+        min-height: calc(100vh - 118px);
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .hidden { display: none !important; }
+
+      .content-block {
+        padding: 18px 26px 30px;
+      }
+
+      .page-title {
+        margin: 0 0 18px;
+        font-size: clamp(2rem, 2vw, 2.4rem);
+        color: var(--ink);
+        font-weight: 700;
+      }
+
+      .subtitle {
+        margin: 0 0 28px;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.6;
+      }
+
+      .options {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .option-card {
+        display: grid;
+        gap: 16px;
+        padding: 22px 20px;
+        border: 1px solid rgba(0,0,0,0.08);
+        border-radius: 18px;
+        background: rgba(255,255,255,0.55);
+        box-shadow: 0 8px 18px rgba(16, 26, 20, 0.05);
+        cursor: pointer;
+      }
+
+      .option-card:hover {
+        transform: translateY(-2px);
+      }
+
+      .option-icon {
+        display: grid;
+        place-items: center;
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        background: #eaeaea;
+        color: #1f1f1f;
+        font-weight: 700;
+      }
+
+      .option-card:nth-child(2) .option-icon { background: #f2ece0; }
+      .option-card:nth-child(3) .option-icon { background: #ebeff0; }
+
+      .option-card h2 {
+        margin: 0;
+        font-size: 1.15rem;
+      }
+
+      .option-card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .option-card button {
+        width: fit-content;
+        min-height: 38px;
+        border: none;
+        border-radius: 8px;
+        padding: 0 14px;
+        background: var(--green);
+        color: white;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .form-wrap {
+        display: grid;
+        gap: 18px;
+        max-width: 860px;
+        margin-top: 18px;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+
+      .field label {
+        color: var(--muted);
+        font-size: 0.8rem;
+        font-weight: 700;
+      }
+
+      .field input, .field select {
+        width: 100%;
+        min-height: 46px;
+        padding: 12px 14px;
+        border: 1px solid rgba(0,0,0,0.12);
+        border-radius: 10px;
+        background: rgba(255,255,255,0.7);
+        color: var(--ink);
+        font-size: 0.96rem;
+      }
+
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+      }
+
+      .button {
+        min-height: 44px;
+        border: none;
+        border-radius: 10px;
+        padding: 0 18px;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      .button-primary { background: var(--green); color: white; }
+      .button-secondary { background: #ececec; color: #222; }
+
+      .message {
+        min-height: 22px;
+        margin: 0;
+        color: var(--green);
+        font-weight: 700;
+      }
+
+      @media (max-width: 940px) {
+        .request-header {
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+
+        .request-tabs {
+          order: 3;
+          width: 100%;
+          flex-wrap: wrap;
+          gap: 18px 28px;
+        }
+
+        .brand-zone, .user-box {
+          min-width: unset;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .request-header {
+          min-height: auto;
+          padding: 18px 16px 12px;
+        }
+
+        .brand-mark {
+          width: 72px;
+          height: 72px;
+        }
+
+        .brand-mark svg {
+          width: 72px;
+          height: 72px;
+        }
+
+        .request-tabs {
+          gap: 12px 18px;
+        }
+
+        .tab-link {
+          font-size: 13px;
+        }
+
+        .user-box {
+          font-size: 12px;
+        }
+
+        .user-actions { flex-wrap: wrap; justify-content: center; }
+
+        .content-block {
+          padding: 16px 18px 24px;
+        }
+
+        .options, .form-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="request-page">
+      <header class="request-header">
+        <div class="brand-zone" aria-label="Logo da Polícia Penal">
+          <img class="brand-image" src="brasao_ok.png" alt="Brasão da Polícia Penal" />
+        </div>
+
+        <nav class="request-tabs" aria-label="Opções de solicitação">
+          <button class="tab-link active" type="button" data-option="ferias">Solicitar férias</button>
+          <button class="tab-link" type="button" data-option="especial">Licença especial</button>
+          <button class="tab-link" type="button" data-option="capacitação">Licença capacitação</button>
+        </nav>
+
+        <div class="user-box">
+          <span class="user-avatar" id="user-avatar" aria-hidden="true">S</span>
+          <span class="user-name" id="user-name">Servidor</span>
+          <div class="user-actions">
+            <button class="logout-button" id="open-password-change" type="button" aria-haspopup="dialog">Alterar senha</button>
+            <a class="logout-button" href="login.html" data-logout aria-label="Sair e voltar para o login">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+              <span>Sair</span>
+            </a>
+          </div>
+        </div>
+      </header>
+
+      <main class="request-main">
+        <div class="content-block">
+          <div id="selection-panel" class="hidden"></div>
+
+          <div id="form-panel" class="hidden">
+            <h1 id="form-title" class="page-title">Solicitação</h1>
+            <p id="form-subtitle" class="subtitle">Preencha os dados abaixo para encaminhar sua solicitação.</p>
+
+            <form id="vacation-form" class="form-wrap">
+              <div class="form-grid">
+                <div class="field">
+                  <label for="nome">Nome</label>
+                  <input id="nome" name="nome" type="text" placeholder="Digite seu nome" required />
+                </div>
+                <div class="field">
+                  <label for="email">E-mail do usuário</label>
+                  <input id="email" name="email" type="email" placeholder="seuemail@empresa.com.br" required />
+                </div>
+                <div class="field">
+                  <label for="cpf">CPF</label>
+                  <input id="cpf" name="cpf" type="text" placeholder="000.000.000-00" required />
+                </div>
+                <div class="field">
+                  <label for="unidade">Unidade de Lotação</label>
+                  <select id="unidade" name="unidade" required>
+                    <option value="">Selecione a unidade penal</option>
+                    <option>Sot - Umuarama</option>
+                    <option>Cadeia Pública de Umuarama</option>
+                    <option>RA-R6</option>
+                    <option>Penitenciária Estadual de Cruzeiro do Oeste</option>
+                    <option>Penitenciária Estadual de Guaíra</option>
+                    <option>Cadeia Pública de Cidade Gaúcha</option>
+                    <option>Cadeia Pública de Iporã</option>
+                    <option>Penitenciária de Campo Mourão</option>
+                    <option>Cadeia Pública de Campo Mourão</option>
+                    <option>Posto Avançado de Monitoramento - R6</option>
+                    <option>Cadeia Pública de Loanda</option>
+                    <option>Complexo Social de Campo Mourão</option>
+                    <option>Cadeia Pública de Goioerê</option>
+                    <option>Cadeia Pública de Altonia</option>
+                    <option>Cadeia Pública de Cianorte</option>
+                    <option>Complexo Social de Cruzeiro do Oeste</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="equipe">Equipe</label>
+                  <select id="equipe" name="equipe" required>
+                    <option value="">Selecione a equipe</option>
+                    <option value="Alfa">Alfa</option>
+                    <option value="Bravo">Bravo</option>
+                    <option value="Charlie">Charlie</option>
+                    <option value="Delta">Delta</option>
+                    <option value="Expediente">Expediente</option>
+                  </select>
+                </div>
+                <div class="field hidden" id="function-field">
+                  <label for="funcao-exercida">Função exercida</label>
+                  <input id="funcao-exercida" name="funcaoExercida" type="text" placeholder="Informe a função gratificada" />
+                </div>
+                <div class="field hidden" id="substitute-field">
+                  <label for="substituto">Substituto</label>
+                  <input id="substituto" name="substituto" type="text" placeholder="Informe o nome do substituto" />
+                </div>
+                <div class="field cycle-field hidden" id="cycle-field" style="grid-column: 1 / -1;">
+                  <label for="ciclo">Qual o ciclo deseja?</label>
+                  <select id="ciclo" name="ciclo" required>
+                    <option value="">Selecione o ciclo</option>
+                    <option value="A">Ciclo A — março, abril, maio</option>
+                    <option value="B">Ciclo B — junho, julho, agosto</option>
+                    <option value="C">Ciclo C — setembro, outubro, novembro</option>
+                  </select>
+                </div>
+                <div class="field" style="grid-column: 1 / -1;">
+                  <label for="data-ferias">Mês de férias</label>
+                  <select id="data-ferias" name="data-ferias" required>
+                    <option value="">Selecione o mês</option>
+                    <option value="janeiro">Janeiro</option>
+                    <option value="fevereiro">Fevereiro</option>
+                    <option value="março">Março</option>
+                    <option value="abril">Abril</option>
+                    <option value="maio">Maio</option>
+                    <option value="junho">Junho</option>
+                    <option value="julho">Julho</option>
+                    <option value="agosto">Agosto</option>
+                    <option value="setembro">Setembro</option>
+                    <option value="outubro">Outubro</option>
+                    <option value="novembro">Novembro</option>
+                    <option value="dezembro">Dezembro</option>
+                  </select>
+                </div>
+                <div class="field vacation-period-field hidden">
+                  <label for="inicio-ferias">Início das férias</label>
+                  <input id="inicio-ferias" name="inicioFerias" type="date" />
+                </div>
+                <div class="field vacation-period-field hidden">
+                  <label for="fim-ferias">Fim das férias</label>
+                  <input id="fim-ferias" name="fimFerias" type="date" />
+                </div>
+              </div>
+
+              <div class="actions">
+                <button class="button button-secondary" type="button" id="back-to-selection">Voltar</button>
+                <button class="button button-primary" type="submit">Enviar solicitação</button>
+              </div>
+
+              <p id="submit-message" class="message" aria-live="polite"></p>
+            </form>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <dialog class="password-change-dialog" id="password-change-dialog" aria-labelledby="password-change-title">
+      <div class="password-change-heading">
+        <div><h2 id="password-change-title">Alterar senha</h2><p>Confirme sua senha atual e informe uma nova senha.</p></div>
+        <button class="password-change-close" id="close-password-change" type="button" aria-label="Fechar">×</button>
+      </div>
+      <form class="password-change-form" id="password-change-form">
+        <div class="field"><label for="current-password">Senha atual</label><input id="current-password" type="password" autocomplete="current-password" minlength="6" required /></div>
+        <div class="field"><label for="new-password">Nova senha</label><input id="new-password" type="password" autocomplete="new-password" minlength="6" required /></div>
+        <div class="field"><label for="confirm-new-password">Confirme a nova senha</label><input id="confirm-new-password" type="password" autocomplete="new-password" minlength="6" required /></div>
+        <p class="password-change-message" id="password-change-message" aria-live="polite"></p>
+        <div class="actions"><button class="button button-secondary" type="button" id="cancel-password-change">Cancelar</button><button class="button button-primary" type="submit">Salvar nova senha</button></div>
+      </form>
+    </dialog>
+
+    <script>
+      const loggedUser = sessionStorage.getItem('brisa-demo-user');
+      let serverProfile = null;
+      let isFgServer = false;
+      try {
+        serverProfile = JSON.parse(sessionStorage.getItem('brisa-demo-profile') || 'null');
+      } catch {}
+      try {
+        const fgRoster = JSON.parse(localStorage.getItem('brisa-fg-server-roster-v1') || '[]');
+        const normalizeCpf = value => String(value || '').replace(/\D/g, '');
+        const normalizedCpf = normalizeCpf(serverProfile?.cpf);
+        const normalizedName = String(serverProfile?.name || '').trim().toLocaleLowerCase('pt-BR');
+        isFgServer = Array.isArray(fgRoster) && fgRoster.some(entry => {
+          if (typeof entry === 'string') return entry.trim().toLocaleLowerCase('pt-BR') === normalizedName;
+          if (!entry || typeof entry !== 'object') return false;
+          const rosterCpf = normalizeCpf(entry.cpf);
+          return (normalizedCpf && rosterCpf && rosterCpf === normalizedCpf)
+            || String(entry.name || '').trim().toLocaleLowerCase('pt-BR') === normalizedName;
+        });
+      } catch {}
+      if (loggedUser !== 'usuario' || !serverProfile?.name || !serverProfile?.cpf) {
+        window.location.replace('login.html');
+      } else {
+        document.getElementById('nome').value = serverProfile.name;
+        document.getElementById('nome').readOnly = true;
+        document.getElementById('cpf').value = serverProfile.cpf;
+        document.getElementById('cpf').readOnly = true;
+        document.getElementById('user-name').textContent = serverProfile.name;
+        document.getElementById('user-avatar').textContent = serverProfile.name.trim().charAt(0).toLocaleUpperCase('pt-BR');
+      }
+
+      const selectionPanel = document.getElementById('selection-panel');
+      const formPanel = document.getElementById('form-panel');
+      const formTitle = document.getElementById('form-title');
+      const formSubtitle = document.getElementById('form-subtitle');
+      const submitMessage = document.getElementById('submit-message');
+      const cycleField = document.getElementById('cycle-field');
+      const cycleSelect = document.getElementById('ciclo');
+      const monthField = document.getElementById('data-ferias').closest('.field');
+      const monthSelect = document.getElementById('data-ferias');
+      const vacationPeriodFields = document.querySelectorAll('.vacation-period-field');
+      const vacationStartInput = document.getElementById('inicio-ferias');
+      const vacationEndInput = document.getElementById('fim-ferias');
+      const functionField = document.getElementById('function-field');
+      const functionInput = document.getElementById('funcao-exercida');
+      const substituteField = document.getElementById('substitute-field');
+      const substituteInput = document.getElementById('substituto');
+
+      const passwordChangeDialog = document.getElementById('password-change-dialog');
+      const passwordChangeForm = document.getElementById('password-change-form');
+      const passwordChangeMessage = document.getElementById('password-change-message');
+      const serverAccountsStorageKey = 'brisa-server-accounts-v1';
+
+      async function hashPassword(password, saltHex) {
+        if (!crypto.subtle) throw new Error('Criptografia segura indisponível neste navegador.');
+        const salt = new Uint8Array(saltHex.match(/.{2}/g).map(value => Number.parseInt(value, 16)));
+        const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+        const digest = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, key, 256);
+        return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+      }
+
+      document.getElementById('open-password-change').addEventListener('click', () => {
+        passwordChangeForm.reset();
+        passwordChangeMessage.textContent = '';
+        passwordChangeMessage.classList.remove('error');
+        passwordChangeDialog.showModal();
+      });
+      document.getElementById('close-password-change').addEventListener('click', () => passwordChangeDialog.close());
+      document.getElementById('cancel-password-change').addEventListener('click', () => passwordChangeDialog.close());
+      passwordChangeForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        passwordChangeMessage.textContent = '';
+        passwordChangeMessage.classList.remove('error');
+        const currentPassword = document.getElementById('current-password').value;
+        const newPassword = document.getElementById('new-password').value;
+        const confirmPassword = document.getElementById('confirm-new-password').value;
+        if (newPassword !== confirmPassword) {
+          passwordChangeMessage.textContent = 'A confirmação não corresponde à nova senha.';
+          passwordChangeMessage.classList.add('error');
+          return;
+        }
+        if (currentPassword === newPassword) {
+          passwordChangeMessage.textContent = 'A nova senha deve ser diferente da senha atual.';
+          passwordChangeMessage.classList.add('error');
+          return;
+        }
+
+        try {
+          const accounts = JSON.parse(localStorage.getItem(serverAccountsStorageKey) || '[]');
+          const cpfDigits = String(serverProfile?.cpf || '').replace(/\D/g, '');
+          const account = Array.isArray(accounts)
+            ? accounts.find(item => String(item.cpf || '').replace(/\D/g, '') === cpfDigits)
+            : null;
+          if (!account?.salt || !account.passwordHash) {
+            passwordChangeMessage.textContent = 'Não foi possível localizar as credenciais desta conta.';
+            passwordChangeMessage.classList.add('error');
+            return;
+          }
+          if (await hashPassword(currentPassword, account.salt) !== account.passwordHash) {
+            passwordChangeMessage.textContent = 'A senha atual está incorreta.';
+            passwordChangeMessage.classList.add('error');
+            return;
+          }
+          const salt = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
+          account.salt = salt;
+          account.passwordHash = await hashPassword(newPassword, salt);
+          localStorage.setItem(serverAccountsStorageKey, JSON.stringify(accounts));
+          passwordChangeForm.reset();
+          passwordChangeMessage.textContent = 'Senha alterada com sucesso.';
+        } catch {
+          passwordChangeMessage.textContent = 'Não foi possível salvar a nova senha neste navegador.';
+          passwordChangeMessage.classList.add('error');
+        }
+      });
+
+      let currentOption = 'ferias';
+
+      const openForm = (option) => {
+        const labels = {
+          ferias: ['Férias', 'Preencha os dados abaixo para encaminhar sua solicitação de férias.'],
+          capacitação: ['Licença Capacitação', 'Preencha os dados abaixo para encaminhar sua solicitação de licença capacitação.'],
+          especial: ['Licença Especial', 'Preencha os dados abaixo para encaminhar sua solicitação de licença especial.']
+        };
+
+        const [title, subtitle] = labels[option] || labels.ferias;
+        const isLicense = option === 'capacitação' || option === 'especial';
+        const isVacation = !isLicense;
+        const showFgFields = isVacation && isFgServer;
+        currentOption = option;
+
+        formTitle.textContent = title;
+        formSubtitle.textContent = isVacation && isFgServer
+          ? `${subtitle} Como servidor com Função Gratificada, informe também a função exercida e o substituto.`
+          : subtitle;
+        cycleField.classList.toggle('hidden', !isLicense);
+        cycleSelect.required = isLicense;
+        monthField.classList.toggle('hidden', isLicense);
+        monthSelect.required = !isLicense;
+        vacationPeriodFields.forEach(field => field.classList.toggle('hidden', isLicense));
+        vacationStartInput.required = isVacation;
+        vacationEndInput.required = isVacation;
+        functionField.classList.toggle('hidden', !showFgFields);
+        functionInput.required = showFgFields;
+        if (!showFgFields) functionInput.value = '';
+        substituteField.classList.toggle('hidden', !showFgFields);
+        substituteInput.required = showFgFields;
+        if (!showFgFields) substituteInput.value = '';
+
+        if (!isLicense) {
+          cycleSelect.value = '';
+        } else {
+          monthSelect.value = '';
+        }
+
+        selectionPanel.classList.add('hidden');
+        formPanel.classList.remove('hidden');
+      };
+
+      document.querySelectorAll('.tab-link').forEach(tab => {
+        tab.addEventListener('click', () => {
+          document.querySelectorAll('.tab-link').forEach(item => item.classList.toggle('active', item === tab));
+          openForm(tab.dataset.option);
+        });
+      });
+
+      document.getElementById('back-to-selection').addEventListener('click', () => {
+        formPanel.classList.add('hidden');
+        selectionPanel.classList.add('hidden');
+        cycleSelect.value = '';
+        monthSelect.value = '';
+        monthSelect.required = true;
+        monthField.classList.remove('hidden');
+        submitMessage.textContent = '';
+      });
+
+      document.getElementById('vacation-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        if (!serverProfile) {
+          window.location.replace('login.html');
+          return;
+        }
+
+        if (cycleSelect.required && !cycleSelect.value) {
+          cycleSelect.focus();
+          cycleSelect.reportValidity();
+          return;
+        }
+
+        const nome = serverProfile.name;
+        const emailUsuario = document.getElementById('email').value.trim();
+        const cpf = serverProfile.cpf;
+        const unidade = document.getElementById('unidade').value.trim();
+        const equipe = document.getElementById('equipe').value.trim();
+        const funcaoExercida = !cycleSelect.required ? functionInput.value.trim() : '';
+        const substituto = !cycleSelect.required ? substituteInput.value.trim() : '';
+        const dataSolicitacao = document.getElementById('data-ferias').value;
+        const inicioFerias = !cycleSelect.required ? vacationStartInput.value : '';
+        const fimFerias = !cycleSelect.required ? vacationEndInput.value : '';
+        if (!cycleSelect.required && (!inicioFerias || !fimFerias || fimFerias < inicioFerias)) {
+          submitMessage.textContent = 'Informe um período válido para as férias.';
+          vacationStartInput.reportValidity();
+          if (inicioFerias && fimFerias < inicioFerias) vacationEndInput.focus();
+          return;
+        }
+        const tipoSolicitacao = formTitle.textContent.trim();
+        const ciclo = cycleSelect.required ? cycleSelect.value : 'Não se aplica';
+        const rhEmail = 'centralrhumuarama@policiapenal.pr.gov.br';
+        const storageKey = 'brisa-vacation-requests-v1';
+
+        const initials = nome
+          .split(/\s+/)
+          .filter(Boolean)
+          .slice(0, 2)
+          .map(part => part[0]?.toUpperCase() || '')
+          .join('') || 'US';
+
+        const request = {
+          id: `user-${Date.now()}`,
+          person: nome,
+          initials,
+          color: '#6a7782',
+          start: inicioFerias || '',
+          end: fimFerias || '',
+          month: dataSolicitacao,
+          days: inicioFerias && fimFerias ? Math.round((new Date(`${fimFerias}T12:00:00`) - new Date(`${inicioFerias}T12:00:00`)) / 86400000) + 1 : 1,
+          note: `${tipoSolicitacao} • ${equipe} • ${unidade} • Ciclo ${ciclo}`,
+          created: 'Agora',
+          status: 'pending',
+          type: tipoSolicitacao.toLowerCase(),
+          source: 'user',
+          createdAt: new Date().toISOString(),
+          email: emailUsuario,
+          cpf,
+          unidade,
+          equipe,
+          ciclo
+        };
+        if (funcaoExercida) request.funcaoExercida = funcaoExercida;
+        if (substituto) request.substituto = substituto;
+
+        try {
+          const existing = JSON.parse(localStorage.getItem(storageKey) || '[]');
+          existing.unshift(request);
+          localStorage.setItem(storageKey, JSON.stringify(existing));
+        } catch (error) {
+          console.warn('Não foi possível salvar a solicitação no armazenamento local:', error);
+        }
+
+        const subject = encodeURIComponent(`Solicitação de ${tipoSolicitacao} - ${nome}`);
+        const body = encodeURIComponent(
+          `Solicitação: ${tipoSolicitacao}\n\n` +
+          `Nome: ${nome}\n` +
+          `E-mail do usuário: ${emailUsuario}\n` +
+          `CPF: ${cpf}\n` +
+          `Unidade de Lotação: ${unidade}\n` +
+          `Equipe: ${equipe}\n` +
+          (funcaoExercida ? `Função exercida: ${funcaoExercida}\n` : '') +
+          (substituto ? `Substituto: ${substituto}\n` : '') +
+          `Ciclo: ${ciclo}\n` +
+          `Mês: ${dataSolicitacao}\n\n` +
+          (inicioFerias ? `Início das férias: ${inicioFerias}\n` : '') +
+          (fimFerias ? `Fim das férias: ${fimFerias}\n\n` : '\n') +
+          `Esta solicitação foi enviada para a Central de Recursos Humanos e também foi encaminhada em cópia para o e-mail do usuário.`
+        );
+
+        window.location.href = `mailto:${rhEmail}?cc=${encodeURIComponent(emailUsuario)}&subject=${subject}&body=${body}`;
+
+        submitMessage.textContent = 'Solicitação enviada com sucesso. Um e-mail foi aberto com cópia para o usuário e para a Central de Recursos Humanos.';
+        this.reset();
+        document.getElementById('nome').value = serverProfile.name;
+        document.getElementById('cpf').value = serverProfile.cpf;
+      });
+
+      const logoutLink = document.querySelector('[data-logout]');
+      if (logoutLink) {
+        logoutLink.addEventListener('click', function (event) {
+          event.preventDefault();
+          sessionStorage.removeItem('brisa-demo-user');
+          sessionStorage.removeItem('brisa-demo-username');
+          sessionStorage.removeItem('brisa-demo-profile');
+          window.location.href = 'login.html';
+        });
+      }
+    </script>
+  </body>
+</html>
