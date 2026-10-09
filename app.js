@@ -296,7 +296,6 @@ function saveServerAccounts() {
     showToast("Não foi possível salvar o cadastro neste navegador.");
     return false;
   }
-  syncServerDataToFirestore("contas", serverAccounts, account => String(account.cpf || account.username || "").replace(/\D/g, ""));
   return true;
 }
 
@@ -506,32 +505,6 @@ async function hashServerPassword(password, saltHex) {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
   const digest = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: 120000, hash: "SHA-256" }, key, 256);
   return toHex(new Uint8Array(digest));
-}
-
-function renderServerAccounts() {
-  const body = document.getElementById("server-registry-body");
-  if (!body) return;
-  const searchTerm = document.getElementById("server-registry-search").value.trim().toLocaleLowerCase("pt-BR");
-  const cpfSearchTerm = searchTerm.replace(/\D/g, "");
-  const roleFilter = document.getElementById("server-registry-role-filter").value;
-  const sortedRecords = serverPersonalData
-    .filter(record => {
-      const cpf = String(record.cpf || "");
-      const account = serverAccounts.find(item => String(item.cpf || "").replace(/\D/g, "") === cpf.replace(/\D/g, ""));
-      const role = account?.role === "both" ? "both" : account?.role === "admin" ? "admin" : "usuario";
-      const nameMatches = String(record.name || "").toLocaleLowerCase("pt-BR").includes(searchTerm);
-      const cpfMatches = cpfSearchTerm && cpf.replace(/\D/g, "").includes(cpfSearchTerm);
-      return (!searchTerm || nameMatches || cpfMatches) && (!roleFilter || role === roleFilter);
-    })
-    .sort((left, right) => String(left.name).localeCompare(String(right.name), "pt-BR"));
-  body.innerHTML = sortedRecords.length
-    ? sortedRecords.map(record => {
-      const cpfDigits = String(record.cpf || "").replace(/\D/g, "");
-      const account = serverAccounts.find(item => String(item.cpf || "").replace(/\D/g, "") === cpfDigits);
-      const role = account?.role === "both" ? "both" : account?.role === "admin" ? "admin" : "usuario";
-      return `<tr><td>${escapeHtml(record.name)}</td><td>${escapeHtml(record.cpf)}</td><td><select data-server-account-role data-server-cpf="${escapeHtml(cpfDigits)}" aria-label="Tipo de acesso de ${escapeHtml(record.name)}"><option value="usuario"${role === "usuario" ? " selected" : ""}>Usuário</option><option value="admin"${role === "admin" ? " selected" : ""}>Administrador</option><option value="both"${role === "both" ? " selected" : ""}>Usuário e administrador</option></select></td></tr>`;
-    }).join("")
-    : `<tr><td class="detailed-report-empty" colspan="3">${serverPersonalData.length ? "Nenhum servidor corresponde aos filtros selecionados." : "Nenhum servidor cadastrado. Cadastre os dados em “Cadastro de Dados dos Servidores”."}</td></tr>`;
 }
 
 function getFilteredServerPersonalData() {
@@ -1327,7 +1300,6 @@ function renderAll() {
   renderTeam("overview-team", 4);
   renderTeam("full-team", people.length);
   renderCurrentMonthVacations();
-  renderServerAccounts();
   renderServerPersonalData();
   renderReportYear();
   renderReportUnit();
@@ -1756,7 +1728,7 @@ function setView(view) {
     toggle.setAttribute("aria-expanded", String(hasActiveItem));
     submenu.hidden = !hasActiveItem;
   });
-  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."], servers: ["Servidores", "Cadastro de Login", "Consulte os dados cadastrados e altere somente o tipo de acesso."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatório - Servidores", "Relatório - Servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-especial": ["Licença especial", "Relatório de licença especial", "Consulte as solicitações de licença especial aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
+  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatório - Servidores", "Relatório - Servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-especial": ["Licença especial", "Relatório de licença especial", "Consulte as solicitações de licença especial aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
   const [breadcrumb, title, subtitle] = titles[view] || (view === "tasks" ? ["Gestão", "Lista de tarefas", "Registre e acompanhe suas tarefas."] : view === "meta4" ? ["Solicitações", "META 4", "Consulte os pedidos de férias enviados pelos usuários."] : view === "protocols-fg" ? ["Solicitações", "Protocolos F.G", "Acompanhe o status e o número dos protocolos de férias com Função Gratificada."] : titles.overview);
   document.getElementById("breadcrumb-current").textContent = breadcrumb;
   const pageTitle = document.getElementById("page-title");
@@ -1768,7 +1740,6 @@ function setView(view) {
   if (view === "reports") renderCurrentMonthVacations();
   if (view === "meta4") renderMeta4();
   if (view === "protocols-fg") renderFgProtocols();
-  if (view === "servers") renderServerAccounts();
   if (view === "server-data") renderServerPersonalData();
   if (view === "server-fg") renderFgServerRoster();
   if (view === "vacation-launch") renderVacationLaunch();
@@ -1907,7 +1878,6 @@ document.querySelectorAll("[data-report-export-table]").forEach(exportControls =
     else printReportTable(title, main.headers, main.rows, extraSections);
   });
 });
-const serverRegistryBody = document.getElementById("server-registry-body");
 document.getElementById("meta4-month-filter").addEventListener("change", renderMeta4);
 document.getElementById("meta4-year-filter").addEventListener("change", renderMeta4);
 document.getElementById("meta4-launch-filter").addEventListener("change", renderMeta4);
@@ -2118,8 +2088,6 @@ document.getElementById("server-fg-body").addEventListener("click", event => {
   const removeButton = event.target.closest("[data-remove-fg-server]");
   if (removeButton) removeFgServer(removeButton.dataset.removeFgServer);
 });
-document.getElementById("server-registry-search").addEventListener("input", renderServerAccounts);
-document.getElementById("server-registry-role-filter").addEventListener("change", renderServerAccounts);
 document.getElementById("server-data-search").addEventListener("input", renderServerPersonalData);
 document.getElementById("server-data-export-csv").addEventListener("click", () => {
   const records = getFilteredServerPersonalData();
@@ -2383,41 +2351,10 @@ document.addEventListener("click", event => {
     }
     if (editingServerDataId === recordId) resetServerDataEdit();
     renderServerPersonalData();
-    renderServerAccounts();
     if (window.RH_SYNC && window.RH_SYNC.enabled) {
       window.RH_SYNC.deleteDoc("servidores", recordId).catch(() => {});
-      if (removedCpf) window.RH_SYNC.deleteDoc("contas", removedCpf).catch(() => {});
     }
   }
-});
-serverRegistryBody.addEventListener("change", event => {
-  const roleSelect = event.target.closest("[data-server-account-role]");
-  if (!roleSelect) return;
-  const cpfDigits = roleSelect.dataset.serverCpf;
-  const record = serverPersonalData.find(item => String(item.cpf || "").replace(/\D/g, "") === cpfDigits);
-  if (!record) {
-    showToast("Não foi possível localizar os dados do servidor.");
-    renderServerAccounts();
-    return;
-  }
-  const previousAccounts = serverAccounts.map(account => ({ ...account }));
-  const account = serverAccounts.find(item => String(item.cpf || "").replace(/\D/g, "") === cpfDigits);
-  const role = roleSelect.value === "admin" || roleSelect.value === "both" ? roleSelect.value : "usuario";
-  if (account) {
-    account.username = cpfDigits;
-    account.name = record.name;
-    account.cpf = record.cpf;
-    account.role = role;
-  } else {
-    serverAccounts.push({ username: cpfDigits, name: record.name, cpf: record.cpf, role });
-  }
-  if (!saveServerAccounts()) {
-    serverAccounts = previousAccounts;
-    renderServerAccounts();
-    return;
-  }
-  const roleLabel = role === "both" ? "Usuário e administrador" : role === "admin" ? "Administrador" : "Usuário";
-  showToast(`Acesso de ${record.name} atualizado para ${roleLabel}.`);
 });
 serverDataCancelEdit.addEventListener("click", resetServerDataEdit);
 document.getElementById("usuario-add").addEventListener("click", () => openUsuarioDialog(null));
@@ -2668,7 +2605,6 @@ serverDataForm.addEventListener("submit", event => {
   const wasEditing = Boolean(editedRecord);
   resetServerDataEdit();
   renderServerPersonalData();
-  renderServerAccounts();
   showToast(wasEditing ? "Dados do servidor atualizados." : "Dados do servidor cadastrados.");
 });
 document.getElementById("global-search").addEventListener("input", event => {
@@ -2717,15 +2653,9 @@ async function loadUsuariosFromFirestore() {
 
 async function loadServerRegistryFromFirestore() {
   try {
-    const [remoteServidores, remoteContas] = await Promise.all([
-      window.RH_SYNC.loadDocs("servidores"),
-      window.RH_SYNC.loadDocs("contas")
-    ]);
+    const remoteServidores = await window.RH_SYNC.loadDocs("servidores");
     if (remoteServidores && remoteServidores.length > 0) {
       serverPersonalData = mergeServerRecords(serverPersonalData, remoteServidores, record => record.id);
-    }
-    if (remoteContas && remoteContas.length > 0) {
-      serverAccounts = mergeServerRecords(serverAccounts, remoteContas, account => String(account.cpf || account.username || "").replace(/\D/g, ""));
     }
   } catch (error) {
     const detail = error instanceof Error ? ` ${error.message}` : "";
@@ -2733,7 +2663,6 @@ async function loadServerRegistryFromFirestore() {
     showToast(`Cadastros carregados apenas deste navegador.${detail}`);
   }
   renderServerPersonalData();
-  renderServerAccounts();
 }
 
 function mergeServerRecords(localList, remoteList, keyFor) {
