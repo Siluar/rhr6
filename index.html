@@ -255,7 +255,7 @@
                   <label class="table-search server-registry-search"><i data-lucide="search"></i><input id="cargos-search" type="search" placeholder="Filtrar cargo" aria-label="Filtrar cargos pelo nome" /></label>
                   <button class="button button-primary" id="cargo-add" type="button"><i data-lucide="briefcase-business"></i><span>Adicionar cargo</span></button>
                 </div>
-                <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Cargo</th><th scope="col">Quadro</th><th scope="col">Em uso por</th><th scope="col">Ação</th></tr></thead><tbody id="cargos-body"></tbody></table></div>
+                <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Cargo</th><th scope="col">Quadro</th><th scope="col">Em uso por</th><th scope="col">Observações</th><th scope="col">Ação</th></tr></thead><tbody id="cargos-body"></tbody></table></div>
               </div>
             </section>
           </section>
@@ -426,6 +426,7 @@
           <option value="QPPP">QPPP</option>
           <option value="QPPE">QPPE</option>
         </select></label>
+        <label for="cargo-obs">Observações (opcional)<textarea id="cargo-obs" name="observacoes" rows="2" maxlength="200" placeholder="Detalhes complementares sobre o cargo"></textarea></label>
         <p id="cargo-message" role="status" aria-live="polite"></p>
         <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="cargo-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="briefcase-business"></i><span>Salvar cargo</span></button></div>
       </form>

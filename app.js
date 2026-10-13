@@ -384,7 +384,8 @@ function normalizeReferenceList(list) {
     .map(item => ({
       id: String((item && item.id) || crypto.randomUUID()),
       name: String((item && item.name) || "").trim(),
-      quadro: item && (item.quadro === "QPPP" || item.quadro === "QPPE") ? item.quadro : ""
+      quadro: item && (item.quadro === "QPPP" || item.quadro === "QPPE") ? item.quadro : "",
+      observacoes: String((item && item.observacoes) || "").trim()
     }))
     .filter(item => item.name);
 }
@@ -548,14 +549,15 @@ function renderCargos() {
     .filter(cargo => cargo.name.toLocaleLowerCase("pt-BR").includes(query))
     .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
   if (filtered.length === 0) {
-    container.innerHTML = `<tr><td colspan="4" class="team-empty">Nenhum cargo cadastrado.</td></tr>`;
+    container.innerHTML = `<tr><td colspan="5" class="team-empty">Nenhum cargo cadastrado.</td></tr>`;
     refreshIcons();
     return;
   }
   container.innerHTML = filtered.map(cargo => {
     const usedCount = serverPersonalData.filter(record => String(record.cargo || "") === cargo.name).length;
     const countCell = usedCount > 0 ? `<span class="status-pill status-approved">${usedCount} servidor${usedCount === 1 ? "" : "es"}</span>` : "—";
-    return `<tr><td><strong>${escapeHtml(cargo.name)}</strong></td><td>${cargo.quadro ? `<span class="status-pill status-approved">${escapeHtml(cargo.quadro)}</span>` : "—"}</td><td>${countCell}</td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-cargo="${escapeHtml(cargo.id)}" aria-label="Editar cargo ${escapeHtml(cargo.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-cargo="${escapeHtml(cargo.id)}" aria-label="Remover cargo ${escapeHtml(cargo.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+    const observacoesCell = cargo.observacoes ? `<span title="${escapeHtml(cargo.observacoes)}">${escapeHtml(cargo.observacoes)}</span>` : "—";
+    return `<tr><td><strong>${escapeHtml(cargo.name)}</strong></td><td>${cargo.quadro ? `<span class="status-pill status-approved">${escapeHtml(cargo.quadro)}</span>` : "—"}</td><td>${countCell}</td><td>${observacoesCell}</td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-cargo="${escapeHtml(cargo.id)}" aria-label="Editar cargo ${escapeHtml(cargo.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-cargo="${escapeHtml(cargo.id)}" aria-label="Remover cargo ${escapeHtml(cargo.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
   }).join("");
   refreshIcons();
   fillServerDataReferenceSelects();
@@ -626,6 +628,7 @@ function openCargoDialog(cargo) {
     title.textContent = "Editar cargo";
     document.getElementById("cargo-nome").value = cargo.name || "";
     document.getElementById("cargo-quadro").value = cargo.quadro === "QPPP" || cargo.quadro === "QPPE" ? cargo.quadro : "";
+    document.getElementById("cargo-obs").value = cargo.observacoes || "";
   } else {
     editingCargoId = null;
     title.textContent = "Adicionar cargo";
@@ -2705,6 +2708,7 @@ document.getElementById("cargo-form").addEventListener("submit", event => {
   const form = event.currentTarget;
   const name = String(form.elements.nome.value).trim();
   const quadro = form.elements.quadro.value === "QPPP" || form.elements.quadro.value === "QPPE" ? form.elements.quadro.value : "";
+  const observacoes = String(form.elements.observacoes.value).trim();
   if (!name) {
     setCargoMessage("Informe o nome do cargo.", true);
     return;
@@ -2715,7 +2719,7 @@ document.getElementById("cargo-form").addEventListener("submit", event => {
   }
   if (editingCargoId) {
     const previousName = (cargos.find(item => item.id === editingCargoId) || {}).name;
-    cargos = cargos.map(item => item.id === editingCargoId ? Object.assign({}, item, { name, quadro }) : item);
+    cargos = cargos.map(item => item.id === editingCargoId ? Object.assign({}, item, { name, quadro, observacoes }) : item);
     if (previousName && previousName !== name) {
       const previousRecords = serverPersonalData.map(record => ({ ...record }));
       serverPersonalData = serverPersonalData.map(record => String(record.cargo || "") === previousName
@@ -2724,7 +2728,7 @@ document.getElementById("cargo-form").addEventListener("submit", event => {
       if (!saveServerPersonalData()) serverPersonalData = previousRecords;
     }
   } else {
-    cargos.push({ id: crypto.randomUUID(), name, quadro });
+    cargos.push({ id: crypto.randomUUID(), name, quadro, observacoes });
   }
   saveCargos();
   form.closest("dialog").close();
