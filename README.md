@@ -177,6 +177,20 @@ O site pode ser publicado diretamente do repositório via **GitHub Pages**
 | `run-site.bat` | Atalho para iniciar o site no Windows |
 | `VS- CODE.code-workspace` | Workspace do VS Code |
 
+## Legado
+
+Com o acesso **exclusivamente pelo Google**, alguns trechos antigos são mantidos
+apenas por compatibilidade e **não** fazem parte do fluxo atual:
+
+- `intranet.html` (órfã, nenhuma página aponta para ela) usa o login por
+  CPF/senha de `login.js` (`submitCredentials` + `serverAccounts`). Com o
+  Firebase ativo esse caminho é bloqueado.
+- O botão/diálogo **Alterar senha** no painel é legado: compara a senha atual com
+  `window.RH_CONFIG.initialAdminPassword` (hoje vazio) ou com um hash salvo no
+  navegador.
+- A visão **Equipe** usa dados de exemplo (`people` em `app.js`); hoje ela só é
+  acessível pela busca global (não há item no menu).
+
 ## Aviso
 
 Projeto de uso interno/institucional. A autenticação é **local e de
