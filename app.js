@@ -1,7 +1,7 @@
 const monthNames = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
 const weekdays = ["D", "S", "T", "Q", "Q", "S", "S"];
 const calendarScale = { width: 24, height: 72 };
-const calendarMaxMonth = new Date(2028, 0, 1);
+const calendarMaxMonth = new Date(2040, 11, 1);
 const avatarColors = ["#728e70", "#bd785e", "#718da0", "#a58a58", "#8a7798", "#5f917f", "#c38174", "#7c8764", "#a77b57", "#688b98", "#a06a69", "#8b9369"];
 // A lista "Equipe" é montada a partir dos servidores realmente cadastrados,
 // sem nomes fictícios.
