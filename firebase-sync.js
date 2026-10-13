@@ -50,15 +50,27 @@
     return RH_SYNC._auth.currentUser;
   };
 
+  // Um único listener mantém RH_SYNC.user atualizado e resolve uma promise
+  // cacheada quando o Firebase terminar de restaurar a sessão. Antes, cada
+  // chamada de waitForAuth() registrava um listener novo.
+  let authRestored = false;
+  let resolveAuthReady = null;
+  const authReady = new Promise(resolve => { resolveAuthReady = resolve; });
+
+  const settleAuthReady = user => {
+    if (authRestored) return;
+    authRestored = true;
+    if (resolveAuthReady) resolveAuthReady(user);
+  };
+
+  RH_SYNC._auth.onAuthStateChanged(
+    user => { RH_SYNC.user = user; settleAuthReady(user); },
+    () => { RH_SYNC.user = null; settleAuthReady(null); }
+  );
+
   // Aguarda o Firebase restaurar a sessão e resolve com o usuário (ou null).
   RH_SYNC.waitForAuth = function () {
-    return new Promise(resolve => {
-      const unsubscribe = RH_SYNC._auth.onAuthStateChanged(user => {
-        unsubscribe();
-        RH_SYNC.user = user;
-        resolve(user);
-      }, () => resolve(null));
-    });
+    return authReady;
   };
 
   RH_SYNC.signInWithGoogle = function (idToken) {

@@ -1,13 +1,15 @@
 /*
- * Modelo de configuração local (NÃO versionada).
+ * Modelo de configuração local.
  *
- * Copie este arquivo para "config.local.js" e ajuste os valores.
- * Ele SOBRESCREVE o que estiver em config.js (configuração pública).
- * "config.local.js" está no .gitignore e NÃO deve ser enviado ao repositório.
+ * ATENÇÃO: as páginas NÃO carregam mais "config.local.js" (arquivo não
+ * versionado, que gerava 404 no site publicado). Este modelo fica apenas como
+ * referência histórica.
+ *
+ * O login administrativo é feito exclusivamente pelo Google (veja
+ * `googleAdminEmails` em config.js); não há mais senha padrão de administrador.
  */
 window.RH_CONFIG = Object.assign({}, window.RH_CONFIG, {
-  // Senha inicial do administrador (usuário "centralrh").
-  // Deixe de fora (ou vazio) para não haver senha padrão.
+  // (legado) Senha inicial do administrador (usuário "centralrh").
   initialAdminPassword: "defina-uma-senha-forte"
 
   // Opcional: sobrescrever valores públicos (normalmente definidos em config.js)

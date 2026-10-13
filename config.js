@@ -5,7 +5,9 @@
  * Use apenas valores que podem ser públicos, como o Client ID do Google
  * (que não é segredo: todo site com login Google expõe o dele).
  *
- * Valores locais/secreta podem sobrescrever estes em "config.local.js".
+ * Observação: "config.local.js" NÃO é mais carregado pelas páginas (por não ser
+ * versionado, gerava 404 no site publicado). O login administrativo é feito
+ * pelo Google; não há mais senha padrão de administrador.
  */
 window.RH_CONFIG = Object.assign({}, window.RH_CONFIG, {
   // Client ID do Google OAuth (tipo "Aplicativo da Web").
@@ -29,6 +31,7 @@ window.RH_CONFIG = Object.assign({}, window.RH_CONFIG, {
     measurementId: "G-VDC22YZ20F"
   }
 
-  // A senha inicial do administrador NÃO fica aqui. Defina-a apenas em
-  // "config.local.js" (que está no .gitignore).
+  // A senha inicial do administrador e valores locais NÃO são mais carregados:
+  // as páginas não incluem "config.local.js" (ele 404 no site publicado). O
+  // acesso administrativo é exclusivamente pelo login com Google.
 });

@@ -71,11 +71,21 @@ let toastTimer;
 function loadRequests() {
   if (window.RH_SYNC && window.RH_SYNC.enabled) {
     return window.RH_SYNC.loadRequests()
-      .then(list => (list.length ? list : legacyLoadRequests()).map(normalizeRequest))
+      .then(list => {
+        if (list.length) {
+          const normalized = list.map(normalizeRequest);
+          seedFirestoreSyncState("requests", normalized);
+          return normalized;
+        }
+        // Nuvem vazia: reaproveita apenas o que houver no navegador (sem
+        // injetar solicitações de exemplo em produção). A baseline fica de fora
+        // para que a primeira gravação envie esses dados locais à nuvem.
+        return legacyLoadRequests(false).map(normalizeRequest);
+      })
       .catch(error => {
         console.warn("Falha ao carregar as solicitações do Firestore:", error);
         showToast("Não foi possível carregar as solicitações online.");
-        return legacyLoadRequests();
+        return legacyLoadRequests(false).map(normalizeRequest);
       });
   }
   return Promise.resolve(legacyLoadRequests());
@@ -88,13 +98,8 @@ function saveRequests() {
   } catch {
     localFailed = true;
   }
-  if (window.RH_SYNC && window.RH_SYNC.enabled) {
-    window.RH_SYNC.saveRequests(requests).catch(error => {
-      console.warn("Falha ao salvar no Firestore:", error);
-      showToast("Falha ao salvar online. Verifique a conexão e as regras do Firestore.");
-    });
-    return true;
-  }
+  syncCollectionToFirestore("requests", requests);
+  if (window.RH_SYNC && window.RH_SYNC.enabled) return true;
   if (localFailed) {
     showToast("Não foi possível salvar neste navegador.");
     return false;
@@ -324,27 +329,79 @@ function saveServerPersonalData() {
     showToast("Não foi possível salvar os dados do servidor neste navegador.");
     return false;
   }
-  syncServerDataToFirestore("servidores", serverPersonalData);
+  syncCollectionToFirestore("servidores", serverPersonalData);
   return true;
 }
 
-function syncServerDataToFirestore(collection, docs, idFor) {
+// Cada coleção guarda a assinatura do último documento gravado, para enviar ao
+// Firestore apenas o que realmente mudou (em vez de reescrever a coleção toda).
+const firestoreSyncState = new Map();
+
+function documentSignature(doc) {
+  try {
+    return JSON.stringify(doc);
+  } catch {
+    return `${Date.now()}-${Math.random()}`;
+  }
+}
+
+function syncFailureHandler(collection) {
+  return error => {
+    const detail = error instanceof Error ? ` ${error.message}` : "";
+    console.warn(`Falha ao sincronizar ${collection} no Firestore:`, error);
+    showToast(`Cadastro salvo apenas neste navegador.${detail}`);
+  };
+}
+
+// Marca como "já presentes no Firestore" os documentos do carregamento inicial,
+// para que as próximas gravações enviem somente as alterações.
+function seedFirestoreSyncState(collection, docs, idFor) {
   if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
-  const normalized = docs.map(doc => {
+  const baseline = new Map();
+  (docs || []).forEach(doc => {
+    const id = idFor ? idFor(doc) : doc.id;
+    if (id) baseline.set(String(id), documentSignature(Object.assign({}, doc, { id })));
+  });
+  firestoreSyncState.set(collection, baseline);
+}
+
+function syncCollectionToFirestore(collection, docs, idFor) {
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
+  const normalized = (docs || []).map(doc => {
     const id = idFor ? idFor(doc) : doc.id;
     return Object.assign({}, doc, { id: id || undefined });
   });
-  window.RH_SYNC.saveDocs(collection, normalized)
-    .then(() => {})
-    .catch(error => {
-      const detail = error instanceof Error ? ` ${error.message}` : "";
-      console.warn(`Falha ao sincronizar ${collection} no Firestore:`, error);
-      showToast(`Cadastro salvo apenas neste navegador.${detail}`);
+  const baseline = firestoreSyncState.get(collection);
+  if (!baseline) {
+    // Ainda sem retrato do Firestore: envia tudo uma vez e memoriza.
+    const fresh = new Map();
+    firestoreSyncState.set(collection, fresh);
+    normalized.forEach(doc => {
+      if (doc.id) fresh.set(String(doc.id), documentSignature(doc));
     });
+    if (normalized.length) {
+      window.RH_SYNC.saveDocs(collection, normalized).catch(syncFailureHandler(collection));
+    }
+    return;
+  }
+  const changed = [];
+  normalized.forEach(doc => {
+    if (!doc.id) return;
+    const id = String(doc.id);
+    const signature = documentSignature(doc);
+    if (baseline.get(id) === signature) return;
+    baseline.set(id, signature);
+    changed.push(doc);
+  });
+  if (changed.length) {
+    window.RH_SYNC.saveDocs(collection, changed).catch(syncFailureHandler(collection));
+  }
 }
 
 function deleteReferenceDocFromFirestore(collection, id) {
   if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
+  const baseline = firestoreSyncState.get(collection);
+  if (baseline) baseline.delete(String(id));
   window.RH_SYNC.deleteDoc(collection, id)
     .catch(error => {
       const detail = error instanceof Error ? ` ${error.message}` : "";
@@ -413,7 +470,7 @@ function saveUnidades() {
     showToast("Não foi possível salvar as unidades neste navegador.");
     return false;
   }
-  syncServerDataToFirestore("unidades", unidades);
+  syncCollectionToFirestore("unidades", unidades);
   return true;
 }
 
@@ -424,7 +481,7 @@ function saveCargos() {
     showToast("Não foi possível salvar os cargos neste navegador.");
     return false;
   }
-  syncServerDataToFirestore("cargos", cargos);
+  syncCollectionToFirestore("cargos", cargos);
   return true;
 }
 
@@ -435,7 +492,7 @@ function saveQuadros() {
     showToast("Não foi possível salvar os quadros neste navegador.");
     return false;
   }
-  syncServerDataToFirestore("quadros", quadros);
+  syncCollectionToFirestore("quadros", quadros);
   return true;
 }
 
@@ -485,14 +542,7 @@ function saveUsuarios() {
   } catch {
     showToast("Não foi possível salvar os usuários neste navegador.");
   }
-  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
-  window.RH_SYNC.saveDocs("usuarios", usuarios)
-    .then(() => {})
-    .catch(error => {
-      const detail = error instanceof Error ? ` ${error.message}` : "";
-      console.warn("Falha ao salvar usuários no Firestore:", error);
-      showToast(`Usuários salvos apenas neste navegador.${detail}`);
-    });
+  syncCollectionToFirestore("usuarios", usuarios);
 }
 
 function renderUsuarios() {
@@ -606,7 +656,17 @@ function renderQuadros() {
   fillServerDataReferenceSelects();
 }
 
+// Evita reconstruir as listas de opções quando nada no cadastro mudou
+// (renderAll chama esta função várias vezes por ciclo).
+let referenceSelectsSignature = null;
 function fillServerDataReferenceSelects() {
+  const signature = JSON.stringify([
+    unidades.map(item => item.name),
+    cargos.map(item => `${item.name}\u0000${item.quadro}`),
+    quadros.map(item => item.name)
+  ]);
+  if (signature === referenceSelectsSignature) return;
+  referenceSelectsSignature = signature;
   const quadroOptions = quadros.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("");
   if (serverDataForm) {
     const unidadeSelect = serverDataForm.elements.namedItem("unidadePenal");
@@ -796,13 +856,7 @@ async function removeRequest(requestId) {
     renderAll();
     return;
   }
-  if (window.RH_SYNC && window.RH_SYNC.enabled) {
-    window.RH_SYNC.deleteDoc("requests", requestId).catch(error => {
-      const detail = error instanceof Error ? ` ${error.message}` : "";
-      console.warn("Falha ao excluir a solicitação no Firestore:", error);
-      showToast(`Solicitação excluída apenas deste navegador.${detail}`);
-    });
-  }
+  deleteReferenceDocFromFirestore("requests", requestId);
   const dialog = document.getElementById("request-details-dialog");
   if (dialog?.open) dialog.close();
   renderAll();
@@ -933,13 +987,14 @@ function normalizeRequest(request) {
   return normalized;
 }
 
-function legacyLoadRequests() {
+function legacyLoadRequests(includeSeed = true) {
+  const fallback = () => (includeSeed ? seedRequests.map(request => ({ ...request })) : []);
   try {
     const saved = localStorage.getItem(storageKey);
-    const parsed = saved ? JSON.parse(saved) : seedRequests.map(request => ({ ...request }));
-    return (Array.isArray(parsed) ? parsed : seedRequests.map(request => ({ ...request }))).map(normalizeRequest);
+    const parsed = saved ? JSON.parse(saved) : fallback();
+    return (Array.isArray(parsed) ? parsed : fallback()).map(normalizeRequest);
   } catch {
-    return seedRequests.map(request => ({ ...request }));
+    return fallback();
   }
 }
 
@@ -1627,6 +1682,25 @@ function renderAll() {
   updateSelectedDay();
   refreshIcons();
 }
+
+// Re-renderiza somente o que depende de `requests` (usado quando o Firestore
+// avisa de mudanças), evitando refazer cadastros, equipe e relatórios pesados.
+function renderRequestsDependentViews() {
+  renderCalendar("overview-calendar", true);
+  renderCalendar("full-calendar", false);
+  renderRequests("overview-requests", true);
+  renderRequests("full-requests", false);
+  renderMeta4();
+  renderFgProtocols();
+  renderCurrentMonthVacations();
+  renderReportYear();
+  renderReportUnit();
+  renderReportPerson();
+  renderReportFg();
+  updateCounts();
+  updateSelectedDay();
+  refreshIcons();
+}
 function renderCalendar(elementId, compact) {
   const grid = document.getElementById(elementId);
   if (!grid) return;
@@ -2082,7 +2156,26 @@ function showToast(message) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove("visible"), 2800);
 }
-function refreshIcons() { if (window.lucide) window.lucide.createIcons(); }
+// Agrupa várias chamadas no mesmo fluxo em uma única atualização de ícones.
+let iconsRefreshScheduled = false;
+function refreshIcons() {
+  if (iconsRefreshScheduled) return;
+  iconsRefreshScheduled = true;
+  const run = () => {
+    iconsRefreshScheduled = false;
+    if (window.lucide) window.lucide.createIcons();
+  };
+  if (typeof window.requestAnimationFrame === "function") window.requestAnimationFrame(run);
+  else window.setTimeout(run, 0);
+}
+
+function debounce(fn, wait = 150) {
+  let timer = null;
+  return function debounced(...args) {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => fn.apply(this, args), wait);
+  };
+}
 function renderLoggedInProfile() {
   const nameElement = document.getElementById("profile-name");
   const avatarElement = document.getElementById("profile-avatar");
@@ -2204,8 +2297,8 @@ document.getElementById("meta4-launch-filter").addEventListener("change", render
 document.getElementById("protocols-fg-month-filter").addEventListener("change", renderFgProtocols);
 document.getElementById("protocols-fg-year-filter").addEventListener("change", renderFgProtocols);
 document.getElementById("protocols-fg-status-filter").addEventListener("change", renderFgProtocols);
-document.getElementById("meta4-search").addEventListener("input", renderMeta4);
-document.getElementById("protocols-fg-search").addEventListener("input", renderFgProtocols);
+document.getElementById("meta4-search").addEventListener("input", debounce(renderMeta4));
+document.getElementById("protocols-fg-search").addEventListener("input", debounce(renderFgProtocols));
 document.getElementById("protocols-fg-body").addEventListener("change", event => {
   const statusSelect = event.target.closest("[data-fg-protocol-status]");
   const numberInput = event.target.closest("[data-fg-protocol-number]");
@@ -2381,7 +2474,7 @@ document.addEventListener("click", event => {
 });
 document.getElementById("server-fg-form").addEventListener("submit", addFgServerFromForm);
 document.getElementById("vacation-launch-form").addEventListener("submit", addVacationLaunch);
-document.getElementById("vacation-launch-server-search").addEventListener("input", renderVacationSuggestions);
+document.getElementById("vacation-launch-server-search").addEventListener("input", debounce(renderVacationSuggestions));
 document.getElementById("vacation-launch-suggestions").addEventListener("mousedown", event => {
   const option = event.target.closest("[data-server-id]");
   if (!option) return;
@@ -2408,7 +2501,7 @@ document.getElementById("server-fg-body").addEventListener("click", event => {
   const removeButton = event.target.closest("[data-remove-fg-server]");
   if (removeButton) removeFgServer(removeButton.dataset.removeFgServer);
 });
-document.getElementById("server-data-search").addEventListener("input", renderServerPersonalData);
+document.getElementById("server-data-search").addEventListener("input", debounce(renderServerPersonalData));
 document.getElementById("server-data-export-csv").addEventListener("click", () => {
   const records = getFilteredServerPersonalData();
   if (!records.length) {
@@ -2673,15 +2766,13 @@ document.addEventListener("click", event => {
     }
     if (editingServerDataId === recordId) resetServerDataEdit();
     renderServerPersonalData();
-    if (window.RH_SYNC && window.RH_SYNC.enabled) {
-      window.RH_SYNC.deleteDoc("servidores", recordId).catch(() => {});
-    }
+    deleteReferenceDocFromFirestore("servidores", recordId);
   }
 });
 serverDataCancelEdit.addEventListener("click", resetServerDataEdit);
 document.getElementById("usuario-add").addEventListener("click", () => openUsuarioDialog(null));
 document.getElementById("usuario-cancel").addEventListener("click", () => document.getElementById("usuario-dialog").close());
-document.getElementById("usuarios-search").addEventListener("input", renderUsuarios);
+document.getElementById("usuarios-search").addEventListener("input", debounce(renderUsuarios));
 document.getElementById("usuarios-body").addEventListener("change", event => {
   const perfilSelect = event.target.closest("[data-usuario-perfil]");
   if (!perfilSelect) return;
@@ -2748,7 +2839,7 @@ document.getElementById("usuario-form").addEventListener("submit", event => {
 });
 document.getElementById("unidade-add").addEventListener("click", () => openUnidadeDialog(null));
 document.getElementById("unidade-cancel").addEventListener("click", () => document.getElementById("unidade-dialog").close());
-document.getElementById("unidades-search").addEventListener("input", renderUnidades);
+document.getElementById("unidades-search").addEventListener("input", debounce(renderUnidades));
 document.getElementById("unidades-body").addEventListener("click", event => {
   const editButton = event.target.closest("[data-edit-unidade]");
   const removeButton = event.target.closest("[data-remove-unidade]");
@@ -2805,7 +2896,7 @@ document.getElementById("unidade-form").addEventListener("submit", event => {
 });
 document.getElementById("cargo-add").addEventListener("click", () => openCargoDialog(null));
 document.getElementById("cargo-cancel").addEventListener("click", () => document.getElementById("cargo-dialog").close());
-document.getElementById("cargos-search").addEventListener("input", renderCargos);
+document.getElementById("cargos-search").addEventListener("input", debounce(renderCargos));
 document.getElementById("cargos-body").addEventListener("click", event => {
   const editButton = event.target.closest("[data-edit-cargo]");
   const removeButton = event.target.closest("[data-remove-cargo]");
@@ -2953,7 +3044,7 @@ document.getElementById("cargo-import-form").addEventListener("submit", event =>
 });
 document.getElementById("quadro-add").addEventListener("click", () => openQuadroDialog(null));
 document.getElementById("quadro-cancel").addEventListener("click", () => document.getElementById("quadro-dialog").close());
-document.getElementById("quadros-search").addEventListener("input", renderQuadros);
+document.getElementById("quadros-search").addEventListener("input", debounce(renderQuadros));
 document.getElementById("quadros-body").addEventListener("click", event => {
   const editButton = event.target.closest("[data-edit-quadro]");
   const removeButton = event.target.closest("[data-remove-quadro]");
@@ -3083,8 +3174,8 @@ document.addEventListener("keydown", event => {
   document.getElementById(openSubmenuToggle.getAttribute("aria-controls")).hidden = true;
   openSubmenuToggle.focus();
 });
-document.getElementById("team-search").addEventListener("input", () => renderTeam("full-team", people.length));
-document.getElementById("current-vacation-search").addEventListener("input", renderCurrentMonthVacations);
+document.getElementById("team-search").addEventListener("input", debounce(() => renderTeam("full-team", people.length)));
+document.getElementById("current-vacation-search").addEventListener("input", debounce(renderCurrentMonthVacations));
 document.getElementById("current-vacation-month").addEventListener("change", event => {
   selectedVacationMonth = event.currentTarget.value;
   renderCurrentMonthVacations();
@@ -3101,16 +3192,16 @@ document.getElementById("report-unit-select").addEventListener("change", event =
   selectedReportUnit = event.currentTarget.value;
   renderReportUnit();
 });
-document.getElementById("report-unit-person-search").addEventListener("input", renderReportUnit);
-document.getElementById("report-person-search").addEventListener("input", renderReportPerson);
-document.getElementById("report-servers-select").addEventListener("input", renderServerDirectoryReport);
+document.getElementById("report-unit-person-search").addEventListener("input", debounce(renderReportUnit));
+document.getElementById("report-person-search").addEventListener("input", debounce(renderReportPerson));
+document.getElementById("report-servers-select").addEventListener("input", debounce(renderServerDirectoryReport));
 document.getElementById("report-servers-unit").addEventListener("change", renderServerDirectoryReport);
-document.getElementById("report-capacitacao-name").addEventListener("input", renderReportCapacitacao);
+document.getElementById("report-capacitacao-name").addEventListener("input", debounce(renderReportCapacitacao));
 document.getElementById("report-capacitacao-month").addEventListener("change", event => {
   selectedCapacitacaoMonth = event.currentTarget.value;
   renderReportCapacitacao();
 });
-document.getElementById("report-especial-name").addEventListener("input", renderReportEspecial);
+document.getElementById("report-especial-name").addEventListener("input", debounce(renderReportEspecial));
 document.getElementById("report-especial-month").addEventListener("change", event => {
   selectedEspecialMonth = event.currentTarget.value;
   renderReportEspecial();
@@ -3211,11 +3302,11 @@ serverDataForm.addEventListener("submit", event => {
   renderServerPersonalData();
   showToast(wasEditing ? "Dados do servidor atualizados." : "Dados do servidor cadastrados.");
 });
-document.getElementById("global-search").addEventListener("input", event => {
+document.getElementById("global-search").addEventListener("input", debounce(event => {
   const query = event.target.value.trim();
   if (!query) return;
   setView("team"); document.getElementById("team-search").value = query; renderTeam("full-team", people.length);
-});
+}));
 document.getElementById("global-search").addEventListener("keydown", event => { if (event.key === "Escape") { event.target.value = ""; event.target.blur(); } });
 document.addEventListener("keydown", event => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); const search = document.getElementById("global-search"); search.style.width = "230px"; search.focus(); }
@@ -3233,15 +3324,16 @@ async function initializeApp() {
   if (window.RH_SYNC && window.RH_SYNC.enabled) {
     let initialSignature = null;
     window.RH_SYNC.subscribeRequests(list => {
+      // Mantém os dados locais quando a nuvem ainda está vazia; o primeiro
+      // snapshot repete o que loadRequests() trouxe, então evitamos um render
+      // redundante logo na abertura.
       const normalized = (list.length ? list : requests).map(normalizeRequest);
-      // O primeiro snapshot repete o que loadRequests() já trouxe: evita um
-      // renderAll completo redundante logo na abertura.
       if (initialSignature === null) {
         initialSignature = JSON.stringify(requests);
         if (JSON.stringify(normalized) === initialSignature) return;
       }
       requests = normalized;
-      renderAll();
+      renderRequestsDependentViews();
     }, error => console.warn("Assinatura do Firestore falhou:", error));
     loadUsuariosFromFirestore();
     loadServerRegistryFromFirestore();
@@ -3253,6 +3345,7 @@ async function loadUsuariosFromFirestore() {
     const remote = await window.RH_SYNC.loadDocs("usuarios");
     if (remote && remote.length > 0) {
       usuarios = remote.map(normalizeUsuario);
+      seedFirestoreSyncState("usuarios", usuarios);
     } else if (usuarios.length > 0) {
       saveUsuarios();
     }
@@ -3269,6 +3362,7 @@ async function loadServerRegistryFromFirestore() {
     const remoteServidores = await window.RH_SYNC.loadDocs("servidores");
     if (remoteServidores && remoteServidores.length > 0) {
       serverPersonalData = mergeServerRecords(serverPersonalData, remoteServidores, record => record.id);
+      seedFirestoreSyncState("servidores", remoteServidores);
     }
   } catch (error) {
     const detail = error instanceof Error ? ` ${error.message}` : "";
@@ -3286,9 +3380,18 @@ async function loadReferenceDataFromFirestore() {
         window.RH_SYNC.loadDocs("cargos"),
         window.RH_SYNC.loadDocs("quadros")
       ]);
-      if (remoteUnidades && remoteUnidades.length > 0) unidades = normalizeReferenceList(remoteUnidades);
-      if (remoteCargos && remoteCargos.length > 0) cargos = normalizeReferenceList(remoteCargos);
-      if (remoteQuadros && remoteQuadros.length > 0) quadros = normalizeReferenceList(remoteQuadros);
+      if (remoteUnidades && remoteUnidades.length > 0) {
+        unidades = normalizeReferenceList(remoteUnidades);
+        seedFirestoreSyncState("unidades", unidades);
+      }
+      if (remoteCargos && remoteCargos.length > 0) {
+        cargos = normalizeReferenceList(remoteCargos);
+        seedFirestoreSyncState("cargos", cargos);
+      }
+      if (remoteQuadros && remoteQuadros.length > 0) {
+        quadros = normalizeReferenceList(remoteQuadros);
+        seedFirestoreSyncState("quadros", quadros);
+      }
     } catch (error) {
       const detail = error instanceof Error ? ` ${error.message}` : "";
       console.warn("Falha ao carregar cadastros básicos do Firestore:", error);

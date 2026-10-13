@@ -36,33 +36,30 @@ compartilhadas entre todos os usuários via Firestore.
 
 ## Configuração
 
-As configurações vêm de dois arquivos, carregados nesta ordem:
+Toda a configuração fica em `config.js` (versionado):
 
-| Arquivo | Versionado? | Conteúdo |
-|---|---|---|
-| `config.js` | Sim | Valores públicos: `googleClientId`, `googleAdminEmails` |
-| `config.local.js` | Não (`.gitignore`) | Segredos/overrides: `initialAdminPassword`, etc. |
+| Chave | Descrição |
+|---|---|
+| `googleClientId` | Client ID do Google OAuth (Web). Usado só no fluxo antigo do Google Identity Services, quando o Firebase não está configurado |
+| `googleAdminEmails` | E-mails do Google com acesso de administrador (proprietários) |
+| `firebase` | Objeto `firebaseConfig`; quando preenchido, liga o backend (Auth + Firestore) |
 
-| Chave | Onde | Descrição |
-|---|---|---|
-| `initialAdminPassword` | `config.local.js` | Senha inicial do administrador (usuário `centralrh`) |
-| `googleClientId` | `config.js` | Client ID do Google OAuth (Web). Sem ele, o botão "Entrar com Google" não aparece |
-| `googleAdminEmails` | `config.js` | E-mails do Google com acesso de administrador (proprietários) |
-
-1. Copie `config.local.example.js` para `config.local.js`.
-2. Ajuste os valores necessários.
-
-Sem `config.local.js`, o login administrativo com senha padrão fica
-desabilitado (não há senha padrão) — o acesso de admin continua possível pelo
-login com Google.
+> `config.local.js` **não é mais carregado automaticamente** pelas páginas: por
+> não ser versionado, ele retornava 404 no site publicado. O login
+> administrativo é feito exclusivamente pelo Google. O arquivo
+> `config.local.example.js` fica apenas como referência.
 
 ### Entrar com Google
 
-O botão usa o **Google Identity Services** (fluxo client-side, sem backend).
-Após o login, o e-mail verificado é comparado com `googleAdminEmails`: se
-estiver na lista, a sessão vira administrador; caso contrário, usuário comum.
+- **Com Firebase configurado** (recomendado): o botão usa o login Google nativo
+  do Firebase (popup, `signInWithPopup`), o que dispensa o Client ID do GIS e
+  evita o erro `origin_mismatch`.
+- **Sem Firebase**: usa o **Google Identity Services** (fluxo client-side) com o
+  `googleClientId`.
 
-Para funcionar, é preciso:
+Após o login, o e-mail verificado é comparado com `googleAdminEmails`: se estiver
+na lista, a sessão vira administrador; caso contrário, valem a coleção `usuarios`
+do Firestore (perfil e situação). Para funcionar, é preciso:
 
 - Um **Client ID OAuth** (tipo "Aplicativo da Web") no Google Cloud Console.
 - As **Origens JavaScript autorizadas** com a URL onde o site é servido
@@ -146,6 +143,11 @@ editar e excluir), persistida nas coleções do Firestore:
 > cadastros. As coleções `servidores`, `unidades`, `cargos`, `quadros` e
 > `usuarios` são protegidas.
 
+As gravações no Firestore são **incrementais** (envia só os documentos que
+mudaram) e fatiadas em lotes de até 400 escritas, o que evita o limite de 500
+por batch e reduz o tráfego. Ícones e listas de referência são atualizados uma
+única vez por ciclo de renderização, e as buscas usam *debounce*.
+
 ## Publicação (GitHub Pages)
 
 O site pode ser publicado diretamente do repositório via **GitHub Pages**
@@ -165,11 +167,11 @@ O site pode ser publicado diretamente do repositório via **GitHub Pages**
 | `index.html`, `styles.css`, `app.js` | Aplicação principal (painel/gestão) |
 | `solicitacao-ferias.html` | Fluxo de solicitação de férias |
 | `recusada.html` | Tela de solicitação recusada |
-| `intranet.html` | Página da intranet |
+| `intranet.html` | Página da intranet (legado) |
 | `brasao_ok.png` | Brasão institucional |
 | `config.js` | Configuração pública (Client ID do Google, e-mails admin, Firebase) |
-| `config.local.js` | Configuração local/secreta: senha do admin (não versionada) |
-| `config.local.example.js` | Modelo da configuração local |
+| `config.local.js` | Configuração local/secreta, **não carregada** pelas páginas (não versionada) |
+| `config.local.example.js` | Modelo da configuração local (referência) |
 | `firebase-sync.js` | Camada de sincronização com o Firestore (backend opcional) |
 | `firestore.rules` | Regras de segurança do Firestore |
 | `run-site.bat` | Atalho para iniciar o site no Windows |
