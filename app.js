@@ -90,7 +90,17 @@ function loadRequests() {
         if (list.length) {
           const normalized = list.map(normalizeRequest);
           seedFirestoreSyncState("requests", normalized);
-          return normalized;
+          // Solicitações que existam apenas neste navegador (criadas sem rede ou
+          // antes do Firebase entrar no ar) sobem para a nuvem em vez de serem
+          // descartadas pela lista da nuvem.
+          const cloudIds = new Set(normalized.map(request => String(request.id)));
+          const localOnly = legacyLoadRequests(false)
+            .map(normalizeRequest)
+            .filter(request => request && request.id && !cloudIds.has(String(request.id)));
+          if (!localOnly.length) return normalized;
+          const merged = normalized.concat(localOnly);
+          syncCollectionToFirestore("requests", merged);
+          return merged;
         }
         // Nuvem vazia: reaproveita apenas o que houver no navegador (sem
         // injetar solicitações de exemplo em produção). A baseline fica de fora
@@ -136,11 +146,32 @@ function loadTasks() {
 function saveTasks() {
   try {
     localStorage.setItem(taskStorageKey, JSON.stringify(tasks));
-    return true;
   } catch {
     showToast("Não foi possível salvar as tarefas neste navegador.");
     return false;
   }
+  syncCollectionWithRemovals("tarefas", tasks, task => task.id);
+  return true;
+}
+
+// Traz as tarefas gravadas na nuvem e sobe as que existirem apenas aqui.
+async function loadTasksFromFirestore() {
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
+  try {
+    const remote = await window.RH_SYNC.loadDocs("tarefas");
+    if (remote && remote.length > 0) {
+      tasks = mergeServerRecords(tasks, remote, task => task.id);
+      seedFirestoreSyncState("tarefas", remote, task => task.id);
+      saveTasks();
+    } else if (tasks.length > 0) {
+      saveTasks();
+    }
+  } catch (error) {
+    const detail = error instanceof Error ? ` ${error.message}` : "";
+    console.warn("Falha ao carregar as tarefas do Firestore:", error);
+    showToast(`Tarefas carregadas apenas deste navegador.${detail}`);
+  }
+  renderTasks();
 }
 
 function renderTasks() {
@@ -242,7 +273,62 @@ function openRequestAttachmentsDatabase() {
   });
 }
 
-async function getRequestAttachment(requestId) {
+// Limite seguro para caber em um documento do Firestore (limite de 1 MiB por
+// documento; base64 ocupa cerca de 1/3 a mais que o arquivo original).
+const attachmentCloudLimit = 700 * 1024;
+
+function formatFileSize(bytes) {
+  const size = Number(bytes || 0);
+  if (size < 1024) return `${size} bytes`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function readAttachmentAsDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Não foi possível ler o arquivo."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function dataUrlToBlob(dataUrl) {
+  const [meta, base64] = String(dataUrl || "").split(",");
+  const mime = (String(meta).match(/data:([^;]+)/) || [])[1] || "application/octet-stream";
+  const binary = atob(base64 || "");
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new Blob([bytes], { type: mime });
+}
+
+// Espelha o anexo na coleção "anexos" (arquivo em base64). Sem a nuvem o anexo
+// continua apenas neste navegador, como antes.
+async function syncAttachmentToFirestore(requestId, attachment) {
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled || !requestId) return;
+  try {
+    if (!attachment || !attachment.blob) {
+      await window.RH_SYNC.deleteDoc("anexos", requestId);
+      return;
+    }
+    const dataUrl = await readAttachmentAsDataUrl(attachment.blob);
+    await window.RH_SYNC.saveDocs("anexos", [{
+      id: requestId,
+      requestId,
+      name: attachment.name || "anexo",
+      type: attachment.type || attachment.blob.type || "",
+      size: Number(attachment.size || attachment.blob.size || 0),
+      dataUrl,
+      updatedAt: new Date().toISOString()
+    }]);
+  } catch (error) {
+    const detail = error instanceof Error ? ` ${error.message}` : "";
+    console.warn("Falha ao sincronizar o anexo no Firestore:", error);
+    showToast(`Anexo salvo apenas neste navegador.${detail}`);
+  }
+}
+
+async function getLocalRequestAttachment(requestId) {
   const database = await openRequestAttachmentsDatabase();
   return new Promise((resolve, reject) => {
     const transaction = database.transaction(requestAttachmentsStoreName, "readonly");
@@ -261,9 +347,38 @@ async function getRequestAttachment(requestId) {
   });
 }
 
+// Busca o anexo neste navegador e, se não estiver aqui, na nuvem.
+async function getRequestAttachment(requestId) {
+  let local = null;
+  try {
+    local = await getLocalRequestAttachment(requestId);
+  } catch (error) {
+    console.warn("Anexo local indisponível:", error);
+  }
+  if (local && local.blob) return local;
+  if (window.RH_SYNC && window.RH_SYNC.enabled) {
+    try {
+      const remote = await window.RH_SYNC.getDoc("anexos", requestId);
+      if (remote && remote.dataUrl) {
+        const blob = dataUrlToBlob(remote.dataUrl);
+        return {
+          requestId,
+          blob,
+          name: remote.name || "anexo",
+          type: remote.type || blob.type,
+          size: Number(remote.size || blob.size)
+        };
+      }
+    } catch (error) {
+      console.warn("Falha ao carregar o anexo da nuvem:", error);
+    }
+  }
+  return local;
+}
+
 async function storeRequestAttachment(requestId, file) {
   const database = await openRequestAttachmentsDatabase();
-  return new Promise((resolve, reject) => {
+  await new Promise((resolve, reject) => {
     const transaction = database.transaction(requestAttachmentsStoreName, "readwrite");
     transaction.objectStore(requestAttachmentsStoreName).put({
       requestId,
@@ -285,14 +400,20 @@ async function storeRequestAttachment(requestId, file) {
       reject(transaction.error || new Error("O armazenamento do anexo foi cancelado."));
     };
   });
+  await syncAttachmentToFirestore(requestId, {
+    blob: file,
+    name: file.name,
+    type: file.type,
+    size: file.size
+  });
 }
 
 async function restoreRequestAttachment(requestId, attachment) {
   const database = await openRequestAttachmentsDatabase();
-  return new Promise((resolve, reject) => {
+  await new Promise((resolve, reject) => {
     const transaction = database.transaction(requestAttachmentsStoreName, "readwrite");
     const store = transaction.objectStore(requestAttachmentsStoreName);
-    if (attachment) store.put(attachment);
+    if (attachment && attachment.blob) store.put(attachment);
     else store.delete(requestId);
     transaction.oncomplete = () => {
       database.close();
@@ -307,6 +428,7 @@ async function restoreRequestAttachment(requestId, attachment) {
       reject(transaction.error || new Error("A restauração do anexo foi cancelada."));
     };
   });
+  await syncAttachmentToFirestore(requestId, attachment && attachment.blob ? attachment : null);
 }
 
 function loadServerAccounts() {
@@ -325,7 +447,42 @@ function saveServerAccounts() {
     showToast("Não foi possível salvar o cadastro neste navegador.");
     return false;
   }
+  syncCollectionWithRemovals("contasLegado", serverAccounts, account => String(account.cpf || "").replace(/\D/g, ""));
   return true;
+}
+
+// Copia de segurança das contas CPF/senha (legado) na nuvem. A cópia local tem
+// prioridade (é nela que a senha é alterada); a nuvem apenas acrescenta contas
+// que ainda não existem neste navegador. Somente admin lê e grava.
+function mergeServerAccountsWithCloud(localList, remoteList) {
+  const merged = (localList || []).map(account => ({ ...account }));
+  const knownKeys = new Set(merged.map(account => String(account.cpf || "").replace(/\D/g, "")));
+  (remoteList || []).forEach(remote => {
+    const key = String(remote.cpf || "").replace(/\D/g, "");
+    if (!key || knownKeys.has(key)) return;
+    knownKeys.add(key);
+    merged.push({ ...remote });
+  });
+  return merged;
+}
+
+async function loadServerAccountsFromFirestore() {
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
+  const idFor = account => String(account.cpf || "").replace(/\D/g, "");
+  try {
+    const remote = await window.RH_SYNC.loadDocs("contasLegado");
+    if (!remote || remote.length === 0) {
+      if (serverAccounts.length > 0) saveServerAccounts();
+      return;
+    }
+    serverAccounts = mergeServerAccountsWithCloud(serverAccounts, remote);
+    seedFirestoreSyncState("contasLegado", remote, idFor);
+    saveServerAccounts();
+  } catch (error) {
+    const detail = error instanceof Error ? ` ${error.message}` : "";
+    console.warn("Falha ao carregar as contas legadas do Firestore:", error);
+    showToast(`Contas de acesso carregadas apenas deste navegador.${detail}`);
+  }
 }
 
 function loadServerPersonalData() {
@@ -425,6 +582,25 @@ function deleteReferenceDocFromFirestore(collection, id) {
     });
 }
 
+// Sincroniza a coleção e também apaga na nuvem o que foi removido aqui. Só
+// apaga com base no retrato já conhecido do Firestore, para nunca remover
+// documentos que este navegador ainda não viu.
+function syncCollectionWithRemovals(collection, docs, idFor) {
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
+  const baseline = firestoreSyncState.get(collection);
+  if (baseline) {
+    const currentIds = new Set();
+    (docs || []).forEach(doc => {
+      const id = idFor ? idFor(doc) : doc.id;
+      if (id) currentIds.add(String(id));
+    });
+    baseline.forEach((value, id) => {
+      if (!currentIds.has(String(id))) deleteReferenceDocFromFirestore(collection, id);
+    });
+  }
+  syncCollectionToFirestore(collection, docs, idFor);
+}
+
 function seedUnidades() {
   return [
     "Penitenciária de Cruzeiro",
@@ -476,6 +652,18 @@ function normalizeReferenceList(list) {
       observacoes: String((item && item.observacoes) || "").trim()
     }))
     .filter(item => item.name);
+}
+
+// Junta o que existe na nuvem com o que existir apenas neste navegador (a
+// nuvem tem prioridade). Itens locais cujo nome já existe na nuvem são
+// descartados, para não duplicar a lista inicial em cada navegador novo.
+function mergeReferenceListWithCloud(localList, remoteList) {
+  const remote = normalizeReferenceList(remoteList);
+  const cloudIds = new Set(remote.map(item => String(item.id)));
+  const cloudNames = new Set(remote.map(item => normalizeSearchText(item.name)));
+  const localOnly = normalizeReferenceList(localList).filter(item =>
+    !cloudIds.has(String(item.id)) && !cloudNames.has(normalizeSearchText(item.name)));
+  return remote.concat(localOnly);
 }
 
 function saveUnidades() {
@@ -889,6 +1077,7 @@ async function removeRequest(requestId) {
     return;
   }
   deleteReferenceDocFromFirestore("requests", requestId);
+  deleteReferenceDocFromFirestore("anexos", requestId);
   const dialog = document.getElementById("request-details-dialog");
   if (dialog?.open) dialog.close();
   renderAll();
@@ -1128,12 +1317,56 @@ function getApprovedVacationRequests() {
   });
 }
 
+// Identificador estável de uma entrada da lista de Função Gratificada. É usado
+// como id do documento na nuvem (CPF quando existir, senão o nome).
+function fgRosterEntryId(entry) {
+  const cpf = String((entry && entry.cpf) || "").replace(/\D/g, "");
+  if (cpf) return `fg-${cpf}`;
+  const slug = normalizeSearchText((entry && entry.name) || "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return `fg-${slug || "sem-nome"}`;
+}
+
+// Sempre trabalha com objetos { id, name, cpf } (as listas antigas guardavam
+// apenas o nome em texto).
+function normalizeFgRosterEntry(entry) {
+  const name = String((typeof entry === "string" ? entry : entry && entry.name) || "").trim();
+  if (!name) return null;
+  const cpf = String((typeof entry === "string" ? "" : entry && entry.cpf) || "").trim();
+  const base = { name, cpf };
+  const id = typeof entry === "string" ? "" : String((entry && entry.id) || "").trim();
+  return { id: id || fgRosterEntryId(base), name, cpf };
+}
+
+function fgRosterKey(entry) {
+  const cpf = String((entry && entry.cpf) || "").replace(/\D/g, "");
+  return cpf ? `cpf:${cpf}` : `nome:${normalizeSearchText((entry && entry.name) || "")}`;
+}
+
+// Une a lista local com a da nuvem (a nuvem tem prioridade na mesma pessoa).
+function mergeFgRoster(localList, remoteList) {
+  const merged = [];
+  const indexByKey = new Map();
+  const put = entry => {
+    const normalized = normalizeFgRosterEntry(entry);
+    if (!normalized) return;
+    const key = fgRosterKey(normalized);
+    const index = indexByKey.get(key);
+    if (index === undefined) {
+      indexByKey.set(key, merged.length);
+      merged.push(normalized);
+    } else {
+      merged[index] = normalized;
+    }
+  };
+  (localList || []).forEach(put);
+  (remoteList || []).forEach(put);
+  return merged;
+}
+
 function loadFgServerRoster() {
   try {
     const saved = JSON.parse(localStorage.getItem(fgRosterStorageKey) || "[]");
-    return Array.isArray(saved)
-      ? saved.filter(entry => (typeof entry === "string" && entry.trim()) || (entry && typeof entry === "object" && typeof entry.name === "string" && entry.name.trim()))
-      : [];
+    return Array.isArray(saved) ? mergeFgRoster(saved, []) : [];
   } catch {
     return [];
   }
@@ -1142,11 +1375,32 @@ function loadFgServerRoster() {
 function saveFgServerRoster() {
   try {
     localStorage.setItem(fgRosterStorageKey, JSON.stringify(fgServerRoster));
-    return true;
   } catch {
     showToast("Não foi possível salvar o cadastro de servidores com Função Gratificada neste navegador.");
     return false;
   }
+  syncCollectionWithRemovals("fgServidores", fgServerRoster, entry => entry.id);
+  return true;
+}
+
+// Traz a lista de Função Gratificada da nuvem e sobe o que existir só aqui.
+async function loadFgServerRosterFromFirestore() {
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
+  try {
+    const remote = await window.RH_SYNC.loadDocs("fgServidores");
+    if (remote && remote.length > 0) {
+      fgServerRoster = mergeFgRoster(fgServerRoster, remote);
+      seedFirestoreSyncState("fgServidores", remote, entry => entry.id);
+      saveFgServerRoster();
+    } else if (fgServerRoster.length > 0) {
+      saveFgServerRoster();
+    }
+  } catch (error) {
+    const detail = error instanceof Error ? ` ${error.message}` : "";
+    console.warn("Falha ao carregar o cadastro de Função Gratificada do Firestore:", error);
+    showToast(`Cadastro de Função Gratificada carregado apenas deste navegador.${detail}`);
+  }
+  renderFgServerRoster();
 }
 
 function getFgRosterName(entry) {
@@ -2157,7 +2411,7 @@ async function downloadRequestAttachment(requestId) {
   try {
     const attachment = await getRequestAttachment(requestId);
     if (!attachment?.blob) {
-      showToast("O arquivo anexado não está disponível neste navegador.");
+      showToast("O arquivo anexado não está disponível.");
       return;
     }
     const downloadUrl = URL.createObjectURL(attachment.blob);
@@ -2182,6 +2436,10 @@ async function rejectRequestWithDetails(event) {
   const justification = String(formData.get("justification") || "").trim();
   const attachmentFile = document.getElementById("request-rejection-attachment").files[0] || null;
   const request = requests.find(item => item.id === requestId);
+  if (attachmentFile && attachmentFile.size > attachmentCloudLimit) {
+    showToast(`O arquivo tem ${formatFileSize(attachmentFile.size)} e não cabe na nuvem (máximo ${formatFileSize(attachmentCloudLimit)}). Escolha um arquivo menor.`);
+    return;
+  }
   if (!request || request.status !== "pending") {
     showToast("Esta solicitação não está mais pendente.");
     return;
@@ -3661,7 +3919,10 @@ async function initializeApp() {
       // Mantém os dados locais quando a nuvem ainda está vazia; o primeiro
       // snapshot repete o que loadRequests() trouxe, então evitamos um render
       // redundante logo na abertura.
-      const normalized = (list.length ? list : requests).map(normalizeRequest);
+      const cloudList = list.length ? list : requests;
+      const cloudIds = new Set(cloudList.map(request => String(request.id)));
+      const localOnly = requests.filter(request => request && request.id && !cloudIds.has(String(request.id)));
+      const normalized = cloudList.concat(localOnly).map(normalizeRequest);
       if (initialSignature === null) {
         initialSignature = JSON.stringify(requests);
         if (JSON.stringify(normalized) === initialSignature) return;
@@ -3671,6 +3932,9 @@ async function initializeApp() {
     }, error => console.warn("Assinatura do Firestore falhou:", error));
     loadUsuariosFromFirestore();
     loadServerRegistryFromFirestore();
+    loadFgServerRosterFromFirestore();
+    loadTasksFromFirestore();
+    loadServerAccountsFromFirestore();
   }
 }
 
@@ -3697,6 +3961,12 @@ async function loadServerRegistryFromFirestore() {
     if (remoteServidores && remoteServidores.length > 0) {
       serverPersonalData = mergeServerRecords(serverPersonalData, remoteServidores, record => record.id);
       seedFirestoreSyncState("servidores", remoteServidores);
+      // Sobe o que existir apenas neste navegador (o merge acima já trouxe o
+      // restante da nuvem).
+      saveServerPersonalData();
+    } else if (serverPersonalData.length > 0) {
+      // Nuvem vazia: sobe o cadastro que só existe neste navegador.
+      saveServerPersonalData();
     }
   } catch (error) {
     const detail = error instanceof Error ? ` ${error.message}` : "";
@@ -3715,17 +3985,23 @@ async function loadReferenceDataFromFirestore() {
         window.RH_SYNC.loadDocs("quadros")
       ]);
       if (remoteUnidades && remoteUnidades.length > 0) {
-        unidades = normalizeReferenceList(remoteUnidades);
-        seedFirestoreSyncState("unidades", unidades);
+        unidades = mergeReferenceListWithCloud(unidades, remoteUnidades);
+        seedFirestoreSyncState("unidades", normalizeReferenceList(remoteUnidades));
+        saveUnidades();
       }
       if (remoteCargos && remoteCargos.length > 0) {
-        cargos = normalizeReferenceList(remoteCargos);
-        seedFirestoreSyncState("cargos", cargos);
+        cargos = mergeReferenceListWithCloud(cargos, remoteCargos);
+        seedFirestoreSyncState("cargos", normalizeReferenceList(remoteCargos));
+        saveCargos();
       }
       if (remoteQuadros && remoteQuadros.length > 0) {
-        quadros = normalizeReferenceList(remoteQuadros);
-        seedFirestoreSyncState("quadros", quadros);
+        quadros = mergeReferenceListWithCloud(quadros, remoteQuadros);
+        seedFirestoreSyncState("quadros", normalizeReferenceList(remoteQuadros));
+        saveQuadros();
       }
+      if (!remoteUnidades?.length && unidades.length > 0) saveUnidades();
+      if (!remoteCargos?.length && cargos.length > 0) saveCargos();
+      if (!remoteQuadros?.length && quadros.length > 0) saveQuadros();
     } catch (error) {
       const detail = error instanceof Error ? ` ${error.message}` : "";
       console.warn("Falha ao carregar cadastros básicos do Firestore:", error);

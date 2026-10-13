@@ -73,6 +73,30 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Cadastro de servidores com Funcao Gratificada (menu Servidores).
+    match /fgServidores/{id} {
+      allow read, list: if isApproved();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Tarefas do painel.
+    match /tarefas/{id} {
+      allow read, list, create, update, delete: if isAdmin();
+    }
+
+    // Anexos das recusas (arquivo em base64; documento limitado a ~700 KB).
+    match /anexos/{id} {
+      allow read: if isApproved();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // Contas legadas (CPF/senha). Ficam na nuvem apenas como copia de seguranca
+    // e restauracao; somente admin le e grava.
+    match /contasLegado/{id} {
+      allow read, list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
     // Usuarios/contas do Google.
     //  - get: qualquer logado pode ler o proprio/login (necessario para decidir
     //    o perfil no login).

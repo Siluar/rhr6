@@ -89,7 +89,8 @@ Como ativar:
 6. Em **Firestore → Regras**, cole o conteúdo de `firestore.rules` e publique.
    Alternativa por linha de comando (com o Firebase CLI autenticado): o projeto
    já inclui `firebase.json` e `.firebaserc`, então basta rodar
-   `firebase deploy --only firestore:rules`.
+   `firebase deploy --only firestore:rules --project rhr6-5b275` (o
+   `--project` evita publicar no projeto que o CLI tenha como ativo na máquina).
 7. Em **Authentication → Configurações → Domínios autorizados**, adicione os
    domínios do site (ex.: `siluar.github.io`, `rhr6.vercel.app`, `localhost`).
 
@@ -107,10 +108,14 @@ Com o Firebase ativo, o painel ganha uma gestão **completa** (criar, ler,
 editar e excluir), persistida nas coleções do Firestore:
 
 - **Solicitações** — além de aprovar/recusar, o admin pode **editar** os dados
-  de um pedido ou **excluí-lo** (coleção `requests`).
-- **Servidores** — o cadastro de dados dos servidores e as Funções Gratificadas
-  já existentes passam a ser sincronizados com a coleção `servidores` (a guia
-  "Cadastro de Login", obsoleta com o acesso só-Google, foi removida do menu).
+  de um pedido ou **excluí-lo** (coleção `requests`). O arquivo anexado na
+  recusa é gravado na coleção `anexos` (em base64, até **700 KB** por arquivo)
+  e recuperado de lá em qualquer computador; arquivos maiores continuam
+  disponíveis apenas no navegador onde foram anexados.
+- **Servidores** — o cadastro de dados dos servidores é sincronizado com a
+  coleção `servidores`; o **Cadastro de Servidores com Função Gratificada** usa
+  a coleção `fgServidores` (a guia "Cadastro de Login", obsoleta com o acesso
+  só-Google, foi removida do menu). As tarefas do painel ficam em `tarefas`.
 - **Cadastro de Unidades** — item **Unidades** próprio na barra lateral para
   criar, editar e excluir as unidades penais (coleção `unidades`). As unidades
   cadastradas alimentam o select "Unidade Penal" do formulário de dados dos
@@ -152,14 +157,26 @@ editar e excluir), persistida nas coleções do Firestore:
 > perfil `admin` e ativos) pode aprovar, editar, apagar ou gerenciar os
 > cadastros. A autoinscrição é permitida somente para o próprio e-mail e apenas
 > como `ativo: false` / `pendente: true` / perfil `usuario` — ninguém consegue se
-> auto-aprovar. As coleções `servidores`, `unidades`, `cargos`, `quadros` e
-> `usuarios` são protegidas. **Publique estas regras no console** para que a
-> autoinscrição de pendentes e o bloqueio por situação funcionem na nuvem.
+> auto-aprovar. As coleções `servidores`, `unidades`, `cargos`, `quadros`,
+> `usuarios`, `fgServidores`, `tarefas`, `anexos` e `contasLegado` são
+> protegidas. **Publique estas regras no console** para que a autoinscrição de
+> pendentes e o bloqueio por situação funcionem na nuvem.
 
 As gravações no Firestore são **incrementais** (envia só os documentos que
 mudaram) e fatiadas em lotes de até 400 escritas, o que evita o limite de 500
-por batch e reduz o tráfego. Ícones e listas de referência são atualizados uma
-única vez por ciclo de renderização, e as buscas usam *debounce*.
+por batch e reduz o tráfego. Exclusões também chegam à nuvem (o documento é
+apagado quando o item sai da lista no painel). Ao abrir o painel, os cadastros da
+nuvem são **unidos** ao que existir apenas naquele navegador — nada é descartado
+só porque o outro computador ainda não tinha o registro. Ícones e listas de
+referência são atualizados uma única vez por ciclo de renderização, e as buscas
+usam *debounce*.
+
+> As contas antigas de **CPF/senha** (`contasLegado`) e a senha administrativa
+> local seguem sendo dados legados: as contas ficam na nuvem apenas como cópia de
+> segurança (a cópia local tem prioridade, porque é nela que a senha é alterada) e
+> a senha administrativa continua apenas no navegador, já que o acesso
+> administrativo é exclusivamente pelo Google. Tarefas, anexos e o cadastro de
+> Função Gratificada agora também vão para a nuvem.
 
 ## Publicação (GitHub Pages)
 
