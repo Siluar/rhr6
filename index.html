@@ -77,6 +77,7 @@
           <div class="nav-menu-item" id="reports-nav-item">
             <button class="nav-link nav-menu-toggle" type="button" data-submenu-toggle="reports" aria-label="Relatórios, abrir submenu" aria-expanded="false" aria-controls="reports-submenu"><i data-lucide="chart-no-axes-column-increasing"></i><span>Relatórios</span><i class="nav-menu-chevron" data-lucide="chevron-down"></i></button>
             <div class="nav-submenu" id="reports-submenu" hidden>
+              <button class="nav-submenu-link" type="button" data-view="report-requests">Relatório de solicitações</button>
               <button class="nav-submenu-link" type="button" data-view="reports">Relatório por mês</button>
               <button class="nav-submenu-link" type="button" data-view="report-year">Relatório por ano</button>
               <button class="nav-submenu-link" type="button" data-view="report-unit">Relatório por unidade</button>
@@ -333,6 +334,19 @@
               <label class="table-search report-filter-search"><i data-lucide="search"></i><input id="report-person-search" type="search" placeholder="Filtrar servidor" aria-label="Filtrar servidor pelo nome" /></label>
               <div class="report-export-actions" data-report-export-table="report-person-table" data-report-export-title="Relatório por servidor"></div>
               <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-person-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Unidade de Lotação</th><th scope="col">Período</th><th scope="col">Dias</th></tr></thead><tbody id="report-person-body"></tbody></table></div>
+            </section>
+          </section>
+          <section class="view-panel" id="view-report-requests" aria-label="Relatório de solicitações">
+            <section class="panel detailed-reports-panel" aria-labelledby="report-requests-title">
+              <div class="panel-heading"><div><p class="section-kicker">TODAS AS SOLICITAÇÕES</p><h2 id="report-requests-title">Relatório de solicitações</h2></div></div>
+              <div class="report-requests-filters">
+                <label class="table-search report-filter-search"><i data-lucide="search"></i><input id="report-requests-search" type="search" placeholder="Filtrar servidor" aria-label="Filtrar solicitações pelo nome do servidor" /></label>
+                <label class="report-unit-filter" for="report-requests-status">Status<select id="report-requests-status"><option value="">Todos</option><option value="pending">Pendentes</option><option value="approved">Aprovadas</option><option value="rejected">Recusadas</option></select></label>
+                <label class="report-unit-filter" for="report-requests-type">Tipo<select id="report-requests-type"><option value="">Todos os tipos</option></select></label>
+                <label class="report-unit-filter" for="report-requests-year">Ano<select id="report-requests-year"><option value="">Todos os anos</option></select></label>
+              </div>
+              <div class="report-month-toolbar"><span class="task-count" id="report-requests-count">0 solicitações</span><div class="report-export-actions" data-report-export-table="report-requests-table" data-report-export-title="Relatório de solicitações"></div></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-requests-table"><thead><tr><th scope="col">Servidor</th><th scope="col">CPF</th><th scope="col">Tipo</th><th scope="col">Unidade</th><th scope="col">Período</th><th scope="col">Justificativa</th></tr></thead><tbody id="report-requests-body"></tbody></table></div>
             </section>
           </section>
           <section class="view-panel" id="view-report-capacitacao" aria-label="Relatório de licença-capacitação">

@@ -76,6 +76,9 @@ let selectedVacationMonth = String(new Date().getMonth());
 let selectedVacationYear = String(new Date().getFullYear());
 let selectedCapacitacaoMonth = "";
 let selectedEspecialMonth = "";
+let selectedReportRequestsStatus = "";
+let selectedReportRequestsType = "";
+let selectedReportRequestsYear = "";
 let toastTimer;
 
 function loadRequests() {
@@ -1600,6 +1603,107 @@ function renderReportPerson() {
     .join("");
 }
 
+const requestStatusLabels = { pending: "Pendentes", approved: "Aprovadas", rejected: "Recusadas" };
+const requestStatusOrder = ["pending", "approved", "rejected"];
+
+function getRequestTypeLabel(request) {
+  const raw = String(request?.type || "Férias").trim() || "Férias";
+  return raw.charAt(0).toLocaleUpperCase("pt-BR") + raw.slice(1);
+}
+
+function getRequestYearValue(request) {
+  const start = String(request?.start || "");
+  if (isIsoDate(start)) return start.slice(0, 4);
+  const createdAt = String(request?.createdAt || "");
+  if (isIsoDate(createdAt)) return createdAt.slice(0, 4);
+  const explicit = String(request?.year || request?.ano || "").trim();
+  return /^\d{4}$/.test(explicit) ? explicit : "";
+}
+
+function getRequestJustification(request) {
+  if (request?.status === "rejected") return String(request.rejectionJustification || "").trim();
+  if (request?.status === "approved") return String(request.approvalJustification || "").trim();
+  return "";
+}
+
+function renderReportRequests() {
+  const body = document.getElementById("report-requests-body");
+  const statusSelect = document.getElementById("report-requests-status");
+  const typeSelect = document.getElementById("report-requests-type");
+  const yearSelect = document.getElementById("report-requests-year");
+  const searchInput = document.getElementById("report-requests-search");
+  const countElement = document.getElementById("report-requests-count");
+  if (!body || !statusSelect || !typeSelect || !yearSelect) return;
+
+  // Filtro de tipos montado a partir das solicitações existentes.
+  const typeLabels = new Map();
+  requests.forEach(request => {
+    const key = String(request?.type || "").trim().toLocaleLowerCase("pt-BR");
+    if (key && !typeLabels.has(key)) typeLabels.set(key, getRequestTypeLabel(request));
+  });
+  const sortedTypes = Array.from(typeLabels.entries()).sort((left, right) => left[1].localeCompare(right[1], "pt-BR"));
+  if (!typeLabels.has(selectedReportRequestsType)) selectedReportRequestsType = "";
+  typeSelect.innerHTML = `<option value="">Todos os tipos</option>${sortedTypes.map(([key, label]) => `<option value="${escapeHtml(key)}">${escapeHtml(label)}</option>`).join("")}`;
+  typeSelect.value = selectedReportRequestsType;
+  selectedReportRequestsType = typeSelect.value;
+
+  // Filtro de anos montado a partir das solicitações existentes.
+  const years = new Set();
+  requests.forEach(request => {
+    const year = getRequestYearValue(request);
+    if (year) years.add(year);
+  });
+  if (!years.has(selectedReportRequestsYear)) selectedReportRequestsYear = "";
+  yearSelect.innerHTML = `<option value="">Todos os anos</option>${Array.from(years).sort((left, right) => right.localeCompare(left)).map(year => `<option value="${escapeHtml(year)}">${escapeHtml(year)}</option>`).join("")}`;
+  yearSelect.value = selectedReportRequestsYear;
+  selectedReportRequestsYear = yearSelect.value;
+
+  statusSelect.value = selectedReportRequestsStatus;
+  selectedReportRequestsStatus = statusSelect.value;
+  const statusFilter = statusSelect.value || "";
+  const typeFilter = typeSelect.value;
+  const yearFilter = yearSelect.value;
+  const searchTerm = searchInput ? searchInput.value.trim().toLocaleLowerCase("pt-BR") : "";
+  const filtered = requests.filter(request => {
+    if (statusFilter && String(request.status || "") !== statusFilter) return false;
+    if (typeFilter && String(request.type || "").trim().toLocaleLowerCase("pt-BR") !== typeFilter) return false;
+    if (yearFilter && getRequestYearValue(request) !== yearFilter) return false;
+    if (searchTerm && !String(request.person || "Não identificado").toLocaleLowerCase("pt-BR").includes(searchTerm)) return false;
+    return true;
+  });
+
+  if (countElement) countElement.textContent = `${filtered.length} ${filtered.length === 1 ? "solicitação" : "solicitações"}`;
+
+  if (!filtered.length) {
+    body.innerHTML = `<tr><td class="detailed-report-empty" colspan="6">Nenhuma solicitação encontrada com esses filtros.</td></tr>`;
+    return;
+  }
+
+  const groupedStatuses = requestStatusOrder.filter(status => filtered.some(request => String(request.status || "") === status));
+  filtered.forEach(request => {
+    const status = String(request.status || "pending");
+    if (!groupedStatuses.includes(status)) groupedStatuses.push(status);
+  });
+
+  const renderRow = request => {
+    const period = getRequestPeriodDisplay(request);
+    const displayPeriod = period && period !== "Não informado" ? period : getRequestMonthCycleDisplay(request);
+    const justification = getRequestJustification(request) || "—";
+    return `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(formatCpfLabel(request.cpf))}</td><td>${escapeHtml(getRequestTypeLabel(request))}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(displayPeriod)}</td><td>${escapeHtml(justification)}</td></tr>`;
+  };
+
+  body.innerHTML = groupedStatuses
+    .filter(status => !statusFilter || status === statusFilter)
+    .map(status => {
+      const items = filtered
+        .filter(request => String(request.status || "") === status)
+        .sort((left, right) => String(left.person || "").localeCompare(String(right.person || ""), "pt-BR") || String(left.start || left.month || "").localeCompare(String(right.start || right.month || "")));
+      if (!items.length) return "";
+      return `<tr class="report-requests-group"><th scope="colgroup" colspan="6">${escapeHtml(requestStatusLabels[status] || status)} (${items.length})</th></tr>${items.map(renderRow).join("")}`;
+    })
+    .join("");
+}
+
 function renderCurrentMonthVacations() {
   const monthLabel = document.getElementById("current-month-label");
   const container = document.getElementById("current-month-vacations");
@@ -1701,6 +1805,7 @@ function renderAll() {
   renderReportYear();
   renderReportUnit();
   renderReportPerson();
+  renderReportRequests();
   renderReportFg();
   renderUsuarios();
   renderUnidades();
@@ -1725,6 +1830,7 @@ function renderRequestsDependentViews() {
   renderReportYear();
   renderReportUnit();
   renderReportPerson();
+  renderReportRequests();
   renderReportFg();
   renderVacationTodayStat();
   updateCounts();
@@ -2227,7 +2333,7 @@ function setView(view) {
     toggle.setAttribute("aria-expanded", String(hasActiveItem));
     submenu.hidden = !hasActiveItem;
   });
-  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Unidades", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Cargos", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "cadastro-quadros": ["Quadros", "Cadastro de Quadros", "Cadastre os quadros usados pelos cargos."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatório - Servidores", "Relatório - Servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-especial": ["Licença especial", "Relatório de licença especial", "Consulte as solicitações de licença especial aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
+  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Unidades", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Cargos", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "cadastro-quadros": ["Quadros", "Cadastro de Quadros", "Cadastre os quadros usados pelos cargos."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatório - Servidores", "Relatório - Servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-requests": ["Solicitações", "Relatório de solicitações", "Consulte todas as solicitações agrupadas por situação."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-especial": ["Licença especial", "Relatório de licença especial", "Consulte as solicitações de licença especial aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
   const [breadcrumb, title, subtitle] = titles[view] || (view === "tasks" ? ["Gestão", "Lista de tarefas", "Registre e acompanhe suas tarefas."] : view === "meta4" ? ["Solicitações", "META 4", "Consulte os pedidos de férias enviados pelos usuários."] : view === "protocols-fg" ? ["Solicitações", "Protocolos F.G", "Acompanhe o status e o número dos protocolos de férias com Função Gratificada."] : titles.overview);
   document.getElementById("breadcrumb-current").textContent = breadcrumb;
   const pageTitle = document.getElementById("page-title");
@@ -2248,6 +2354,7 @@ function setView(view) {
   if (view === "report-year") renderReportYear();
   if (view === "report-unit") renderReportUnit();
   if (view === "report-person") renderReportPerson();
+  if (view === "report-requests") renderReportRequests();
   if (view === "report-servers") renderServerDirectoryReport();
   if (view === "report-capacitacao") renderReportCapacitacao();
   if (view === "report-especial") renderReportEspecial();
@@ -3333,6 +3440,19 @@ document.getElementById("report-unit-person-search").addEventListener("input", d
 document.getElementById("report-person-search").addEventListener("input", debounce(renderReportPerson));
 document.getElementById("report-servers-select").addEventListener("input", debounce(renderServerDirectoryReport));
 document.getElementById("report-servers-unit").addEventListener("change", renderServerDirectoryReport);
+document.getElementById("report-requests-search").addEventListener("input", debounce(renderReportRequests));
+document.getElementById("report-requests-status").addEventListener("change", event => {
+  selectedReportRequestsStatus = event.currentTarget.value;
+  renderReportRequests();
+});
+document.getElementById("report-requests-type").addEventListener("change", event => {
+  selectedReportRequestsType = event.currentTarget.value;
+  renderReportRequests();
+});
+document.getElementById("report-requests-year").addEventListener("change", event => {
+  selectedReportRequestsYear = event.currentTarget.value;
+  renderReportRequests();
+});
 document.getElementById("report-capacitacao-name").addEventListener("input", debounce(renderReportCapacitacao));
 document.getElementById("report-capacitacao-month").addEventListener("change", event => {
   selectedCapacitacaoMonth = event.currentTarget.value;

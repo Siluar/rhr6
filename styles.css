@@ -318,6 +318,23 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 #view-reports .current-month-label, [id^="view-report"] .report-filter-search { font-size: 14px; }
 #view-reports .report-export-actions .button, [id^="view-report"] .report-export-actions .button { font-size: 12px; }
 #view-reports .report-note, #view-reports .vacation-count-card > p:last-child { font-size: 13px; }
+#view-report-requests .panel { border-color: #596168; background: #41474d; color: #f2f4f5; }
+#view-report-requests .panel-heading h2 { color: #f2f4f5; }
+#view-report-requests .section-kicker { color: #bec7cd; }
+#view-report-requests .report-requests-filters { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(150px, 220px)); align-items: end; gap: 12px; margin: 14px 0; }
+#view-report-requests .report-requests-filters .report-unit-filter { color: #f2f4f5; }
+#view-report-requests .report-requests-filters select { min-height: 38px; padding: 0 10px; border: 1px solid #9ba5ac; border-radius: 5px; background: #fff; color: #20272c; font: inherit; }
+#view-report-requests .report-filter-search { width: 100%; margin: 0; border-color: #9ba5ac; background: #fff; }
+#view-report-requests .report-filter-search input { color: #20272c; }
+#view-report-requests .task-count { color: #e1e6e9; }
+#view-report-requests .detailed-report-table th { border-bottom-color: #9fc4dc; background: #d7e9f4; color: #273945; text-align: left; }
+#view-report-requests .detailed-report-table td { border-bottom-color: #68727a; color: #f2f4f5; text-align: left; }
+#view-report-requests .detailed-report-table tbody tr:nth-child(even) { background: #50575d; }
+#view-report-requests .detailed-report-table tbody tr:nth-child(odd) { background: #41474d; }
+#view-report-requests .detailed-report-empty { color: #f2f4f5; }
+#view-report-requests .detailed-report-table th:nth-child(2), #view-report-requests .detailed-report-table td:nth-child(2), #view-report-requests .detailed-report-table th:last-child, #view-report-requests .detailed-report-table td:last-child { width: auto; text-align: left; }
+#view-report-requests .detailed-report-table tr.report-requests-group th { background: #9fc4dc; color: #10222d; font-weight: 700; text-align: left; }
+@media (max-width: 900px) { #view-report-requests .report-requests-filters { grid-template-columns: minmax(0, 1fr); } }
 .report-export-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin: 12px 0; }
 .report-export-actions .button, .server-data-export-actions .button { color: #000; font-weight: 700; }
 .report-export-actions .button { min-height: 36px; }
