@@ -14,6 +14,7 @@
  *   addRequest(req)    -> Promise<req> (usado pela pagina de solicitacao)
  *   saveRequests(list) -> Promise (grava a lista inteira, com merge)
  *   subscribeRequests(onData, onError)
+ *   getDoc(col, id)    -> Promise<doc|null> (um documento pelo id)
  *   loadDocs(col)      -> Promise<array> (qualquer colecao, com id)
  *   saveDocs(col, list)-> Promise (grava a lista inteira, com merge)
  *   deleteDoc(col, id) -> Promise
@@ -144,6 +145,12 @@
   RH_SYNC.loadDocs = function (collection) {
     return RH_SYNC.waitForAuth().then(() => RH_SYNC._db.collection(collection).get()).then(snapshot =>
       snapshot.docs.map(doc => Object.assign({}, doc.data(), { id: doc.id }))
+    );
+  };
+
+  RH_SYNC.getDoc = function (collection, id) {
+    return RH_SYNC.waitForAuth().then(() => RH_SYNC._db.collection(collection).doc(id).get()).then(doc =>
+      doc.exists ? Object.assign({}, doc.data(), { id: doc.id }) : null
     );
   };
 

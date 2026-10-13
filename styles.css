@@ -197,6 +197,7 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 .action-icon.approve { border-color: #dbe9dc; background: #eef5ee; color: #4c7a55; }.action-icon.approve:hover { background: #deedde; }.action-icon.reject:hover { background: #fbefea; color: #b85f47; }
 .status-pill { display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 5px 7px; border-radius: 4px; font-size: 9px; font-weight: 600; white-space: nowrap; }.status-pill::before { width: 5px; height: 5px; border-radius: 50%; background: currentColor; content: ""; }
 .status-pending { background: #fcf1e6; color: #a87536; }.status-approved { background: #eaf2e9; color: #4d7854; }.status-rejected { background: #f9ece8; color: #ac634e; }.status-away { background: #eff0ed; color: #717970; }
+.usuarios-pending-note { margin: 0 0 10px; padding: 8px 10px; border-radius: 6px; background: #fcf1e6; color: #a87536; font-size: 12px; font-weight: 600; }
 .overview-team-panel { margin-top: 14px; }.team-panel-heading { margin-bottom: 15px; }.team-total { color: #969b93; font-size: 9px; font-weight: 500; }
 .team-table-wrap { overflow-x: auto; }.team-table { width: 100%; border-collapse: collapse; text-align: left; white-space: nowrap; }
 .team-table th { height: 30px; border-bottom: 1px solid #ecece6; color: #969a92; font-size: 8px; font-weight: 700; }

@@ -179,21 +179,48 @@ function decodeJwtPayload(token) {
   return JSON.parse(json);
 }
 
-async function resolveGoogleRole(email) {
+async function registerPendingUser(email, name) {
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return false;
+  try {
+    await window.RH_SYNC.saveDocs("usuarios", [{
+      id: email,
+      name: name || email,
+      email,
+      perfil: "usuario",
+      ativo: false,
+      pendente: true,
+      criadoEm: new Date().toISOString().slice(0, 10)
+    }]);
+    return true;
+  } catch (error) {
+    console.warn("Não foi possível registrar o acesso pendente:", error);
+    return false;
+  }
+}
+
+async function resolveGoogleRole(email, name) {
   const config = window.RH_CONFIG || {};
   const adminEmails = (config.googleAdminEmails || []).map(item => String(item).toLowerCase());
   if (adminEmails.includes(email)) return { role: "admin", allowed: true };
   if (!window.RH_SYNC || !window.RH_SYNC.enabled) return { role: "usuario", allowed: true };
   try {
     await window.RH_SYNC.waitForAuth();
-    const users = await window.RH_SYNC.loadDocs("usuarios");
-    const match = users.find(user => String(user.email || user.id || "").toLowerCase() === email);
-    if (match && match.ativo === false) return { role: "usuario", allowed: false };
-    if (match && match.perfil === "admin") return { role: "admin", allowed: true };
-    return { role: "usuario", allowed: true };
+    const match = window.RH_SYNC.getDoc
+      ? await window.RH_SYNC.getDoc("usuarios", email)
+      : (await window.RH_SYNC.loadDocs("usuarios")).find(user => String(user.email || user.id || "").toLowerCase() === email);
+    if (match) {
+      if (match.ativo === false) {
+        return { role: "usuario", allowed: false, pending: match.pendente === true };
+      }
+      if (match.perfil === "admin") return { role: "admin", allowed: true };
+      return { role: "usuario", allowed: true };
+    }
+    // E-mail novo: registra como pendente e bloqueia ate o administrador decidir.
+    const registered = await registerPendingUser(email, name);
+    return { role: "usuario", allowed: false, pending: true, registered };
   } catch (error) {
     console.warn("Falha ao consultar usuários no login:", error);
-    return { role: "usuario", allowed: true };
+    return { role: "usuario", allowed: false, error: true };
   }
 }
 
@@ -204,9 +231,24 @@ async function applyGoogleUser(email, verified, name) {
     if (googleMessage) setFormMessage(googleMessage, "Não foi possível confirmar seu e-mail do Google.", true);
     return false;
   }
-  const decision = await resolveGoogleRole(normalizedEmail);
+  const decision = await resolveGoogleRole(normalizedEmail, name);
   if (!decision.allowed) {
-    if (googleMessage) setFormMessage(googleMessage, "Seu acesso está desativado. Fale com o administrador.", true);
+    // Encerra a sessão do Firebase para que um acesso pendente/bloqueado não
+    // permaneça autenticado enquanto aguarda a decisão do administrador.
+    if (window.RH_SYNC && window.RH_SYNC.enabled) {
+      try { await window.RH_SYNC.signOut(); } catch { /* ignora */ }
+    }
+    if (googleMessage) {
+      if (decision.pending) {
+        setFormMessage(googleMessage, decision.registered === false
+          ? "Sua solicitação de acesso não pôde ser enviada agora. Tente novamente em instantes."
+          : "Solicitação enviada. Aguarde a aprovação do administrador para entrar.", true);
+      } else if (decision.error) {
+        setFormMessage(googleMessage, "Não foi possível verificar seu acesso agora. Tente novamente.", true);
+      } else {
+        setFormMessage(googleMessage, "Seu acesso está desativado. Fale com o administrador.", true);
+      }
+    }
     return false;
   }
   const role = decision.role;

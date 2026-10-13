@@ -59,7 +59,11 @@ Toda a configuração fica em `config.js` (versionado):
 
 Após o login, o e-mail verificado é comparado com `googleAdminEmails`: se estiver
 na lista, a sessão vira administrador; caso contrário, valem a coleção `usuarios`
-do Firestore (perfil e situação). Para funcionar, é preciso:
+do Firestore (perfil e situação). Quando o Firebase está ativo, um e-mail que
+**entra pela primeira vez** é gravado como **pendente** (inativo) e a sessão é
+encerrada na hora: a pessoa só acessa depois que um administrador **permite** o
+acesso em *Usuários & Acessos*. Se o administrador **negar**, o e-mail fica
+bloqueado. Para funcionar, é preciso:
 
 - Um **Client ID OAuth** (tipo "Aplicativo da Web") no Google Cloud Console.
 - As **Origens JavaScript autorizadas** com a URL onde o site é servido
@@ -130,18 +134,23 @@ editar e excluir), persistida nas coleções do Firestore:
   importação em lote pelo botão **"Colar lista"**.
 - **Usuários & Acessos** — nova seção no menu (reproduz o item "GESTÃO") para
   gerenciar quem pode entrar com o Google: nome, e-mail, perfil (usuário ou
-  administrador) e situação (ativo/inativo), na coleção `usuarios`. O perfil
-  decidido aqui vale no login: um e-mail marcado como **inativo** é bloqueado.
-  Todos os usuários — inclusive os e-mails proprietários — podem ser editados,
-  ter o perfil trocado ou ser removidos. A segurança de fundo continua firme:
-  os proprietários (`googleAdminEmails`) sempre são tratados como
-  administradores pelo login e pelas regras do Firestore.
+  administrador) e situação (ativo/inativo/pendente), na coleção `usuarios`.
+  Quem entra pela primeira vez aparece como **Pendente** e pode ser liberado
+  (**Permitir**) ou barrado (**Negar**) com um clique; um e-mail **inativo** é
+  bloqueado no login. Todos os usuários — inclusive os e-mails proprietários —
+  podem ser editados, ter o perfil trocado ou ser removidos. A segurança de fundo
+  continua firme: os proprietários (`googleAdminEmails`) sempre são tratados
+  como administradores pelo login e pelas regras do Firestore.
 
-> Regras (`firestore.rules`): qualquer usuário autenticado pode ler/criar
-> solicitações; apenas `isAdmin()` (proprietários **ou** usuários com perfil
-> `admin` na coleção `usuarios`) pode aprovar, editar, apagar ou gerenciar os
-> cadastros. As coleções `servidores`, `unidades`, `cargos`, `quadros` e
-> `usuarios` são protegidas.
+> Regras (`firestore.rules`): a leitura/criação de solicitações é liberada apenas
+> para **usuários aprovados** (`isApproved()` = proprietário **ou** usuário ativo
+> na coleção `usuarios`); apenas `isAdmin()` (proprietários **ou** usuários com
+> perfil `admin` e ativos) pode aprovar, editar, apagar ou gerenciar os
+> cadastros. A autoinscrição é permitida somente para o próprio e-mail e apenas
+> como `ativo: false` / `pendente: true` / perfil `usuario` — ninguém consegue se
+> auto-aprovar. As coleções `servidores`, `unidades`, `cargos`, `quadros` e
+> `usuarios` são protegidas. **Publique estas regras no console** para que a
+> autoinscrição de pendentes e o bloqueio por situação funcionem na nuvem.
 
 As gravações no Firestore são **incrementais** (envia só os documentos que
 mudaram) e fatiadas em lotes de até 400 escritas, o que evita o limite de 500

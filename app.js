@@ -536,6 +536,7 @@ function normalizeUsuario(raw) {
     email: String(raw.email || raw.id || "").toLowerCase(),
     perfil: raw.perfil === "admin" ? "admin" : "usuario",
     ativo: raw.ativo !== false,
+    pendente: raw.pendente === true,
     criadoEm: raw.criadoEm || dateKey(new Date())
   };
 }
@@ -561,18 +562,29 @@ function renderUsuarios() {
   const query = (document.getElementById("usuarios-search")?.value || "").trim().toLocaleLowerCase("pt-BR");
   const filtered = usuarios
     .filter(user => `${user.name} ${user.email}`.toLocaleLowerCase("pt-BR").includes(query))
-    .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
+    .sort((a, b) => (Number(Boolean(b.pendente)) - Number(Boolean(a.pendente))) || String(a.name).localeCompare(String(b.name), "pt-BR"));
+  const pendingNote = document.getElementById("usuarios-pending-note");
+  if (pendingNote) {
+    const pendingCount = usuarios.filter(user => user.pendente).length;
+    pendingNote.textContent = pendingCount === 1
+      ? "1 acesso aguardando aprovação."
+      : `${pendingCount} acessos aguardando aprovação.`;
+    pendingNote.hidden = pendingCount === 0;
+  }
   if (filtered.length === 0) {
     container.innerHTML = `<tr><td colspan="5" class="team-empty">Nenhum usuário encontrado.</td></tr>`;
     refreshIcons();
     return;
   }
   container.innerHTML = filtered.map(user => {
-    const statusLabel = user.ativo ? "Ativo" : "Inativo";
-    const statusClass = user.ativo ? "status-approved" : "status-rejected";
+    const statusLabel = user.pendente ? "Pendente" : (user.ativo ? "Ativo" : "Inativo");
+    const statusClass = user.pendente ? "status-pending" : (user.ativo ? "status-approved" : "status-rejected");
     const ownerBadge = isOwnerEmail(user.email) ? "<small>Proprietário</small>" : "";
     const perfilCell = `<select class="usuario-perfil-select" data-usuario-perfil="${escapeHtml(user.id)}" aria-label="Perfil de ${escapeHtml(user.name)}"><option value="usuario"${user.perfil === "usuario" ? " selected" : ""}>Usuário</option><option value="admin"${user.perfil === "admin" ? " selected" : ""}>Administrador</option></select>`;
-    return `<tr><td><div class="person-cell"><span><strong>${escapeHtml(user.name)}</strong>${ownerBadge}</span></div></td><td>${escapeHtml(user.email)}</td><td>${perfilCell}</td><td><span class="status-pill ${statusClass}">${statusLabel}</span></td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-usuario="${escapeHtml(user.id)}" aria-label="Editar usuário ${escapeHtml(user.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-usuario="${escapeHtml(user.id)}" aria-label="Remover usuário ${escapeHtml(user.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+    const actions = user.pendente
+      ? `<button class="action-icon approve" type="button" data-approve-usuario="${escapeHtml(user.id)}" aria-label="Permitir acesso de ${escapeHtml(user.name)}" title="Permitir acesso"><i data-lucide="check"></i></button><button class="action-icon reject" type="button" data-deny-usuario="${escapeHtml(user.id)}" aria-label="Negar acesso de ${escapeHtml(user.name)}" title="Negar acesso"><i data-lucide="x"></i></button>`
+      : `<button class="action-icon approve" type="button" data-edit-usuario="${escapeHtml(user.id)}" aria-label="Editar usuário ${escapeHtml(user.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-usuario="${escapeHtml(user.id)}" aria-label="Remover usuário ${escapeHtml(user.name)}" title="Remover"><i data-lucide="trash-2"></i></button>`;
+    return `<tr><td><div class="person-cell"><span><strong>${escapeHtml(user.name)}</strong>${ownerBadge}</span></div></td><td>${escapeHtml(user.email)}</td><td>${perfilCell}</td><td><span class="status-pill ${statusClass}">${statusLabel}</span></td><td><div class="request-actions">${actions}</div></td></tr>`;
   }).join("");
   refreshIcons();
 }
@@ -2201,7 +2213,11 @@ function setView(view) {
   if (view === "report-servers") renderServerDirectoryReport();
   if (view === "report-capacitacao") renderReportCapacitacao();
   if (view === "report-especial") renderReportEspecial();
-  if (view === "usuarios") renderUsuarios();
+  if (view === "usuarios") {
+    // Relê a coleção ao abrir a seção para mostrar acessos pendentes novos.
+    if (window.RH_SYNC && window.RH_SYNC.enabled) loadUsuariosFromFirestore();
+    else renderUsuarios();
+  }
   if (view === "calendar") {
     document.getElementById("page-subtitle").textContent = "Escala de trabalho: 24h de serviço e 72h de descanso, distribuídas entre as equipes Alfa, Bravo, Charlie e Delta.";
   }
@@ -2846,8 +2862,31 @@ document.getElementById("usuarios-body").addEventListener("change", event => {
   showToast(`Perfil de ${user.name} atualizado para ${user.perfil === "admin" ? "Administrador" : "Usuário"}.`);
 });
 document.getElementById("usuarios-body").addEventListener("click", event => {
+  const approveButton = event.target.closest("[data-approve-usuario]");
+  const denyButton = event.target.closest("[data-deny-usuario]");
   const editButton = event.target.closest("[data-edit-usuario]");
   const removeButton = event.target.closest("[data-remove-usuario]");
+  if (approveButton) {
+    const user = usuarios.find(item => item.id === approveButton.dataset.approveUsuario);
+    if (!user) return;
+    user.ativo = true;
+    user.pendente = false;
+    saveUsuarios();
+    renderUsuarios();
+    showToast(`Acesso de ${user.name} liberado.`);
+    return;
+  }
+  if (denyButton) {
+    const user = usuarios.find(item => item.id === denyButton.dataset.denyUsuario);
+    if (!user) return;
+    if (!window.confirm(`Negar o acesso de ${user.name} (${user.email})?`)) return;
+    user.ativo = false;
+    user.pendente = false;
+    saveUsuarios();
+    renderUsuarios();
+    showToast("Acesso negado. O usuário permanece bloqueado.");
+    return;
+  }
   if (editButton) {
     const user = usuarios.find(item => item.id === editButton.dataset.editUsuario);
     if (user) openUsuarioDialog(user);
@@ -2860,6 +2899,7 @@ document.getElementById("usuarios-body").addEventListener("click", event => {
   if (!window.confirm(`Remover o acesso de ${user.name} (${user.email})?`)) return;
   usuarios = usuarios.filter(item => item.id !== userId);
   saveUsuarios();
+  deleteReferenceDocFromFirestore("usuarios", userId);
   renderUsuarios();
   showToast("Usuário removido.");
 });
@@ -2883,14 +2923,17 @@ document.getElementById("usuario-form").addEventListener("submit", event => {
     return;
   }
   const currentDate = dateKey(new Date());
+  const previousId = editingUsuarioId;
   if (editingUsuarioId) {
     usuarios = usuarios.map(user => user.id === editingUsuarioId
-      ? Object.assign({}, user, { id: email, name, email, perfil, ativo, criadoEm: user.criadoEm || currentDate })
+      ? Object.assign({}, user, { id: email, name, email, perfil, ativo, pendente: false, criadoEm: user.criadoEm || currentDate })
       : user);
   } else {
-    usuarios.push({ id: email, name, email, perfil, ativo, criadoEm: currentDate });
+    usuarios.push({ id: email, name, email, perfil, ativo, pendente: false, criadoEm: currentDate });
   }
   saveUsuarios();
+  // Trocar o e-mail muda o id do documento: remove o registro antigo na nuvem.
+  if (previousId && previousId !== email) deleteReferenceDocFromFirestore("usuarios", previousId);
   form.closest("dialog").close();
   renderUsuarios();
   showToast(editingUsuarioId ? "Usuário atualizado." : "Usuário adicionado.");

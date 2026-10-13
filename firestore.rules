@@ -15,54 +15,80 @@ service cloud.firestore {
       ];
     }
 
-    // Administrador: dono OU usuario marcado como admin na colecao usuarios
-    // (o id do documento e o e-mail).
-    function isAdmin() {
-      return isOwner() ||
-        (isSignedIn()
-          && exists(/databases/$(database)/documents/usuarios/$(request.auth.token.email))
-          && get(/databases/$(database)/documents/usuarios/$(request.auth.token.email)).data.perfil == 'admin');
+    function hasUserDoc() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.token.email));
     }
 
-    // Solicitacoes de ferias/licencas: qualquer logado le/cria;
+    function userDoc() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.token.email));
+    }
+
+    // Usuario ativo: dono OU registro aprovado na colecao usuarios. Documentos
+    // antigos (sem o campo ativo e sem pendente) seguem valendo como aprovados.
+    function isActiveUser() {
+      return hasUserDoc()
+        && (userDoc().data.get('ativo', null) == true
+            || (userDoc().data.get('ativo', null) == null
+                && userDoc().data.get('pendente', null) != true));
+    }
+
+    // Usuario aprovado: pode ler/criar solicitacoes.
+    function isApproved() {
+      return isOwner() || isActiveUser();
+    }
+
+    // Administrador: dono OU usuario marcado como admin e ativo na colecao
+    // usuarios (o id do documento e o e-mail).
+    function isAdmin() {
+      return isOwner() || (isActiveUser() && userDoc().data.get('perfil', null) == 'admin');
+    }
+
+    // Solicitacoes de ferias/licencas: somente usuario aprovado le/cria;
     // somente admin aprova, edita ou apaga.
     match /requests/{requestId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn();
+      allow read, create: if isApproved();
       allow update, delete: if isAdmin();
     }
 
     // Cadastro de servidores: somente admin.
     match /servidores/{id} {
       allow read, list: if isAdmin();
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     // Cadastro basico de unidades, cargos e quadros: somente admin.
     match /unidades/{id} {
       allow read, list: if isAdmin();
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /cargos/{id} {
       allow read, list: if isAdmin();
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /quadros/{id} {
       allow read, list: if isAdmin();
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
-    // Usuarios/contas do Google: o login precisa ler para decidir o perfil;
-    // somente admin cria/edita/apaga.
+    // Usuarios/contas do Google.
+    //  - get: qualquer logado pode ler o proprio/login (necessario para decidir
+    //    o perfil no login).
+    //  - list: apenas aprovados (painel administrativo).
+    //  - create: admin OU auto-registro do proprio e-mail como pendente, sem
+    //    perfil de admin. Nao pode se auto-aprovar (update e so admin).
     match /usuarios/{email} {
-      allow read, list: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow get: if isSignedIn();
+      allow list: if isApproved();
+      allow create: if isAdmin()
+        || (isSignedIn()
+            && email == request.auth.token.email
+            && request.resource.data.get('perfil', null) == 'usuario'
+            && request.resource.data.get('ativo', null) == false
+            && request.resource.data.get('pendente', null) == true);
+      allow update, delete: if isAdmin();
     }
   }
 }
