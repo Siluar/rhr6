@@ -711,6 +711,10 @@
         const usesPeriod = mode === 'vacation' || mode === 'period';
         currentOption = option;
 
+        // Mostra o formulário e garante que o painel de seleção fica oculto
+        if (selectionPanel) selectionPanel.classList.add('hidden');
+        if (formPanel) formPanel.classList.remove('hidden');
+
         formTitle.textContent = config.title;
 
         if (fgFlagField) fgFlagField.classList.toggle('hidden', !isVacation);
@@ -746,11 +750,8 @@
         substituteInput.required = finalShowFgFields;
         if (!finalShowFgFields) substituteInput.value = '';
 
-        if (!isCycle) cycleSelect.value = '';
-        if (!usesPeriod) monthSelect.value = '';
-
-        selectionPanel.classList.add('hidden');
-        formPanel.classList.remove('hidden');
+        if (cycleSelect && !isCycle) cycleSelect.value = '';
+        if (monthSelect && !usesPeriod) monthSelect.value = '';
       };
 
       document.querySelectorAll('.tab-link').forEach(tab => {
@@ -792,16 +793,23 @@
         const requestedTab = document.querySelector(`.tab-link[data-option="${requestedType}"]`);
         document.querySelectorAll('.tab-link').forEach(item => item.classList.toggle('active', item === requestedTab));
         openForm(requestedType);
+      } else {
+        // Se não tiver ?tipo=..., mostra o painel de seleção? Não existe — então
+        // abre diretamente o formulário de férias (comportamento mais estável).
+        const requestedTab = document.querySelector(`.tab-link[data-option="ferias"]`);
+        if (requestedTab) {
+          document.querySelectorAll('.tab-link').forEach(item => item.classList.toggle('active', item === requestedTab));
+        }
+        openForm('ferias');
       }
 
       document.getElementById('back-to-selection').addEventListener('click', () => {
-        formPanel.classList.add('hidden');
-        selectionPanel.classList.add('hidden');
-        cycleSelect.value = '';
-        monthSelect.value = '';
-        monthSelect.required = true;
-        monthField.classList.remove('hidden');
-        submitMessage.textContent = '';
+        if (formPanel) formPanel.classList.add('hidden');
+        if (selectionPanel) selectionPanel.classList.add('hidden');
+        if (cycleSelect) cycleSelect.value = '';
+        if (monthSelect) { monthSelect.value = ''; monthSelect.required = true; }
+        if (monthField) monthField.classList.remove('hidden');
+        if (submitMessage) submitMessage.textContent = '';
       });
 
       document.getElementById('vacation-form').addEventListener('submit', function (event) {
