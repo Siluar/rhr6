@@ -51,14 +51,14 @@
           <button class="nav-link active" data-view="overview"><i data-lucide="layout-dashboard"></i><span>Visão geral</span></button>
           <button class="nav-link" data-view="calendar"><i data-lucide="calendar-days"></i><span>Calendário</span></button>
           <button class="nav-link" type="button" data-view="tasks"><i data-lucide="list-checks"></i><span>Tarefas</span></button>
-          <div class="nav-menu-item" id="requests-nav-item">
+          <button class="nav-link" type="button" id="nav-new-request"><i data-lucide="file-plus-2"></i><span>Fazer solicitação</span></button>
+          <div class="nav-menu-item" id="requests-nav-item" data-admin-only>
             <button class="nav-link nav-menu-toggle" type="button" data-submenu-toggle="requests" aria-label="Solicitações, abrir submenu" aria-expanded="false" aria-controls="requests-submenu"><i data-lucide="inbox"></i><span>Solicitações</span><span class="nav-count attention-count" id="nav-pending-count">3</span><i class="nav-menu-chevron" data-lucide="chevron-down"></i></button>
             <div class="nav-submenu" id="requests-submenu" hidden>
               <button class="nav-submenu-link active" type="button" data-view="requests" data-request-filter="pending">Pendentes</button>
               <button class="nav-submenu-link" type="button" data-view="requests" data-request-filter="approved">Aprovadas</button>
               <button class="nav-submenu-link" type="button" data-view="requests" data-request-filter="rejected">Recusadas</button>
               <button class="nav-submenu-link" type="button" data-view="vacation-launch">Lançar férias</button>
-              <button class="nav-submenu-link" type="button" id="nav-new-request">Fazer solicitação</button>
             </div>
           </div>
           <button class="nav-link" type="button" data-view="meta4"><i data-lucide="clipboard-list"></i><span>META 4</span></button>
@@ -83,16 +83,11 @@
               <button class="nav-submenu-link" type="button" data-view="report-year">Relatório por ano</button>
               <button class="nav-submenu-link" type="button" data-view="report-unit">Relatório por unidade</button>
               <button class="nav-submenu-link" type="button" data-view="report-person">Relatório por servidor</button>
+              <button class="nav-submenu-link" type="button" data-open-report="report-servers" data-report-count="unit">Relatório de servidores &mdash; Unidade</button>
+              <button class="nav-submenu-link" type="button" data-open-report="report-servers" data-report-count="role">Relatório de servidores &mdash; Cargo</button>
+              <button class="nav-submenu-link" type="button" data-open-report="report-servers" data-report-count="quadro">Relatório de servidores &mdash; Quadro</button>
               <button class="nav-submenu-link" type="button" data-view="report-capacitacao">Licença-capacitação</button>
               <button class="nav-submenu-link" type="button" data-view="report-especial">Licença especial</button>
-            </div>
-          </div>
-          <div class="nav-menu-item report-servers-submenu-item">
-            <button class="nav-link nav-menu-toggle" type="button" data-submenu-toggle="report-servers" aria-label="Relatório - Servidores, abrir submenu" aria-expanded="false" aria-controls="report-servers-submenu"><i data-lucide="users"></i><span>Relatório - Servidores</span><i class="nav-menu-chevron" data-lucide="chevron-down"></i></button>
-            <div class="nav-submenu report-servers-filter-menu" id="report-servers-submenu" hidden>
-              <button class="nav-submenu-link" type="button" data-open-report="report-servers" data-report-count="unit">Unidade</button>
-              <button class="nav-submenu-link" type="button" data-open-report="report-servers" data-report-count="role">Cargo</button>
-              <button class="nav-submenu-link" type="button" data-open-report="report-servers" data-report-count="quadro">Quadro</button>
             </div>
           </div>
         </nav>
