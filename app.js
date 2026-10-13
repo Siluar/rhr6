@@ -36,7 +36,7 @@ const adminPasswordStorageKey = "brisa-admin-password-v1";
 const initialAdminPassword = (window.RH_CONFIG && window.RH_CONFIG.initialAdminPassword) || "";
 const serverDataStorageKey = "brisa-server-personal-data-v1";
 const usuariosStorageKey = "brisa-usuarios-v1";
-const unidadesStorageKey = "brisa-unidades-v1";
+const unidadesStorageKey = "brisa-unidades-v2";
 const cargosStorageKey = "brisa-cargos-v1";
 const requestAttachmentsDatabaseName = "brisa-request-attachments-v1";
 const requestAttachmentsStoreName = "attachments";
@@ -342,22 +342,18 @@ function syncServerDataToFirestore(collection, docs, idFor) {
 
 function seedUnidades() {
   return [
-    "Sot - Umuarama",
-    "Cadeia Pública de Umuarama",
-    "RA-R6",
-    "Penitenciária Estadual de Cruzeiro do Oeste",
-    "Penitenciária Estadual de Guaíra",
-    "Cadeia Pública de Cidade Gaúcha",
-    "Cadeia Pública de Iporã",
+    "Penitenciária de Cruzeiro",
     "Penitenciária de Campo Mourão",
-    "Cadeia Pública de Campo Mourão",
-    "Posto Avançado de Monitoramento - R6",
-    "Cadeia Pública de Loanda",
-    "Complexo Social de Campo Mourão",
-    "Cadeia Pública de Goioerê",
-    "Cadeia Pública de Altonia",
-    "Cadeia Pública de Cianorte",
-    "Complexo Social de Cruzeiro do Oeste"
+    "Penitenciária de Guaíra",
+    "CP Cianorte",
+    "CP Loanda",
+    "CP Iporã",
+    "CP Altonia",
+    "CP Goioere",
+    "CP Umuarama",
+    "CP Cidade Gaúcha",
+    "CP Campo Mourão",
+    "Coordenação Regional CR-6"
   ].map((name, index) => ({ id: `unidade-seed-${index}`, name }));
 }
 
