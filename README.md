@@ -162,14 +162,32 @@ editar e excluir), persistida nas coleções do Firestore:
 > protegidas. **Publique estas regras no console** para que a autoinscrição de
 > pendentes e o bloqueio por situação funcionem na nuvem.
 
-As gravações no Firestore são **incrementais** (envia só os documentos que
-mudaram) e fatiadas em lotes de até 400 escritas, o que evita o limite de 500
-por batch e reduz o tráfego. Exclusões também chegam à nuvem (o documento é
-apagado quando o item sai da lista no painel). Ao abrir o painel, os cadastros da
-nuvem são **unidos** ao que existir apenas naquele navegador — nada é descartado
-só porque o outro computador ainda não tinha o registro. Ícones e listas de
-referência são atualizados uma única vez por ciclo de renderização, e as buscas
-usam *debounce*.
+As gravações no Firestore são **imediatas e incrementais**: cada alteração feita
+no painel é enviada na hora (somente os documentos que mudaram, em lotes de até
+400 escritas — o que evita o limite de 500 por batch e reduz o tráfego).
+Exclusões também chegam à nuvem (o documento é apagado quando o item sai da
+lista no painel). O cabeçalho mostra o estado da nuvem: *Salvando na nuvem…*,
+*Salvo na nuvem às HH:MM* ou *Sem conexão com a nuvem — tentando de novo…*.
+
+Se um envio falhar (sem internet, por exemplo), **nada é perdido**: a coleção
+entra numa fila e é reenviada sozinha quando a conexão volta, quando a aba volta
+ao foco e a cada 15 segundos. O retrato do que já foi gravado fica salvo no
+navegador (`brisa-firestore-sync-state-v1`), o que também permite distinguir
+"nunca subiu" (precisa enviar) de "foi excluído em outro computador" (precisa
+sair daqui também).
+
+Solicitações, usuários, cadastro de servidores, tarefas e Função Gratificada
+ficam **ligados ao Firestore em tempo real** (`onSnapshot`): o que muda em outro
+computador aparece na tela na hora, sem recarregar. Ao abrir o painel, os
+cadastros da nuvem são unidos ao que existir apenas naquele navegador — nada é
+descartado só porque o outro computador ainda não tinha o registro. Unidades,
+cargos, quadros e contas legadas são relidos/gravados a cada abertura e em cada
+edição. Ícones e listas de referência são atualizados uma única vez por ciclo de
+renderização, e as buscas usam *debounce*.
+
+> Na página de solicitação, se a gravação na nuvem falhar, o usuário recebe um
+> aviso em vermelho (a solicitação continua registrada no navegador e é enviada
+> para a nuvem na próxima abertura do painel).
 
 > As contas antigas de **CPF/senha** (`contasLegado`) e a senha administrativa
 > local seguem sendo dados legados: as contas ficam na nuvem apenas como cópia de

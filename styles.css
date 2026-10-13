@@ -82,6 +82,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .breadcrumb svg { width: 13px; height: 13px; }
 .breadcrumb strong { color: #f2f4f5; font-weight: 600; }
 .topbar-actions { gap: 17px; }
+.sync-status { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border: 1px solid rgba(255, 255, 255, .16); border-radius: 999px; background: rgba(255, 255, 255, .08); color: #dfe5e8; font-size: 10.5px; font-weight: 600; white-space: nowrap; }
+.sync-status[hidden] { display: none; }
+.sync-status-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: #9aa4aa; }
+.sync-status.is-ok .sync-status-dot { background: #7fc79b; }
+.sync-status.is-pending .sync-status-dot { background: #e6c06a; }
+.sync-status.is-error { border-color: rgba(224, 122, 101, .5); color: #f0c4b8; }
+.sync-status.is-error .sync-status-dot { background: #e07a65; }
+@media (max-width: 1180px) { .sync-status { display: none; } }
 .search-box { display: flex; width: 230px; height: 34px; align-items: center; gap: 8px; padding: 0 9px; border: 1px solid #e7e8e1; border-radius: 6px; background: white; }
 .search-box > svg { width: 15px; color: #9a9f97; }
 .search-box input, .table-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 11px; }

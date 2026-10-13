@@ -311,6 +311,8 @@
         font-weight: 700;
       }
 
+      .message.error { color: #a0352b; }
+
       @media (max-width: 940px) {
         .request-header {
           flex-wrap: wrap;
@@ -853,8 +855,13 @@
           window.RH_SYNC.waitForAuth().then(user => {
             if (!user) return; // login por CPF/senha: mantém apenas local por enquanto
             return window.RH_SYNC.addRequest(request);
+          }).then(() => {
+            submitMessage.classList.remove('error');
           }).catch(error => {
             console.warn('Não foi possível enviar a solicitação online:', error);
+            // Sem este aviso o pedido ficaria só neste navegador, sem o usuário saber.
+            submitMessage.textContent = 'Atenção: a solicitação foi registrada, mas NÃO foi salva na nuvem. Verifique a internet, envie o e-mail e avise a Central de Recursos Humanos.';
+            submitMessage.classList.add('error');
           });
         }
 

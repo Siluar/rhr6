@@ -303,28 +303,40 @@ function dataUrlToBlob(dataUrl) {
 }
 
 // Espelha o anexo na coleção "anexos" (arquivo em base64). Sem a nuvem o anexo
-// continua apenas neste navegador, como antes.
+// continua apenas neste navegador, como antes. Uma falha entra na fila de novas
+// tentativas (a exclusão do anexo é representada por `null`).
+const pendingAttachmentSyncs = new Map();
+
 async function syncAttachmentToFirestore(requestId, attachment) {
   if (!window.RH_SYNC || !window.RH_SYNC.enabled || !requestId) return;
+  const pendingAttachment = attachment && attachment.blob ? attachment : null;
+  markSyncPending("anexos");
   try {
-    if (!attachment || !attachment.blob) {
+    if (!pendingAttachment) {
       await window.RH_SYNC.deleteDoc("anexos", requestId);
+      pendingAttachmentSyncs.delete(requestId);
+      markSyncSettled("anexos");
       return;
     }
-    const dataUrl = await readAttachmentAsDataUrl(attachment.blob);
+    const dataUrl = await readAttachmentAsDataUrl(pendingAttachment.blob);
     await window.RH_SYNC.saveDocs("anexos", [{
       id: requestId,
       requestId,
-      name: attachment.name || "anexo",
-      type: attachment.type || attachment.blob.type || "",
-      size: Number(attachment.size || attachment.blob.size || 0),
+      name: pendingAttachment.name || "anexo",
+      type: pendingAttachment.type || pendingAttachment.blob.type || "",
+      size: Number(pendingAttachment.size || pendingAttachment.blob.size || 0),
       dataUrl,
       updatedAt: new Date().toISOString()
     }]);
+    pendingAttachmentSyncs.delete(requestId);
+    markSyncSettled("anexos");
   } catch (error) {
-    const detail = error instanceof Error ? ` ${error.message}` : "";
-    console.warn("Falha ao sincronizar o anexo no Firestore:", error);
-    showToast(`Anexo salvo apenas neste navegador.${detail}`);
+    pendingAttachmentSyncs.set(requestId, pendingAttachment);
+    registerSyncFailure(
+      "anexos",
+      error,
+      "Anexo salvo neste navegador; a nuvem será atualizada assim que possível."
+    );
   }
 }
 
@@ -507,22 +519,157 @@ function saveServerPersonalData() {
 
 // Cada coleção guarda a assinatura do último documento gravado, para enviar ao
 // Firestore apenas o que realmente mudou (em vez de reescrever a coleção toda).
+// O retrato também fica salvo no navegador: ao reabrir o painel ele permite
+// distinguir "nunca subiu" (precisa enviar) de "foi excluído em outro
+// computador" (precisa sair daqui também).
+const firestoreSyncStateStorageKey = "brisa-firestore-sync-state-v1";
 const firestoreSyncState = new Map();
+loadPersistedFirestoreSyncState();
 
-function documentSignature(doc) {
+// Coleções com alterações que ainda não foram confirmadas pelo Firestore. Uma
+// falha (rede ou permissão) não descarta nada: a coleção continua na fila e é
+// reenviada quando a conexão volta, quando a aba volta ao foco e a cada ciclo
+// do temporizador.
+const pendingSyncCollections = new Set();
+let cloudSyncLastError = "";
+let cloudSyncNotifiedFailure = "";
+let cloudSyncLastSuccessAt = null;
+const cloudSyncRetryIntervalMs = 15000;
+
+// Coleção -> lista local, usada para reenviar o que ficou pendente.
+const collectionSyncSources = {
+  requests: () => requests,
+  servidores: () => serverPersonalData,
+  usuarios: () => usuarios,
+  unidades: () => unidades,
+  cargos: () => cargos,
+  quadros: () => quadros,
+  tarefas: () => tasks,
+  fgServidores: () => fgServerRoster,
+  contasLegado: () => serverAccounts
+};
+
+function syncIdForCollection(collection) {
+  if (collection === "contasLegado") return account => String(account.cpf || "").replace(/\D/g, "");
+  return null;
+}
+
+function loadPersistedFirestoreSyncState() {
   try {
-    return JSON.stringify(doc);
+    const saved = JSON.parse(localStorage.getItem(firestoreSyncStateStorageKey) || "{}");
+    Object.keys(saved || {}).forEach(collection => {
+      const entries = saved[collection];
+      if (!entries || typeof entries !== "object") return;
+      firestoreSyncState.set(collection, new Map(Object.entries(entries)));
+    });
+  } catch {
+    // Sem retrato salvo: a primeira gravação de cada coleção envia a lista toda.
+  }
+}
+
+function persistFirestoreSyncState() {
+  try {
+    const out = {};
+    firestoreSyncState.forEach((entries, collection) => { out[collection] = Object.fromEntries(entries); });
+    localStorage.setItem(firestoreSyncStateStorageKey, JSON.stringify(out));
+  } catch {
+    // O retrato é apenas uma otimização; sem ele a lista toda é reenviada.
+  }
+}
+
+// Compara valores ignorando a ordem das propriedades (o Firestore pode devolver
+// os campos em ordem diferente da que gravamos).
+function sortKeysDeep(value) {
+  if (Array.isArray(value)) return value.map(sortKeysDeep);
+  if (value && typeof value === "object") {
+    const out = {};
+    Object.keys(value).sort().forEach(key => { out[key] = sortKeysDeep(value[key]); });
+    return out;
+  }
+  return value;
+}
+
+function valueSignature(value) {
+  try {
+    return JSON.stringify(sortKeysDeep(value === undefined ? null : value));
   } catch {
     return `${Date.now()}-${Math.random()}`;
   }
 }
 
-function syncFailureHandler(collection) {
-  return error => {
-    const detail = error instanceof Error ? ` ${error.message}` : "";
-    console.warn(`Falha ao sincronizar ${collection} no Firestore:`, error);
-    showToast(`Cadastro salvo apenas neste navegador.${detail}`);
-  };
+// true quando tudo o que existe neste navegador já está na nuvem: nesse caso a
+// versão da nuvem prevalece (ela pode ter campos extras de outra versão do app
+// e o envio usa merge, que preserva esses campos).
+function localIsCoveredByCloud(localDoc, cloudDoc) {
+  return Object.keys(localDoc).every(key => valueSignature(localDoc[key]) === valueSignature(cloudDoc[key]));
+}
+
+function documentSignature(doc) {
+  try {
+    return JSON.stringify(sortKeysDeep(doc));
+  } catch {
+    return `${Date.now()}-${Math.random()}`;
+  }
+}
+
+// Estado da nuvem mostrado no cabeçalho do painel.
+function updateSyncIndicator() {
+  const chip = document.getElementById("sync-status");
+  const text = document.getElementById("sync-status-text");
+  if (!chip || !text) return;
+  const enabled = Boolean(window.RH_SYNC && window.RH_SYNC.enabled);
+  chip.hidden = !enabled;
+  if (!enabled) return;
+  const pending = pendingSyncCollections.size > 0;
+  const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+  chip.classList.toggle("is-pending", pending && !cloudSyncLastError);
+  chip.classList.toggle("is-error", pending && Boolean(cloudSyncLastError));
+  chip.classList.toggle("is-ok", !pending);
+  if (pending) {
+    if (cloudSyncLastError) {
+      text.textContent = "Sem conexão com a nuvem — tentando de novo…";
+      chip.title = `Última falha: ${cloudSyncLastError}`;
+    } else if (offline) {
+      text.textContent = "Sem conexão com a nuvem — enviando quando voltar";
+      chip.title = "As alterações estão guardadas neste navegador e sobem assim que a internet voltar";
+    } else {
+      text.textContent = "Salvando na nuvem…";
+      chip.title = "Enviando as alterações para o Firestore";
+    }
+    return;
+  }
+  text.textContent = cloudSyncLastSuccessAt
+    ? `Salvo na nuvem às ${cloudSyncLastSuccessAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`
+    : "Tudo salvo na nuvem";
+  chip.title = "Todos os dados estão salvos no Firestore";
+}
+
+function markSyncPending(collection) {
+  pendingSyncCollections.add(collection);
+  updateSyncIndicator();
+}
+
+function markSyncSettled(collection) {
+  pendingSyncCollections.delete(collection);
+  if (!pendingSyncCollections.size) {
+    cloudSyncLastError = "";
+    cloudSyncNotifiedFailure = "";
+    cloudSyncLastSuccessAt = new Date();
+  }
+  updateSyncIndicator();
+}
+
+function registerSyncFailure(collection, error, message) {
+  cloudSyncLastError = error instanceof Error ? error.message : "";
+  const detail = cloudSyncLastError ? ` ${cloudSyncLastError}` : "";
+  console.warn(`Falha ao sincronizar ${collection} no Firestore:`, error);
+  // O mesmo aviso não se repete a cada nova tentativa automática.
+  const stamp = `${collection}|${cloudSyncLastError}`;
+  if (cloudSyncNotifiedFailure !== stamp) {
+    cloudSyncNotifiedFailure = stamp;
+    showToast(message || `Salvo neste navegador; a nuvem será atualizada assim que possível.${detail}`);
+  }
+  updateSyncIndicator();
 }
 
 // Marca como "já presentes no Firestore" os documentos do carregamento inicial,
@@ -531,54 +678,73 @@ function seedFirestoreSyncState(collection, docs, idFor) {
   if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
   const baseline = new Map();
   (docs || []).forEach(doc => {
-    const id = idFor ? idFor(doc) : doc.id;
-    if (id) baseline.set(String(id), documentSignature(Object.assign({}, doc, { id })));
+    const rawId = idFor ? idFor(doc) : doc.id;
+    if (!rawId) return;
+    const id = String(rawId);
+    baseline.set(id, documentSignature(Object.assign({}, doc, { id })));
   });
   firestoreSyncState.set(collection, baseline);
+  persistFirestoreSyncState();
 }
 
 function syncCollectionToFirestore(collection, docs, idFor) {
   if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
   const normalized = (docs || []).map(doc => {
-    const id = idFor ? idFor(doc) : doc.id;
-    return Object.assign({}, doc, { id: id || undefined });
+    const rawId = idFor ? idFor(doc) : doc.id;
+    return Object.assign({}, doc, { id: rawId ? String(rawId) : undefined });
   });
-  const baseline = firestoreSyncState.get(collection);
+  let baseline = firestoreSyncState.get(collection);
+  const changed = [];
   if (!baseline) {
     // Ainda sem retrato do Firestore: envia tudo uma vez e memoriza.
-    const fresh = new Map();
-    firestoreSyncState.set(collection, fresh);
+    baseline = new Map();
+    firestoreSyncState.set(collection, baseline);
+    normalized.forEach(doc => { if (doc.id) changed.push(doc); });
+  } else {
     normalized.forEach(doc => {
-      if (doc.id) fresh.set(String(doc.id), documentSignature(doc));
+      if (!doc.id) return;
+      const id = String(doc.id);
+      if (baseline.get(id) === documentSignature(doc)) return;
+      changed.push(doc);
     });
-    if (normalized.length) {
-      window.RH_SYNC.saveDocs(collection, normalized).catch(syncFailureHandler(collection));
-    }
-    return;
   }
-  const changed = [];
-  normalized.forEach(doc => {
-    if (!doc.id) return;
+  if (!changed.length) return;
+  const signatures = new Map();
+  changed.forEach(doc => {
     const id = String(doc.id);
-    const signature = documentSignature(doc);
-    if (baseline.get(id) === signature) return;
-    baseline.set(id, signature);
-    changed.push(doc);
+    signatures.set(id, documentSignature(doc));
+    baseline.set(id, signatures.get(id));
   });
-  if (changed.length) {
-    window.RH_SYNC.saveDocs(collection, changed).catch(syncFailureHandler(collection));
-  }
+  persistFirestoreSyncState();
+  markSyncPending(collection);
+  window.RH_SYNC.saveDocs(collection, changed)
+    .then(() => markSyncSettled(collection))
+    .catch(error => {
+      // Desfaz o retrato desses documentos: a próxima tentativa os envia de novo.
+      signatures.forEach((value, id) => {
+        if (baseline.get(id) === value) baseline.delete(id);
+      });
+      persistFirestoreSyncState();
+      registerSyncFailure(collection, error);
+    });
 }
 
 function deleteReferenceDocFromFirestore(collection, id) {
   if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
   const baseline = firestoreSyncState.get(collection);
+  const previous = baseline ? baseline.get(String(id)) : undefined;
   if (baseline) baseline.delete(String(id));
+  persistFirestoreSyncState();
+  // Coleções com lista local podem ser inteiramente reenviadas na retentativa.
+  const canRetry = Boolean(collectionSyncSources[collection]);
+  if (canRetry) markSyncPending(collection);
   window.RH_SYNC.deleteDoc(collection, id)
+    .then(() => { if (canRetry) markSyncSettled(collection); })
     .catch(error => {
-      const detail = error instanceof Error ? ` ${error.message}` : "";
-      console.warn(`Falha ao excluir ${collection} no Firestore:`, error);
-      showToast(`Exclusão aplicada apenas neste navegador.${detail}`);
+      // Devolve o retrato do documento: assim a exclusão é tentada novamente.
+      if (baseline && previous !== undefined) baseline.set(String(id), previous);
+      persistFirestoreSyncState();
+      registerSyncFailure(collection, error, "Exclusão aplicada neste navegador; a nuvem será atualizada assim que possível.");
     });
 }
 
@@ -591,14 +757,183 @@ function syncCollectionWithRemovals(collection, docs, idFor) {
   if (baseline) {
     const currentIds = new Set();
     (docs || []).forEach(doc => {
-      const id = idFor ? idFor(doc) : doc.id;
-      if (id) currentIds.add(String(id));
+      const rawId = idFor ? idFor(doc) : doc.id;
+      if (rawId) currentIds.add(String(rawId));
     });
-    baseline.forEach((value, id) => {
+    Array.from(baseline.keys()).forEach(id => {
       if (!currentIds.has(String(id))) deleteReferenceDocFromFirestore(collection, id);
     });
   }
   syncCollectionToFirestore(collection, docs, idFor);
+}
+
+// Reenvia tudo o que ficou pendente (falha de rede/permissão ou aba fechada no
+// meio do envio).
+function retryPendingSyncs() {
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
+  if (!pendingSyncCollections.size) return;
+  // Sem internet o Firestore já guarda a escrita na fila dele: tentar de novo
+  // agora só acumularia pedidos repetidos.
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  // Anexos pendentes voltam pelo mesmo caminho que os grava (null = exclusão).
+  if (pendingAttachmentSyncs.size) {
+    Array.from(pendingAttachmentSyncs.entries()).forEach(([requestId, attachment]) => {
+      syncAttachmentToFirestore(requestId, attachment);
+    });
+  }
+  Array.from(pendingSyncCollections).forEach(collection => {
+    if (collection === "anexos") {
+      if (!pendingAttachmentSyncs.size) pendingSyncCollections.delete(collection);
+      return;
+    }
+    const source = collectionSyncSources[collection];
+    if (!source) {
+      pendingSyncCollections.delete(collection);
+      return;
+    }
+    syncCollectionWithRemovals(collection, source(), syncIdForCollection(collection));
+  });
+  updateSyncIndicator();
+}
+
+function setupSyncRetryLoop() {
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
+  window.addEventListener("online", retryPendingSyncs);
+  window.addEventListener("offline", updateSyncIndicator);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") retryPendingSyncs();
+  });
+  setInterval(retryPendingSyncs, cloudSyncRetryIntervalMs);
+}
+
+// ---- Espelho em tempo real -------------------------------------------------
+
+// Funde a lista da nuvem com a deste navegador:
+//  - documento que existe só aqui e nunca subiu continua valendo (será enviado);
+//  - documento que existe nos dois lados mantém a versão local apenas enquanto
+//    houver nela algo que a nuvem ainda não tem;
+//  - documento que já estava na nuvem e sumiu de lá foi excluído em outro
+//    computador, então sai daqui também.
+function mergeRemoteCollection(collection, localList, remoteList, idFor) {
+  const baseline = firestoreSyncState.get(collection);
+  const idOf = doc => {
+    const rawId = idFor ? idFor(doc) : doc && doc.id;
+    return rawId ? String(rawId) : "";
+  };
+  const remoteById = new Map();
+  (remoteList || []).forEach(doc => {
+    const id = idOf(doc);
+    if (id) remoteById.set(id, doc);
+  });
+  const merged = [];
+  const known = new Set();
+  (localList || []).forEach(local => {
+    const id = idOf(local);
+    if (!id || known.has(id)) return;
+    known.add(id);
+    const remote = remoteById.get(id);
+    if (!remote) {
+      // Ausente na nuvem: mantém apenas se nunca chegou a subir (senão foi
+      // excluído em outro computador e sai daqui também).
+      const signature = documentSignature(Object.assign({}, local, { id }));
+      const confirmed = baseline ? baseline.get(id) === signature : false;
+      if (!confirmed) merged.push(local);
+      return;
+    }
+    // Presente nos dois lados: fica a versão local só enquanto houver algo nela
+    // que a nuvem ainda não tem (nesse caso o envio acontece na sequência).
+    merged.push(localIsCoveredByCloud(local, remote) ? remote : local);
+  });
+  (remoteList || []).forEach(remote => {
+    const id = idOf(remote);
+    if (!id || known.has(id)) return;
+    known.add(id);
+    merged.push(remote);
+  });
+  return merged;
+}
+
+// O que fazer quando a nuvem envia novidades de cada coleção do painel.
+const liveCollectionHandlers = {
+  requests: {
+    normalize: normalizeRequest,
+    idFor: null,
+    read: () => requests,
+    write: list => { requests = list; },
+    render: () => renderRequestsDependentViews(),
+    flush: () => saveRequests()
+  },
+  usuarios: {
+    normalize: normalizeUsuario,
+    idFor: null,
+    read: () => usuarios,
+    write: list => { usuarios = list; },
+    render: () => renderUsuarios(),
+    flush: () => saveUsuarios()
+  },
+  servidores: {
+    normalize: record => record,
+    idFor: record => record.id,
+    read: () => serverPersonalData,
+    write: list => { serverPersonalData = list; },
+    render: () => { renderServerPersonalData(); fillServerDataReferenceSelects(); },
+    flush: () => saveServerPersonalData()
+  },
+  tarefas: {
+    normalize: task => ({
+      ...task,
+      date: isIsoDate(task.date) ? task.date : "",
+      completed: Boolean(task.completed)
+    }),
+    idFor: task => task.id,
+    read: () => tasks,
+    write: list => { tasks = list; },
+    render: () => renderTasks(),
+    flush: () => saveTasks()
+  },
+  fgServidores: {
+    normalize: normalizeFgRosterEntry,
+    idFor: entry => entry.id,
+    read: () => fgServerRoster,
+    write: list => { fgServerRoster = list; },
+    render: () => renderFgServerRoster(),
+    flush: () => saveFgServerRoster()
+  }
+};
+
+// Aplica a lista vinda da nuvem: funde com o que existe aqui, guarda o retrato
+// da nuvem (antes de enviar), sobe o que só existe neste navegador e redesenha.
+function applyRemoteCollection(collection, remoteRaw) {
+  const handler = liveCollectionHandlers[collection];
+  if (!handler || !window.RH_SYNC || !window.RH_SYNC.enabled) return;
+  const idOf = doc => {
+    const rawId = handler.idFor ? handler.idFor(doc) : doc && doc.id;
+    return rawId ? String(rawId) : "";
+  };
+  const remote = (remoteRaw || []).map(handler.normalize).filter(Boolean);
+  const remoteIds = new Set(remote.map(idOf).filter(Boolean));
+  const merged = mergeRemoteCollection(collection, handler.read(), remote, handler.idFor);
+  seedFirestoreSyncState(collection, remote, handler.idFor);
+  handler.write(merged);
+  // Envia somente quando existe algo aqui que ainda não está na nuvem. Sem isso
+  // cada aviso da nuvem provocaria uma nova gravação (e um aviso novo).
+  const hasLocalOnly = merged.some(doc => {
+    const id = idOf(doc);
+    return !id || !remoteIds.has(id);
+  });
+  if (hasLocalOnly) handler.flush();
+  handler.render();
+}
+
+function subscribeLiveCollections() {
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
+  Object.keys(liveCollectionHandlers).forEach(collection => {
+    window.RH_SYNC.subscribeDocs(
+      collection,
+      list => applyRemoteCollection(collection, list),
+      error => console.warn(`Assinatura em tempo real de ${collection} falhou:`, error)
+    );
+  });
 }
 
 function seedUnidades() {
@@ -1077,7 +1412,9 @@ async function removeRequest(requestId) {
     return;
   }
   deleteReferenceDocFromFirestore("requests", requestId);
-  deleteReferenceDocFromFirestore("anexos", requestId);
+  // O anexo (se houver) sai da nuvem pelo mesmo caminho que o grava, para que
+  // uma falha entre na fila de novas tentativas.
+  syncAttachmentToFirestore(requestId, null);
   const dialog = document.getElementById("request-details-dialog");
   if (dialog?.open) dialog.close();
   renderAll();
@@ -3914,36 +4251,28 @@ async function initializeApp() {
   renderTasks();
   loadReferenceDataFromFirestore();
   if (window.RH_SYNC && window.RH_SYNC.enabled) {
-    let initialSignature = null;
-    window.RH_SYNC.subscribeRequests(list => {
-      // Mantém os dados locais quando a nuvem ainda está vazia; o primeiro
-      // snapshot repete o que loadRequests() trouxe, então evitamos um render
-      // redundante logo na abertura.
-      const cloudList = list.length ? list : requests;
-      const cloudIds = new Set(cloudList.map(request => String(request.id)));
-      const localOnly = requests.filter(request => request && request.id && !cloudIds.has(String(request.id)));
-      const normalized = cloudList.concat(localOnly).map(normalizeRequest);
-      if (initialSignature === null) {
-        initialSignature = JSON.stringify(requests);
-        if (JSON.stringify(normalized) === initialSignature) return;
-      }
-      requests = normalized;
-      renderRequestsDependentViews();
-    }, error => console.warn("Assinatura do Firestore falhou:", error));
+    // Cada coleção fica ligada ao Firestore: novidades de outro computador
+    // aparecem na hora e o que existe só aqui sobe automaticamente.
+    subscribeLiveCollections();
     loadUsuariosFromFirestore();
     loadServerRegistryFromFirestore();
     loadFgServerRosterFromFirestore();
     loadTasksFromFirestore();
     loadServerAccountsFromFirestore();
+    setupSyncRetryLoop();
   }
+  updateSyncIndicator();
 }
 
 async function loadUsuariosFromFirestore() {
   try {
     const remote = await window.RH_SYNC.loadDocs("usuarios");
     if (remote && remote.length > 0) {
-      usuarios = remote.map(normalizeUsuario);
-      seedFirestoreSyncState("usuarios", usuarios);
+      const cloudUsers = remote.map(normalizeUsuario);
+      // Mantém os acessos que existirem apenas neste navegador (serão enviados).
+      usuarios = mergeRemoteCollection("usuarios", usuarios, cloudUsers, null);
+      seedFirestoreSyncState("usuarios", cloudUsers, null);
+      saveUsuarios();
     } else if (usuarios.length > 0) {
       saveUsuarios();
     }
