@@ -240,6 +240,7 @@
               <div class="server-data-content">
                 <div class="server-data-toolbar">
                   <label class="table-search server-registry-search"><i data-lucide="search"></i><input id="unidades-search" type="search" placeholder="Filtrar unidade" aria-label="Filtrar unidades pelo nome" /></label>
+                  <button class="button button-secondary" id="unidade-import" type="button"><i data-lucide="clipboard-paste"></i><span>Colar lista</span></button>
                   <button class="button button-primary" id="unidade-add" type="button"><i data-lucide="building-2"></i><span>Adicionar unidade</span></button>
                 </div>
                 <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Nome da unidade</th><th scope="col">Em uso por</th><th scope="col">Ação</th></tr></thead><tbody id="unidades-body"></tbody></table></div>
@@ -253,6 +254,7 @@
               <div class="server-data-content">
                 <div class="server-data-toolbar">
                   <label class="table-search server-registry-search"><i data-lucide="search"></i><input id="cargos-search" type="search" placeholder="Filtrar cargo" aria-label="Filtrar cargos pelo nome" /></label>
+                  <button class="button button-secondary" id="cargo-import" type="button"><i data-lucide="clipboard-paste"></i><span>Colar lista</span></button>
                   <button class="button button-primary" id="cargo-add" type="button"><i data-lucide="briefcase-business"></i><span>Adicionar cargo</span></button>
                 </div>
                 <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Cargo</th><th scope="col">Quadro</th><th scope="col">Em uso por</th><th scope="col">Observações</th><th scope="col">Ação</th></tr></thead><tbody id="cargos-body"></tbody></table></div>
@@ -417,6 +419,14 @@
         <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="unidade-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="building-2"></i><span>Salvar unidade</span></button></div>
       </form>
     </dialog>
+    <dialog class="account-password-dialog crud-dialog" id="unidade-import-dialog" aria-labelledby="unidade-import-title">
+      <div class="request-details-dialog-heading"><div><p class="section-kicker">IMPORTAR</p><h2 id="unidade-import-title">Importar unidades</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
+      <form id="unidade-import-form">
+        <label for="unidade-import-lista">Cole uma unidade por linha<textarea id="unidade-import-lista" name="lista" rows="10" required placeholder="Cadeia Pública de Maringá&#10;Penitenciária Estadual de Londrina&#10;RA-R6&#10;..."></textarea></label>
+        <p id="unidade-import-message" role="status" aria-live="polite"></p>
+        <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="unidade-import-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="clipboard-paste"></i><span>Importar unidades</span></button></div>
+      </form>
+    </dialog>
     <dialog class="account-password-dialog crud-dialog" id="cargo-dialog" aria-labelledby="cargo-dialog-title">
       <div class="request-details-dialog-heading"><div><p class="section-kicker">CARGO</p><h2 id="cargo-dialog-title">Adicionar cargo</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
       <form id="cargo-form">
@@ -429,6 +439,14 @@
         <label for="cargo-obs">Observações (opcional)<textarea id="cargo-obs" name="observacoes" rows="2" maxlength="200" placeholder="Detalhes complementares sobre o cargo"></textarea></label>
         <p id="cargo-message" role="status" aria-live="polite"></p>
         <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="cargo-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="briefcase-business"></i><span>Salvar cargo</span></button></div>
+      </form>
+    </dialog>
+    <dialog class="account-password-dialog crud-dialog" id="cargo-import-dialog" aria-labelledby="cargo-import-title">
+      <div class="request-details-dialog-heading"><div><p class="section-kicker">IMPORTAR</p><h2 id="cargo-import-title">Importar cargos</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
+      <form id="cargo-import-form">
+        <label for="cargo-import-lista">Cole um cargo por linha. Para indicar o quadro, use o formato <code>Nome;Quadro</code>.<textarea id="cargo-import-lista" name="lista" rows="10" required placeholder="Auxiliar Administrativo&#10;Analista Técnico;QPPE&#10;Inspetor de Segurança;QPPP&#10;..."></textarea></label>
+        <p id="cargo-import-message" role="status" aria-live="polite"></p>
+        <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="cargo-import-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="clipboard-paste"></i><span>Importar cargos</span></button></div>
       </form>
     </dialog>
     <dialog class="account-password-dialog crud-dialog" id="request-edit-dialog" aria-labelledby="request-edit-title">

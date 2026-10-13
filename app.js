@@ -654,6 +654,22 @@ function openCargoDialog(cargo) {
   refreshIcons();
 }
 
+function setReferenceImportMessage(type, message, isError) {
+  const element = document.getElementById(`${type}-import-message`);
+  if (!element) return;
+  element.textContent = message || "";
+  element.classList.toggle("error", Boolean(isError));
+}
+
+function openReferenceImportDialog(type) {
+  const dialog = document.getElementById(`${type}-import-dialog`);
+  if (!dialog) return;
+  dialog.querySelector("form").reset();
+  setReferenceImportMessage(type, "");
+  dialog.showModal();
+  refreshIcons();
+}
+
 function setRequestEditMessage(message, isError) {
   const element = document.getElementById("request-edit-message");
   if (!element) return;
@@ -2770,6 +2786,63 @@ document.addEventListener("click", event => {
       renderCargos();
     }
   }
+});
+document.getElementById("unidade-import").addEventListener("click", () => openReferenceImportDialog("unidade"));
+document.getElementById("unidade-import-cancel").addEventListener("click", () => document.getElementById("unidade-import-dialog").close());
+document.getElementById("unidade-import-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const raw = String(form.elements.lista.value || "");
+  const seen = new Set();
+  const names = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const name = line.trim();
+    if (!name) continue;
+    const key = name.toLocaleLowerCase("pt-BR");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (unidades.some(item => item.name.toLocaleLowerCase("pt-BR") === key)) continue;
+    names.push(name);
+  }
+  if (names.length === 0) {
+    setReferenceImportMessage("unidade", "Nenhuma unidade nova na lista (linhas vazias, repetidas ou já cadastradas foram ignoradas).", true);
+    return;
+  }
+  names.forEach(name => unidades.push({ id: crypto.randomUUID(), name }));
+  saveUnidades();
+  form.closest("dialog").close();
+  renderUnidades();
+  showToast(`${names.length} unidade${names.length === 1 ? "" : "s"} importada${names.length === 1 ? "" : "s"}.`);
+});
+document.getElementById("cargo-import").addEventListener("click", () => openReferenceImportDialog("cargo"));
+document.getElementById("cargo-import-cancel").addEventListener("click", () => document.getElementById("cargo-import-dialog").close());
+document.getElementById("cargo-import-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const raw = String(form.elements.lista.value || "");
+  const seen = new Set();
+  const newCargos = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const match = trimmed.match(/^([^;]+?)(?:;\s*(QPPP|QPPE))?$/i);
+    const name = (match ? match[1] : trimmed).trim();
+    const quadro = match && match[2] ? match[2].toUpperCase() : "";
+    const key = name.toLocaleLowerCase("pt-BR");
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    if (cargos.some(item => item.name.toLocaleLowerCase("pt-BR") === key)) continue;
+    newCargos.push({ id: crypto.randomUUID(), name, quadro, observacoes: "" });
+  }
+  if (newCargos.length === 0) {
+    setReferenceImportMessage("cargo", "Nenhum cargo novo na lista (linhas vazias, repetidas ou já cadastrados foram ignorados).", true);
+    return;
+  }
+  newCargos.forEach(cargo => cargos.push(cargo));
+  saveCargos();
+  form.closest("dialog").close();
+  renderCargos();
+  showToast(`${newCargos.length} cargo${newCargos.length === 1 ? "" : "s"} importado${newCargos.length === 1 ? "" : "s"}.`);
 });
 document.getElementById("request-edit-cancel").addEventListener("click", () => document.getElementById("request-edit-dialog").close());
 document.getElementById("request-edit-form").addEventListener("submit", event => {
