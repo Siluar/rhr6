@@ -742,6 +742,15 @@
         });
       });
 
+      // Permite abrir direto em um tipo, vindo do menu "Fazer solicitação" do painel
+      // (ex.: solicitacao-ferias.html?tipo=medica).
+      const requestedType = new URLSearchParams(window.location.search).get('tipo');
+      if (requestedType && optionConfig[requestedType]) {
+        const requestedTab = document.querySelector(`.tab-link[data-option="${requestedType}"]`);
+        document.querySelectorAll('.tab-link').forEach(item => item.classList.toggle('active', item === requestedTab));
+        openForm(requestedType);
+      }
+
       document.getElementById('back-to-selection').addEventListener('click', () => {
         formPanel.classList.add('hidden');
         selectionPanel.classList.add('hidden');
@@ -755,7 +764,7 @@
       document.getElementById('vacation-form').addEventListener('submit', function (event) {
         event.preventDefault();
 
-        if (loggedUser !== 'usuario' || !autoName) {
+        if ((loggedUser !== 'usuario' && loggedUser !== 'admin') || !autoName) {
           window.location.replace('login.html');
           return;
         }

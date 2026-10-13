@@ -51,7 +51,16 @@
           <button class="nav-link active" data-view="overview"><i data-lucide="layout-dashboard"></i><span>Visão geral</span></button>
           <button class="nav-link" data-view="calendar"><i data-lucide="calendar-days"></i><span>Calendário</span></button>
           <button class="nav-link" type="button" data-view="tasks"><i data-lucide="list-checks"></i><span>Tarefas</span></button>
-          <button class="nav-link" type="button" id="nav-new-request"><i data-lucide="file-plus-2"></i><span>Fazer solicitação</span></button>
+          <div class="nav-menu-item" id="new-request-nav-item">
+            <button class="nav-link nav-menu-toggle" type="button" data-submenu-toggle="new-request" aria-label="Fazer solicitação, abrir submenu" aria-expanded="false" aria-controls="new-request-submenu"><i data-lucide="file-plus-2"></i><span>Fazer solicitação</span><i class="nav-menu-chevron" data-lucide="chevron-down"></i></button>
+            <div class="nav-submenu" id="new-request-submenu" hidden>
+              <button class="nav-submenu-link" type="button" data-request-type="ferias">Férias</button>
+              <button class="nav-submenu-link" type="button" data-request-type="premio">Licença prêmio</button>
+              <button class="nav-submenu-link" type="button" data-request-type="capacitacao">Licença capacitação</button>
+              <button class="nav-submenu-link" type="button" data-request-type="medica">Licença médica</button>
+              <button class="nav-submenu-link" type="button" data-request-type="outros">Outros</button>
+            </div>
+          </div>
           <div class="nav-menu-item" id="requests-nav-item" data-admin-only>
             <button class="nav-link nav-menu-toggle" type="button" data-submenu-toggle="requests" aria-label="Solicitações, abrir submenu" aria-expanded="false" aria-controls="requests-submenu"><i data-lucide="inbox"></i><span>Solicitações</span><span class="nav-count attention-count" id="nav-pending-count">3</span><i class="nav-menu-chevron" data-lucide="chevron-down"></i></button>
             <div class="nav-submenu" id="requests-submenu" hidden>
