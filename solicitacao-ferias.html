@@ -529,15 +529,32 @@
     <script>
       const loggedUser = sessionStorage.getItem('brisa-demo-user');
       let serverProfile = null;
-      let isFgServer = false;
       try {
         serverProfile = JSON.parse(sessionStorage.getItem('brisa-demo-profile') || 'null');
       } catch {}
+      // Perfil vindo do Google: nome e e-mail sempre presentes, mas o login
+      // só-Google não coleta CPF. Busca o servidor já cadastrado pelo e-mail;
+      // se não existir, o próprio usuário informa o CPF no formulário.
+      let autoName = String(serverProfile?.name || '').trim();
+      const googleEmail = String(serverProfile?.email || '').trim().toLowerCase();
+      let autoCpf = String(serverProfile?.cpf || '').trim();
+      try {
+        const registry = JSON.parse(localStorage.getItem('brisa-server-personal-data-v1') || '[]');
+        const record = (Array.isArray(registry) ? registry : []).find(item =>
+          googleEmail && String(item.email || '').trim().toLowerCase() === googleEmail
+        );
+        if (record) {
+          if (!autoName) autoName = String(record.name || '').trim();
+          if (!autoCpf) autoCpf = String(record.cpf || '').trim();
+        }
+      } catch {}
+
+      let isFgServer = false;
       try {
         const fgRoster = JSON.parse(localStorage.getItem('brisa-fg-server-roster-v1') || '[]');
         const normalizeCpf = value => String(value || '').replace(/\D/g, '');
-        const normalizedCpf = normalizeCpf(serverProfile?.cpf);
-        const normalizedName = String(serverProfile?.name || '').trim().toLocaleLowerCase('pt-BR');
+        const normalizedCpf = normalizeCpf(autoCpf);
+        const normalizedName = autoName.toLocaleLowerCase('pt-BR');
         isFgServer = Array.isArray(fgRoster) && fgRoster.some(entry => {
           if (typeof entry === 'string') return entry.trim().toLocaleLowerCase('pt-BR') === normalizedName;
           if (!entry || typeof entry !== 'object') return false;
@@ -546,15 +563,26 @@
             || String(entry.name || '').trim().toLocaleLowerCase('pt-BR') === normalizedName;
         });
       } catch {}
-      if (loggedUser !== 'usuario' || !serverProfile?.name || !serverProfile?.cpf) {
+      const nameInput = document.getElementById('nome');
+      const cpfInput = document.getElementById('cpf');
+      const emailInput = document.getElementById('email');
+      const hasIdentity = Boolean(autoName) && (Boolean(autoCpf) || Boolean(googleEmail));
+      if (loggedUser !== 'usuario' || !hasIdentity) {
         window.location.replace('login.html');
       } else {
-        document.getElementById('nome').value = serverProfile.name;
-        document.getElementById('nome').readOnly = true;
-        document.getElementById('cpf').value = serverProfile.cpf;
-        document.getElementById('cpf').readOnly = true;
-        document.getElementById('user-name').textContent = serverProfile.name;
-        document.getElementById('user-avatar').textContent = serverProfile.name.trim().charAt(0).toLocaleUpperCase('pt-BR');
+        nameInput.value = autoName;
+        nameInput.readOnly = true;
+        cpfInput.value = autoCpf;
+        cpfInput.readOnly = Boolean(autoCpf);
+        cpfInput.placeholder = autoCpf ? '000.000.000-00' : 'Informe seu CPF (obrigatório)';
+        if (emailInput && googleEmail) emailInput.value = googleEmail;
+        document.getElementById('user-name').textContent = autoName;
+        document.getElementById('user-avatar').textContent = autoName.trim().charAt(0).toLocaleUpperCase('pt-BR');
+        // "Alterar senha" só se aplica ao login legado por CPF/senha.
+        if (!String(serverProfile?.cpf || '').trim()) {
+          const passwordButton = document.getElementById('open-password-change');
+          if (passwordButton) passwordButton.style.display = 'none';
+        }
       }
 
       const selectionPanel = document.getElementById('selection-panel');
@@ -704,7 +732,7 @@
       document.getElementById('vacation-form').addEventListener('submit', function (event) {
         event.preventDefault();
 
-        if (!serverProfile) {
+        if (loggedUser !== 'usuario' || !autoName) {
           window.location.replace('login.html');
           return;
         }
@@ -715,9 +743,9 @@
           return;
         }
 
-        const nome = serverProfile.name;
-        const emailUsuario = document.getElementById('email').value.trim();
-        const cpf = serverProfile.cpf;
+        const nome = nameInput.value.trim() || autoName;
+        const emailUsuario = (emailInput && emailInput.value.trim()) || googleEmail;
+        const cpf = cpfInput.value.trim();
         const unidade = document.getElementById('unidade').value.trim();
         const equipe = document.getElementById('equipe').value.trim();
         const funcaoExercida = !cycleSelect.required ? functionInput.value.trim() : '';
@@ -805,8 +833,8 @@
 
         submitMessage.textContent = 'Solicitação enviada com sucesso. Um e-mail foi aberto com cópia para o usuário e para a Central de Recursos Humanos.';
         this.reset();
-        document.getElementById('nome').value = serverProfile.name;
-        document.getElementById('cpf').value = serverProfile.cpf;
+        document.getElementById('nome').value = autoName;
+        document.getElementById('cpf').value = cpf;
       });
 
       const logoutLink = document.querySelector('[data-logout]');
