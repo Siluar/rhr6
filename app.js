@@ -527,11 +527,15 @@ function renderUnidades() {
     .filter(unidade => unidade.name.toLocaleLowerCase("pt-BR").includes(query))
     .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
   if (filtered.length === 0) {
-    container.innerHTML = `<tr><td colspan="2" class="team-empty">Nenhuma unidade cadastrada.</td></tr>`;
+    container.innerHTML = `<tr><td colspan="3" class="team-empty">Nenhuma unidade cadastrada.</td></tr>`;
     refreshIcons();
     return;
   }
-  container.innerHTML = filtered.map(unidade => `<tr><td><strong>${escapeHtml(unidade.name)}</strong></td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-unidade="${escapeHtml(unidade.id)}" aria-label="Editar unidade ${escapeHtml(unidade.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-unidade="${escapeHtml(unidade.id)}" aria-label="Remover unidade ${escapeHtml(unidade.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`).join("");
+  container.innerHTML = filtered.map(unidade => {
+    const usedCount = serverPersonalData.filter(record => String(record.unidadePenal || "") === unidade.name).length;
+    const countCell = usedCount > 0 ? `<span class="status-pill status-approved">${usedCount} servidor${usedCount === 1 ? "" : "es"}</span>` : "—";
+    return `<tr><td><strong>${escapeHtml(unidade.name)}</strong></td><td>${countCell}</td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-unidade="${escapeHtml(unidade.id)}" aria-label="Editar unidade ${escapeHtml(unidade.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-unidade="${escapeHtml(unidade.id)}" aria-label="Remover unidade ${escapeHtml(unidade.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+  }).join("");
   refreshIcons();
   fillServerDataReferenceSelects();
 }
@@ -544,11 +548,15 @@ function renderCargos() {
     .filter(cargo => cargo.name.toLocaleLowerCase("pt-BR").includes(query))
     .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
   if (filtered.length === 0) {
-    container.innerHTML = `<tr><td colspan="3" class="team-empty">Nenhum cargo cadastrado.</td></tr>`;
+    container.innerHTML = `<tr><td colspan="4" class="team-empty">Nenhum cargo cadastrado.</td></tr>`;
     refreshIcons();
     return;
   }
-  container.innerHTML = filtered.map(cargo => `<tr><td><strong>${escapeHtml(cargo.name)}</strong></td><td>${cargo.quadro ? `<span class="status-pill status-approved">${escapeHtml(cargo.quadro)}</span>` : "—"}</td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-cargo="${escapeHtml(cargo.id)}" aria-label="Editar cargo ${escapeHtml(cargo.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-cargo="${escapeHtml(cargo.id)}" aria-label="Remover cargo ${escapeHtml(cargo.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`).join("");
+  container.innerHTML = filtered.map(cargo => {
+    const usedCount = serverPersonalData.filter(record => String(record.cargo || "") === cargo.name).length;
+    const countCell = usedCount > 0 ? `<span class="status-pill status-approved">${usedCount} servidor${usedCount === 1 ? "" : "es"}</span>` : "—";
+    return `<tr><td><strong>${escapeHtml(cargo.name)}</strong></td><td>${cargo.quadro ? `<span class="status-pill status-approved">${escapeHtml(cargo.quadro)}</span>` : "—"}</td><td>${countCell}</td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-cargo="${escapeHtml(cargo.id)}" aria-label="Editar cargo ${escapeHtml(cargo.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-cargo="${escapeHtml(cargo.id)}" aria-label="Remover cargo ${escapeHtml(cargo.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+  }).join("");
   refreshIcons();
   fillServerDataReferenceSelects();
 }
@@ -2625,6 +2633,11 @@ document.getElementById("unidades-body").addEventListener("click", event => {
   const unidadeId = removeButton.dataset.removeUnidade;
   const unidade = unidades.find(item => item.id === unidadeId);
   if (!unidade) return;
+  const usedCount = serverPersonalData.filter(record => String(record.unidadePenal || "") === unidade.name).length;
+  if (usedCount > 0) {
+    showToast(`Não é possível excluir: a unidade está em uso por ${usedCount} servidor${usedCount === 1 ? "" : "es"} cadastrado${usedCount === 1 ? "" : "s"}.`);
+    return;
+  }
   if (!window.confirm(`Remover a unidade "${unidade.name}"?`)) return;
   unidades = unidades.filter(item => item.id !== unidadeId);
   saveUnidades();
@@ -2644,7 +2657,15 @@ document.getElementById("unidade-form").addEventListener("submit", event => {
     return;
   }
   if (editingUnidadeId) {
+    const previousName = (unidades.find(item => item.id === editingUnidadeId) || {}).name;
     unidades = unidades.map(item => item.id === editingUnidadeId ? Object.assign({}, item, { name }) : item);
+    if (previousName && previousName !== name) {
+      const previousRecords = serverPersonalData.map(record => ({ ...record }));
+      serverPersonalData = serverPersonalData.map(record => String(record.unidadePenal || "") === previousName
+        ? Object.assign({}, record, { unidadePenal: name })
+        : record);
+      if (!saveServerPersonalData()) serverPersonalData = previousRecords;
+    }
   } else {
     unidades.push({ id: crypto.randomUUID(), name });
   }
@@ -2668,6 +2689,11 @@ document.getElementById("cargos-body").addEventListener("click", event => {
   const cargoId = removeButton.dataset.removeCargo;
   const cargo = cargos.find(item => item.id === cargoId);
   if (!cargo) return;
+  const usedCount = serverPersonalData.filter(record => String(record.cargo || "") === cargo.name).length;
+  if (usedCount > 0) {
+    showToast(`Não é possível excluir: o cargo está em uso por ${usedCount} servidor${usedCount === 1 ? "" : "es"} cadastrado${usedCount === 1 ? "" : "s"}.`);
+    return;
+  }
   if (!window.confirm(`Remover o cargo "${cargo.name}"?`)) return;
   cargos = cargos.filter(item => item.id !== cargoId);
   saveCargos();
@@ -2688,7 +2714,15 @@ document.getElementById("cargo-form").addEventListener("submit", event => {
     return;
   }
   if (editingCargoId) {
+    const previousName = (cargos.find(item => item.id === editingCargoId) || {}).name;
     cargos = cargos.map(item => item.id === editingCargoId ? Object.assign({}, item, { name, quadro }) : item);
+    if (previousName && previousName !== name) {
+      const previousRecords = serverPersonalData.map(record => ({ ...record }));
+      serverPersonalData = serverPersonalData.map(record => String(record.cargo || "") === previousName
+        ? Object.assign({}, record, { cargo: name })
+        : record);
+      if (!saveServerPersonalData()) serverPersonalData = previousRecords;
+    }
   } else {
     cargos.push({ id: crypto.randomUUID(), name, quadro });
   }
