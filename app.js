@@ -3440,6 +3440,9 @@ document.getElementById("report-unit-person-search").addEventListener("input", d
 document.getElementById("report-person-search").addEventListener("input", debounce(renderReportPerson));
 document.getElementById("report-servers-select").addEventListener("input", debounce(renderServerDirectoryReport));
 document.getElementById("report-servers-unit").addEventListener("change", renderServerDirectoryReport);
+document.getElementById("nav-new-request").addEventListener("click", () => {
+  window.location.href = "solicitacao-ferias.html";
+});
 document.getElementById("report-requests-search").addEventListener("input", debounce(renderReportRequests));
 document.getElementById("report-requests-status").addEventListener("change", event => {
   selectedReportRequestsStatus = event.currentTarget.value;

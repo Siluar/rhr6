@@ -573,7 +573,9 @@
       const cpfInput = document.getElementById('cpf');
       const emailInput = document.getElementById('email');
       const hasIdentity = Boolean(autoName) && (Boolean(autoCpf) || Boolean(googleEmail));
-      if (loggedUser !== 'usuario' || !hasIdentity) {
+      // O administrador também pode abrir o formulário (item "Fazer solicitação"
+      // no menu do painel), desde que tenha nome/e-mail na sessão (login Google).
+      if ((loggedUser !== 'usuario' && loggedUser !== 'admin') || !hasIdentity) {
         window.location.replace('login.html');
       } else {
         nameInput.value = autoName;
