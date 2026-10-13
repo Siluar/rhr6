@@ -38,6 +38,7 @@ const serverDataStorageKey = "brisa-server-personal-data-v1";
 const usuariosStorageKey = "brisa-usuarios-v1";
 const unidadesStorageKey = "brisa-unidades-v2";
 const cargosStorageKey = "brisa-cargos-v1";
+const quadrosStorageKey = "brisa-quadros-v1";
 const requestAttachmentsDatabaseName = "brisa-request-attachments-v1";
 const requestAttachmentsStoreName = "attachments";
 let requests = [];
@@ -48,9 +49,11 @@ let serverPersonalData = loadServerPersonalData();
 let usuarios = loadLocalUsuarios();
 let unidades = loadLocalReferenceList(unidadesStorageKey, seedUnidades());
 let cargos = loadLocalReferenceList(cargosStorageKey, seedCargos());
+let quadros = loadLocalReferenceList(quadrosStorageKey, seedQuadros());
 let editingUsuarioId = null;
 let editingUnidadeId = null;
 let editingCargoId = null;
+let editingQuadroId = null;
 let editingRequestId = null;
 let shownMonth = new Date(2026, 9, 1);
 let shownTaskMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -340,6 +343,16 @@ function syncServerDataToFirestore(collection, docs, idFor) {
     });
 }
 
+function deleteReferenceDocFromFirestore(collection, id) {
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return;
+  window.RH_SYNC.deleteDoc(collection, id)
+    .catch(error => {
+      const detail = error instanceof Error ? ` ${error.message}` : "";
+      console.warn(`Falha ao excluir ${collection} no Firestore:`, error);
+      showToast(`Exclusão aplicada apenas neste navegador.${detail}`);
+    });
+}
+
 function seedUnidades() {
   return [
     "Penitenciária de Cruzeiro",
@@ -365,6 +378,13 @@ function seedCargos() {
   ].map((item, index) => ({ id: `cargo-seed-${index}`, name: item.name, quadro: item.quadro }));
 }
 
+function seedQuadros() {
+  return [
+    { name: "QPPP" },
+    { name: "QPPE" }
+  ].map((item, index) => ({ id: `quadro-seed-${index}`, name: item.name, observacoes: "" }));
+}
+
 function loadLocalReferenceList(key, seeds) {
   try {
     const saved = JSON.parse(localStorage.getItem(key) || "[]");
@@ -380,7 +400,7 @@ function normalizeReferenceList(list) {
     .map(item => ({
       id: String((item && item.id) || crypto.randomUUID()),
       name: String((item && item.name) || "").trim(),
-      quadro: item && (item.quadro === "QPPP" || item.quadro === "QPPE") ? item.quadro : "",
+      quadro: String((item && item.quadro) || "").trim(),
       observacoes: String((item && item.observacoes) || "").trim()
     }))
     .filter(item => item.name);
@@ -405,6 +425,17 @@ function saveCargos() {
     return false;
   }
   syncServerDataToFirestore("cargos", cargos);
+  return true;
+}
+
+function saveQuadros() {
+  try {
+    localStorage.setItem(quadrosStorageKey, JSON.stringify(quadros));
+  } catch {
+    showToast("Não foi possível salvar os quadros neste navegador.");
+    return false;
+  }
+  syncServerDataToFirestore("quadros", quadros);
   return true;
 }
 
@@ -522,16 +553,14 @@ function renderUnidades() {
   const query = (document.getElementById("unidades-search")?.value || "").trim().toLocaleLowerCase("pt-BR");
   const filtered = unidades.filter(unidade => unidade.name.toLocaleLowerCase("pt-BR").includes(query));
   if (filtered.length === 0) {
-    container.innerHTML = `<tr><td colspan="3" class="team-empty">Nenhuma unidade cadastrada.</td></tr>`;
+    container.innerHTML = `<tr><td colspan="2" class="team-empty">Nenhuma unidade cadastrada.</td></tr>`;
     refreshIcons();
     return;
   }
   container.innerHTML = filtered.map((unidade, index) => {
-    const usedCount = serverPersonalData.filter(record => String(record.unidadePenal || "") === unidade.name).length;
-    const countCell = usedCount > 0 ? `<span class="status-pill status-approved">${usedCount} servidor${usedCount === 1 ? "" : "es"}</span>` : "—";
     const upDisabled = index === 0;
     const downDisabled = index === filtered.length - 1;
-    return `<tr><td><strong>${escapeHtml(unidade.name)}</strong></td><td>${countCell}</td><td><div class="request-actions"><button class="action-icon move" type="button" data-move-unidade="${escapeHtml(unidade.id)}" data-direction="-1" aria-label="Mover ${escapeHtml(unidade.name)} para cima" title="Mover para cima"${upDisabled ? " disabled" : ""}><i data-lucide="chevron-up"></i></button><button class="action-icon move" type="button" data-move-unidade="${escapeHtml(unidade.id)}" data-direction="1" aria-label="Mover ${escapeHtml(unidade.name)} para baixo" title="Mover para baixo"${downDisabled ? " disabled" : ""}><i data-lucide="chevron-down"></i></button><button class="action-icon approve" type="button" data-edit-unidade="${escapeHtml(unidade.id)}" aria-label="Editar unidade ${escapeHtml(unidade.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-unidade="${escapeHtml(unidade.id)}" aria-label="Remover unidade ${escapeHtml(unidade.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+    return `<tr><td><strong>${escapeHtml(unidade.name)}</strong></td><td><div class="request-actions"><button class="action-icon move" type="button" data-move-unidade="${escapeHtml(unidade.id)}" data-direction="-1" aria-label="Mover ${escapeHtml(unidade.name)} para cima" title="Mover para cima"${upDisabled ? " disabled" : ""}><i data-lucide="chevron-up"></i></button><button class="action-icon move" type="button" data-move-unidade="${escapeHtml(unidade.id)}" data-direction="1" aria-label="Mover ${escapeHtml(unidade.name)} para baixo" title="Mover para baixo"${downDisabled ? " disabled" : ""}><i data-lucide="chevron-down"></i></button><button class="action-icon approve" type="button" data-edit-unidade="${escapeHtml(unidade.id)}" aria-label="Editar unidade ${escapeHtml(unidade.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-unidade="${escapeHtml(unidade.id)}" aria-label="Remover unidade ${escapeHtml(unidade.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
   }).join("");
   refreshIcons();
   fillServerDataReferenceSelects();
@@ -543,43 +572,80 @@ function renderCargos() {
   const query = (document.getElementById("cargos-search")?.value || "").trim().toLocaleLowerCase("pt-BR");
   const filtered = cargos.filter(cargo => cargo.name.toLocaleLowerCase("pt-BR").includes(query));
   if (filtered.length === 0) {
-    container.innerHTML = `<tr><td colspan="5" class="team-empty">Nenhum cargo cadastrado.</td></tr>`;
+    container.innerHTML = `<tr><td colspan="4" class="team-empty">Nenhum cargo cadastrado.</td></tr>`;
     refreshIcons();
     return;
   }
   container.innerHTML = filtered.map((cargo, index) => {
-    const usedCount = serverPersonalData.filter(record => String(record.cargo || "") === cargo.name).length;
-    const countCell = usedCount > 0 ? `<span class="status-pill status-approved">${usedCount} servidor${usedCount === 1 ? "" : "es"}</span>` : "—";
     const observacoesCell = cargo.observacoes ? `<span title="${escapeHtml(cargo.observacoes)}">${escapeHtml(cargo.observacoes)}</span>` : "—";
     const upDisabled = index === 0;
     const downDisabled = index === filtered.length - 1;
-    return `<tr><td><strong>${escapeHtml(cargo.name)}</strong></td><td>${cargo.quadro ? `<span class="status-pill status-approved">${escapeHtml(cargo.quadro)}</span>` : "—"}</td><td>${countCell}</td><td>${observacoesCell}</td><td><div class="request-actions"><button class="action-icon move" type="button" data-move-cargo="${escapeHtml(cargo.id)}" data-direction="-1" aria-label="Mover ${escapeHtml(cargo.name)} para cima" title="Mover para cima"${upDisabled ? " disabled" : ""}><i data-lucide="chevron-up"></i></button><button class="action-icon move" type="button" data-move-cargo="${escapeHtml(cargo.id)}" data-direction="1" aria-label="Mover ${escapeHtml(cargo.name)} para baixo" title="Mover para baixo"${downDisabled ? " disabled" : ""}><i data-lucide="chevron-down"></i></button><button class="action-icon approve" type="button" data-edit-cargo="${escapeHtml(cargo.id)}" aria-label="Editar cargo ${escapeHtml(cargo.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-cargo="${escapeHtml(cargo.id)}" aria-label="Remover cargo ${escapeHtml(cargo.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+    return `<tr><td><strong>${escapeHtml(cargo.name)}</strong></td><td>${cargo.quadro ? `<span class="status-pill status-approved">${escapeHtml(cargo.quadro)}</span>` : "—"}</td><td>${observacoesCell}</td><td><div class="request-actions"><button class="action-icon move" type="button" data-move-cargo="${escapeHtml(cargo.id)}" data-direction="-1" aria-label="Mover ${escapeHtml(cargo.name)} para cima" title="Mover para cima"${upDisabled ? " disabled" : ""}><i data-lucide="chevron-up"></i></button><button class="action-icon move" type="button" data-move-cargo="${escapeHtml(cargo.id)}" data-direction="1" aria-label="Mover ${escapeHtml(cargo.name)} para baixo" title="Mover para baixo"${downDisabled ? " disabled" : ""}><i data-lucide="chevron-down"></i></button><button class="action-icon approve" type="button" data-edit-cargo="${escapeHtml(cargo.id)}" aria-label="Editar cargo ${escapeHtml(cargo.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-cargo="${escapeHtml(cargo.id)}" aria-label="Remover cargo ${escapeHtml(cargo.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+  }).join("");
+  refreshIcons();
+  fillServerDataReferenceSelects();
+}
+
+function renderQuadros() {
+  const container = document.getElementById("quadros-body");
+  if (!container) return;
+  const query = (document.getElementById("quadros-search")?.value || "").trim().toLocaleLowerCase("pt-BR");
+  const filtered = quadros.filter(quadro => quadro.name.toLocaleLowerCase("pt-BR").includes(query));
+  if (filtered.length === 0) {
+    container.innerHTML = `<tr><td colspan="3" class="team-empty">Nenhum quadro cadastrado.</td></tr>`;
+    refreshIcons();
+    return;
+  }
+  container.innerHTML = filtered.map((quadro, index) => {
+    const observacoesCell = quadro.observacoes ? `<span title="${escapeHtml(quadro.observacoes)}">${escapeHtml(quadro.observacoes)}</span>` : "—";
+    const upDisabled = index === 0;
+    const downDisabled = index === filtered.length - 1;
+    return `<tr><td><strong>${escapeHtml(quadro.name)}</strong></td><td>${observacoesCell}</td><td><div class="request-actions"><button class="action-icon move" type="button" data-move-quadro="${escapeHtml(quadro.id)}" data-direction="-1" aria-label="Mover ${escapeHtml(quadro.name)} para cima" title="Mover para cima"${upDisabled ? " disabled" : ""}><i data-lucide="chevron-up"></i></button><button class="action-icon move" type="button" data-move-quadro="${escapeHtml(quadro.id)}" data-direction="1" aria-label="Mover ${escapeHtml(quadro.name)} para baixo" title="Mover para baixo"${downDisabled ? " disabled" : ""}><i data-lucide="chevron-down"></i></button><button class="action-icon approve" type="button" data-edit-quadro="${escapeHtml(quadro.id)}" aria-label="Editar quadro ${escapeHtml(quadro.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-quadro="${escapeHtml(quadro.id)}" aria-label="Remover quadro ${escapeHtml(quadro.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
   }).join("");
   refreshIcons();
   fillServerDataReferenceSelects();
 }
 
 function fillServerDataReferenceSelects() {
-  if (!serverDataForm) return;
-  const unidadeSelect = serverDataForm.elements.namedItem("unidadePenal");
-  const cargoSelect = serverDataForm.elements.namedItem("cargo");
-  if (unidadeSelect) {
-    const current = unidadeSelect.value;
-    unidadeSelect.innerHTML = `<option value="">Selecione a unidade penal</option>${unidades.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("")}`;
-    if (current && !Array.from(unidadeSelect.options).some(option => option.value === current)) {
-      unidadeSelect.add(new Option(`${current} (cadastro existente)`, current));
+  const quadroOptions = quadros.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("");
+  if (serverDataForm) {
+    const unidadeSelect = serverDataForm.elements.namedItem("unidadePenal");
+    const cargoSelect = serverDataForm.elements.namedItem("cargo");
+    if (unidadeSelect) {
+      const current = unidadeSelect.value;
+      unidadeSelect.innerHTML = `<option value="">Selecione a unidade penal</option>${unidades.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("")}`;
+      if (current && !Array.from(unidadeSelect.options).some(option => option.value === current)) {
+        unidadeSelect.add(new Option(`${current} (cadastro existente)`, current));
+      }
+      if (current) unidadeSelect.value = current;
     }
-    if (current) unidadeSelect.value = current;
+    if (cargoSelect) {
+      const current = cargoSelect.value;
+      cargoSelect.innerHTML = `<option value="">Selecione o cargo</option>${cargos.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("")}`;
+      if (current && !Array.from(cargoSelect.options).some(option => option.value === current)) {
+        cargoSelect.add(new Option(`${current} (cadastro existente)`, current));
+      }
+      if (current) cargoSelect.value = current;
+    }
+    if (serverDataQuadro) {
+      const current = serverDataQuadro.value;
+      serverDataQuadro.innerHTML = `<option value="">Selecione o quadro</option>${quadroOptions}`;
+      if (current && !Array.from(serverDataQuadro.options).some(option => option.value === current)) {
+        serverDataQuadro.add(new Option(`${current} (cadastro existente)`, current));
+      }
+      const autoQuadro = getServerDataQuadroForCargo(cargoSelect ? cargoSelect.value : "");
+      if (autoQuadro) serverDataQuadro.value = autoQuadro;
+      else if (current) serverDataQuadro.value = current;
+    }
   }
-  if (cargoSelect) {
-    const current = cargoSelect.value;
-    cargoSelect.innerHTML = `<option value="">Selecione o cargo</option>${cargos.map(item => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.name)}</option>`).join("")}`;
-    if (current && !Array.from(cargoSelect.options).some(option => option.value === current)) {
-      cargoSelect.add(new Option(`${current} (cadastro existente)`, current));
+  const cargoQuadroSelect = document.getElementById("cargo-quadro");
+  if (cargoQuadroSelect) {
+    const current = cargoQuadroSelect.value;
+    cargoQuadroSelect.innerHTML = `<option value="">Sem quadro padrão</option>${quadroOptions}`;
+    if (current && !Array.from(cargoQuadroSelect.options).some(option => option.value === current)) {
+      cargoQuadroSelect.add(new Option(`${current} (cadastro existente)`, current));
     }
-    if (current) cargoSelect.value = current;
-    const quadro = getServerDataQuadroForCargo(cargoSelect.value);
-    if (quadro) serverDataQuadro.value = quadro;
+    cargoQuadroSelect.value = current;
   }
 }
 
@@ -638,7 +704,11 @@ function openCargoDialog(cargo) {
     editingCargoId = cargo.id;
     title.textContent = "Editar cargo";
     document.getElementById("cargo-nome").value = cargo.name || "";
-    document.getElementById("cargo-quadro").value = cargo.quadro === "QPPP" || cargo.quadro === "QPPE" ? cargo.quadro : "";
+    const cargoQuadroSelect = document.getElementById("cargo-quadro");
+    if (cargo.quadro && !Array.from(cargoQuadroSelect.options).some(option => option.value === cargo.quadro)) {
+      cargoQuadroSelect.add(new Option(`${cargo.quadro} (cadastro existente)`, cargo.quadro));
+    }
+    cargoQuadroSelect.value = cargo.quadro || "";
     document.getElementById("cargo-obs").value = cargo.observacoes || "";
   } else {
     editingCargoId = null;
@@ -646,6 +716,32 @@ function openCargoDialog(cargo) {
     form.reset();
   }
   setCargoMessage("");
+  dialog.showModal();
+  refreshIcons();
+}
+
+function setQuadroMessage(message, isError) {
+  const element = document.getElementById("quadro-message");
+  if (!element) return;
+  element.textContent = message || "";
+  element.classList.toggle("error", Boolean(isError));
+}
+
+function openQuadroDialog(quadro) {
+  const dialog = document.getElementById("quadro-dialog");
+  const title = document.getElementById("quadro-dialog-title");
+  const form = document.getElementById("quadro-form");
+  if (quadro) {
+    editingQuadroId = quadro.id;
+    title.textContent = "Editar quadro";
+    document.getElementById("quadro-nome").value = quadro.name || "";
+    document.getElementById("quadro-obs").value = quadro.observacoes || "";
+  } else {
+    editingQuadroId = null;
+    title.textContent = "Adicionar quadro";
+    form.reset();
+  }
+  setQuadroMessage("");
   dialog.showModal();
   refreshIcons();
 }
@@ -1526,6 +1622,7 @@ function renderAll() {
   renderUsuarios();
   renderUnidades();
   renderCargos();
+  renderQuadros();
   updateCounts();
   updateSelectedDay();
   refreshIcons();
@@ -1948,7 +2045,7 @@ function setView(view) {
     toggle.setAttribute("aria-expanded", String(hasActiveItem));
     submenu.hidden = !hasActiveItem;
   });
-  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Unidades", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Cargos", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatório - Servidores", "Relatório - Servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-especial": ["Licença especial", "Relatório de licença especial", "Consulte as solicitações de licença especial aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
+  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Unidades", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Cargos", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "cadastro-quadros": ["Quadros", "Cadastro de Quadros", "Cadastre os quadros usados pelos cargos."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatório - Servidores", "Relatório - Servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-especial": ["Licença especial", "Relatório de licença especial", "Consulte as solicitações de licença especial aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
   const [breadcrumb, title, subtitle] = titles[view] || (view === "tasks" ? ["Gestão", "Lista de tarefas", "Registre e acompanhe suas tarefas."] : view === "meta4" ? ["Solicitações", "META 4", "Consulte os pedidos de férias enviados pelos usuários."] : view === "protocols-fg" ? ["Solicitações", "Protocolos F.G", "Acompanhe o status e o número dos protocolos de férias com Função Gratificada."] : titles.overview);
   document.getElementById("breadcrumb-current").textContent = breadcrumb;
   const pageTitle = document.getElementById("page-title");
@@ -1964,6 +2061,7 @@ function setView(view) {
   if (view === "server-fg") renderFgServerRoster();
   if (view === "cadastro-unidades") renderUnidades();
   if (view === "cadastro-cargos") renderCargos();
+  if (view === "cadastro-quadros") renderQuadros();
   if (view === "vacation-launch") renderVacationLaunch();
   if (view === "report-year") renderReportYear();
   if (view === "report-unit") renderReportUnit();
@@ -2671,6 +2769,7 @@ document.getElementById("unidades-body").addEventListener("click", event => {
   if (!window.confirm(`Remover a unidade "${unidade.name}"?`)) return;
   unidades = unidades.filter(item => item.id !== unidadeId);
   saveUnidades();
+  deleteReferenceDocFromFirestore("unidades", unidadeId);
   renderUnidades();
   showToast("Unidade removida.");
 });
@@ -2727,6 +2826,7 @@ document.getElementById("cargos-body").addEventListener("click", event => {
   if (!window.confirm(`Remover o cargo "${cargo.name}"?`)) return;
   cargos = cargos.filter(item => item.id !== cargoId);
   saveCargos();
+  deleteReferenceDocFromFirestore("cargos", cargoId);
   renderCargos();
   showToast("Cargo removido.");
 });
@@ -2734,7 +2834,8 @@ document.getElementById("cargo-form").addEventListener("submit", event => {
   event.preventDefault();
   const form = event.currentTarget;
   const name = String(form.elements.nome.value).trim();
-  const quadro = form.elements.quadro.value === "QPPP" || form.elements.quadro.value === "QPPE" ? form.elements.quadro.value : "";
+  const quadroValue = String(form.elements.quadro.value || "").trim();
+  const quadro = quadros.some(item => item.name === quadroValue) ? quadroValue : "";
   const observacoes = String(form.elements.observacoes.value).trim();
   if (!name) {
     setCargoMessage("Informe o nome do cargo.", true);
@@ -2782,6 +2883,15 @@ document.addEventListener("click", event => {
       renderCargos();
     }
   }
+  const quadroMoveButton = event.target.closest("[data-move-quadro]");
+  if (quadroMoveButton && !quadroMoveButton.disabled) {
+    const reordered = moveReferenceItem(quadros, quadroMoveButton.dataset.moveQuadro, Number(quadroMoveButton.dataset.direction), "quadros-search", "name");
+    if (reordered) {
+      quadros = reordered;
+      saveQuadros();
+      renderQuadros();
+    }
+  }
 });
 document.getElementById("unidade-import").addEventListener("click", () => openReferenceImportDialog("unidade"));
 document.getElementById("unidade-import-cancel").addEventListener("click", () => document.getElementById("unidade-import-dialog").close());
@@ -2821,13 +2931,14 @@ document.getElementById("cargo-import-form").addEventListener("submit", event =>
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    const match = trimmed.match(/^([^;]+?)(?:;\s*(QPPP|QPPE))?$/i);
+    const match = trimmed.match(/^([^;]+?)(?:;\s*(.+))?$/);
     const name = (match ? match[1] : trimmed).trim();
-    const quadro = match && match[2] ? match[2].toUpperCase() : "";
+    const quadroRaw = match && match[2] ? match[2].trim() : "";
     const key = name.toLocaleLowerCase("pt-BR");
     if (!name || seen.has(key)) continue;
     seen.add(key);
     if (cargos.some(item => item.name.toLocaleLowerCase("pt-BR") === key)) continue;
+    const quadro = quadros.some(item => item.name.toLocaleLowerCase("pt-BR") === quadroRaw.toLocaleLowerCase("pt-BR")) ? quadroRaw : "";
     newCargos.push({ id: crypto.randomUUID(), name, quadro, observacoes: "" });
   }
   if (newCargos.length === 0) {
@@ -2839,6 +2950,91 @@ document.getElementById("cargo-import-form").addEventListener("submit", event =>
   form.closest("dialog").close();
   renderCargos();
   showToast(`${newCargos.length} cargo${newCargos.length === 1 ? "" : "s"} importado${newCargos.length === 1 ? "" : "s"}.`);
+});
+document.getElementById("quadro-add").addEventListener("click", () => openQuadroDialog(null));
+document.getElementById("quadro-cancel").addEventListener("click", () => document.getElementById("quadro-dialog").close());
+document.getElementById("quadros-search").addEventListener("input", renderQuadros);
+document.getElementById("quadros-body").addEventListener("click", event => {
+  const editButton = event.target.closest("[data-edit-quadro]");
+  const removeButton = event.target.closest("[data-remove-quadro]");
+  if (editButton) {
+    const quadro = quadros.find(item => item.id === editButton.dataset.editQuadro);
+    if (quadro) openQuadroDialog(quadro);
+    return;
+  }
+  if (!removeButton) return;
+  const quadroId = removeButton.dataset.removeQuadro;
+  const quadro = quadros.find(item => item.id === quadroId);
+  if (!quadro) return;
+  const usedByCargos = cargos.filter(cargo => cargo.quadro === quadro.name).length;
+  if (usedByCargos > 0) {
+    showToast(`Não é possível excluir: o quadro está em uso por ${usedByCargos} cargo${usedByCargos === 1 ? "" : "s"}.`);
+    return;
+  }
+  if (!window.confirm(`Remover o quadro "${quadro.name}"?`)) return;
+  quadros = quadros.filter(item => item.id !== quadroId);
+  saveQuadros();
+  deleteReferenceDocFromFirestore("quadros", quadroId);
+  renderQuadros();
+  showToast("Quadro removido.");
+});
+document.getElementById("quadro-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const name = String(form.elements.nome.value).trim();
+  const observacoes = String(form.elements.observacoes.value).trim();
+  if (!name) {
+    setQuadroMessage("Informe o nome do quadro.", true);
+    return;
+  }
+  if (quadros.some(item => item.id !== editingQuadroId && item.name.toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"))) {
+    setQuadroMessage("Já existe um quadro cadastrado com esse nome.", true);
+    return;
+  }
+  if (editingQuadroId) {
+    const previousName = (quadros.find(item => item.id === editingQuadroId) || {}).name;
+    quadros = quadros.map(item => item.id === editingQuadroId ? Object.assign({}, item, { name, observacoes }) : item);
+    if (previousName && previousName !== name) {
+      cargos = cargos.map(cargo => cargo.quadro === previousName ? Object.assign({}, cargo, { quadro: name }) : cargo);
+      saveCargos();
+      const previousRecords = serverPersonalData.map(record => ({ ...record }));
+      serverPersonalData = serverPersonalData.map(record => String(record.quadro || "") === previousName ? Object.assign({}, record, { quadro: name }) : record);
+      if (!saveServerPersonalData()) serverPersonalData = previousRecords;
+    }
+  } else {
+    quadros.push({ id: crypto.randomUUID(), name, observacoes });
+  }
+  saveQuadros();
+  form.closest("dialog").close();
+  renderQuadros();
+  showToast(editingQuadroId ? "Quadro atualizado." : "Quadro adicionado.");
+});
+document.getElementById("quadro-import").addEventListener("click", () => openReferenceImportDialog("quadro"));
+document.getElementById("quadro-import-cancel").addEventListener("click", () => document.getElementById("quadro-import-dialog").close());
+document.getElementById("quadro-import-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const raw = String(form.elements.lista.value || "");
+  const seen = new Set();
+  const names = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const name = line.trim();
+    if (!name) continue;
+    const key = name.toLocaleLowerCase("pt-BR");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (quadros.some(item => item.name.toLocaleLowerCase("pt-BR") === key)) continue;
+    names.push(name);
+  }
+  if (names.length === 0) {
+    setReferenceImportMessage("quadro", "Nenhum quadro novo na lista (linhas vazias, repetidas ou já cadastradas foram ignoradas).", true);
+    return;
+  }
+  names.forEach(name => quadros.push({ id: crypto.randomUUID(), name, observacoes: "" }));
+  saveQuadros();
+  form.closest("dialog").close();
+  renderQuadros();
+  showToast(`${names.length} quadro${names.length === 1 ? "" : "s"} importado${names.length === 1 ? "" : "s"}.`);
 });
 document.getElementById("request-edit-cancel").addEventListener("click", () => document.getElementById("request-edit-dialog").close());
 document.getElementById("request-edit-form").addEventListener("submit", event => {
@@ -3077,21 +3273,24 @@ async function loadServerRegistryFromFirestore() {
 async function loadReferenceDataFromFirestore() {
   if (window.RH_SYNC && window.RH_SYNC.enabled) {
     try {
-      const [remoteUnidades, remoteCargos] = await Promise.all([
+      const [remoteUnidades, remoteCargos, remoteQuadros] = await Promise.all([
         window.RH_SYNC.loadDocs("unidades"),
-        window.RH_SYNC.loadDocs("cargos")
+        window.RH_SYNC.loadDocs("cargos"),
+        window.RH_SYNC.loadDocs("quadros")
       ]);
       if (remoteUnidades && remoteUnidades.length > 0) unidades = normalizeReferenceList(remoteUnidades);
       if (remoteCargos && remoteCargos.length > 0) cargos = normalizeReferenceList(remoteCargos);
+      if (remoteQuadros && remoteQuadros.length > 0) quadros = normalizeReferenceList(remoteQuadros);
     } catch (error) {
       const detail = error instanceof Error ? ` ${error.message}` : "";
-      console.warn("Falha ao carregar unidades e cargos do Firestore:", error);
-      showToast(`Unidades e cargos carregados apenas deste navegador.${detail}`);
+      console.warn("Falha ao carregar cadastros básicos do Firestore:", error);
+      showToast(`Cadastros básicos carregados apenas deste navegador.${detail}`);
     }
   }
   fillServerDataReferenceSelects();
   renderUnidades();
   renderCargos();
+  renderQuadros();
 }
 
 function mergeServerRecords(localList, remoteList, keyFor) {

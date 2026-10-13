@@ -39,7 +39,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Cadastro basico de unidades e cargos: somente admin.
+    // Cadastro basico de unidades, cargos e quadros: somente admin.
     match /unidades/{id} {
       allow read, list: if isAdmin();
       allow create, update: if isAdmin();
@@ -47,6 +47,12 @@ service cloud.firestore {
     }
 
     match /cargos/{id} {
+      allow read, list: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /quadros/{id} {
       allow read, list: if isAdmin();
       allow create, update: if isAdmin();
       allow delete: if isAdmin();

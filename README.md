@@ -106,23 +106,31 @@ editar e excluir), persistida nas coleções do Firestore:
 - **Servidores** — o cadastro de dados dos servidores e as Funções Gratificadas
   já existentes passam a ser sincronizados com a coleção `servidores` (a guia
   "Cadastro de Login", obsoleta com o acesso só-Google, foi removida do menu).
-- **Cadastro de Unidades** — nova seção no menu **Servidores** para criar,
-  editar e excluir as unidades penais (coleção `unidades`). As unidades
+- **Cadastro de Unidades** — item **Unidades** próprio na barra lateral para
+  criar, editar e excluir as unidades penais (coleção `unidades`). As unidades
   cadastradas alimentam o select "Unidade Penal" do formulário de dados dos
   servidores e aparecem nos relatórios. Vem pré-populada com as unidades da
-  região. A lista mostra quantos servidores usam cada unidade; unidades em uso
-  não podem ser excluídas, e renomear atualiza em cascata os servidores.
+  região. Unidades em uso não podem ser excluídas, e renomear atualiza em
+  cascata os servidores.
   A ordem da lista pode ser ajustada com as setas ↑↓ de cada linha, e há
   importação em lote pelo botão **"Colar lista"** (uma unidade por linha).
-- **Cadastro de Cargos** — nova seção no menu **Servidores** para criar,
+- **Cadastro de Cargos** — item **Cargos** próprio na barra lateral para criar,
   editar e excluir os cargos (coleção `cargos`). Cada cargo pode indicar o
-  **quadro padrão** (QPPP/QPPE), que preenche automaticamente o campo Quadro
-  no formulário de dados, e **observações** opcionais. O select "Cargo" do
-  formulário passa a ser alimentado por este cadastro. Vale a mesma proteção:
+  **quadro padrão** (escolhido entre os quadros do Cadastro de Quadros), que
+  preenche automaticamente o campo Quadro no formulário de dados, e
+  **observações** opcionais. O select "Cargo" do formulário passa a ser
+  alimentado por este cadastro. Vale a mesma proteção:
   cargos em uso não podem ser excluídos e renomear atualiza os servidores.
   A ordem da lista pode ser ajustada com as setas ↑↓ de cada linha, e há
   importação em lote pelo botão **"Colar lista"** (formato opcional
   `Nome;Quadro`).
+- **Cadastro de Quadros** — item **Quadros** na barra lateral para criar,
+  editar e excluir os quadros (coleção `quadros`), com **observações**
+  opcionais. Os quadros cadastrados alimentam o select "Quadro" do formulário
+  de dados dos servidores e o select "Quadro padrão" dos cargos. Um quadro em
+  uso por algum cargo não pode ser excluído; renomear atualiza em cascata os
+  cargos e os servidores. A ordem também pode ser ajustada com as setas ↑↓ e há
+  importação em lote pelo botão **"Colar lista"**.
 - **Usuários & Acessos** — nova seção no menu (reproduz o item "GESTÃO") para
   gerenciar quem pode entrar com o Google: nome, e-mail, perfil (usuário ou
   administrador) e situação (ativo/inativo), na coleção `usuarios`. O perfil
@@ -135,8 +143,8 @@ editar e excluir), persistida nas coleções do Firestore:
 > Regras (`firestore.rules`): qualquer usuário autenticado pode ler/criar
 > solicitações; apenas `isAdmin()` (proprietários **ou** usuários com perfil
 > `admin` na coleção `usuarios`) pode aprovar, editar, apagar ou gerenciar os
-> cadastros. As coleções `servidores`, `unidades`, `cargos` e `usuarios` são
-> protegidas.
+> cadastros. As coleções `servidores`, `unidades`, `cargos`, `quadros` e
+> `usuarios` são protegidas.
 
 ## Publicação (GitHub Pages)
 
