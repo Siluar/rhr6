@@ -763,7 +763,7 @@
       // Atualiza campos de FG ao alternar o checkbox manual
       if (fgFlagCheckbox) {
         fgFlagCheckbox.addEventListener('change', () => {
-          const config = getOptionConfig(currentOption);
+          const config = getOptionConfig(currentOption || 'ferias');
           const isVacationMode = (config && config.mode === 'vacation');
           const finalShow = isVacationMode && (isFgServer || fgFlagCheckbox.checked);
           functionField.classList.toggle('hidden', !finalShow);
@@ -772,6 +772,18 @@
           substituteInput.required = finalShow;
         });
       }
+
+      // Garante que ao clicar em qualquer botão de opção o form abre corretamente
+      document.querySelectorAll('.option-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const option = card.dataset.option;
+          if (option && optionConfig[option]) {
+            const requestedTab = document.querySelector(`.tab-link[data-option="${option}"]`);
+            document.querySelectorAll('.tab-link').forEach(item => item.classList.toggle('active', item === requestedTab));
+            openForm(option);
+          }
+        });
+      });
 
       // Permite abrir direto em um tipo, vindo do menu "Fazer solicitação" do painel
       // (ex.: solicitacao-ferias.html?tipo=medica).
