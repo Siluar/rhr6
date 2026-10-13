@@ -557,6 +557,12 @@ function saveUsuarios() {
 }
 
 function renderUsuarios() {
+  const pendingCount = usuarios.filter(user => user.pendente).length;
+  const pendingBadge = document.getElementById("nav-usuarios-pending");
+  if (pendingBadge) {
+    pendingBadge.textContent = pendingCount;
+    pendingBadge.hidden = pendingCount === 0;
+  }
   const container = document.getElementById("usuarios-body");
   if (!container) return;
   const query = (document.getElementById("usuarios-search")?.value || "").trim().toLocaleLowerCase("pt-BR");
@@ -565,7 +571,6 @@ function renderUsuarios() {
     .sort((a, b) => (Number(Boolean(b.pendente)) - Number(Boolean(a.pendente))) || String(a.name).localeCompare(String(b.name), "pt-BR"));
   const pendingNote = document.getElementById("usuarios-pending-note");
   if (pendingNote) {
-    const pendingCount = usuarios.filter(user => user.pendente).length;
     pendingNote.textContent = pendingCount === 1
       ? "1 acesso aguardando aprovação."
       : `${pendingCount} acessos aguardando aprovação.`;

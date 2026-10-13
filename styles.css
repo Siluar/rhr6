@@ -61,6 +61,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .report-servers-filter-menu .nav-menu-toggle { display: flex; align-items: center; justify-content: space-between; }
 .report-server-filter-options .nav-submenu-link { min-height: 30px; font-size: 10px; }
 .nav-count { display: grid; min-width: 21px; height: 21px; place-items: center; border-radius: 5px; background: #eeefe9; color: #6d766d; font-size: 10px; }
+.nav-count[hidden] { display: none; }
 .attention-count { background: #fae9e1; color: #a6523b; }
 .topbar-account, .topbar-profile { display: flex; align-items: center; }
 .topbar-account { gap: 12px; }
