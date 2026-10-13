@@ -395,6 +395,18 @@
           </div>
         </form>
       </section>
+      <section class="request-rejection-section" id="request-approval-section" hidden>
+        <h3>Conceder solicitação</h3>
+        <form id="request-approval-form">
+          <input name="requestId" type="hidden" />
+          <label for="request-approval-reason">Justificativa (opcional)</label>
+          <textarea id="request-approval-reason" name="justification" rows="4" placeholder="Ex.: concedido conforme disponibilidade da escala."></textarea>
+          <div class="request-details-dialog-actions">
+            <button class="button button-secondary" type="button" data-request-action="cancel-approve">Voltar</button>
+            <button class="button button-primary" type="submit"><i data-lucide="check"></i><span>Confirmar concessão</span></button>
+          </div>
+        </form>
+      </section>
       <div class="request-details-dialog-actions" id="request-details-actions"></div>
     </dialog>
     <dialog class="account-password-dialog" id="account-password-dialog" aria-labelledby="account-password-title">

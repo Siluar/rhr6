@@ -378,8 +378,10 @@
 
         <nav class="request-tabs" aria-label="Opções de solicitação">
           <button class="tab-link active" type="button" data-option="ferias">Solicitar férias</button>
-          <button class="tab-link" type="button" data-option="especial">Licença especial</button>
-          <button class="tab-link" type="button" data-option="capacitação">Licença capacitação</button>
+          <button class="tab-link" type="button" data-option="premio">Licença prêmio</button>
+          <button class="tab-link" type="button" data-option="capacitacao">Licença capacitação</button>
+          <button class="tab-link" type="button" data-option="medica">Licença médica</button>
+          <button class="tab-link" type="button" data-option="outros">Outros</button>
         </nav>
 
         <div class="user-box">
@@ -468,7 +470,7 @@
                   </select>
                 </div>
                 <div class="field" style="grid-column: 1 / -1;">
-                  <label for="data-ferias">Mês de férias</label>
+                  <label for="data-ferias" id="data-ferias-label">Mês de férias</label>
                   <select id="data-ferias" name="data-ferias" required>
                     <option value="">Selecione o mês</option>
                     <option value="janeiro">Janeiro</option>
@@ -485,12 +487,16 @@
                     <option value="dezembro">Dezembro</option>
                   </select>
                 </div>
+                <div class="field hidden" id="other-type-field" style="grid-column: 1 / -1;">
+                  <label for="tipo-outros">Especificar tipo de solicitação</label>
+                  <input id="tipo-outros" name="tipoOutros" type="text" maxlength="80" placeholder="Ex.: licença para tratar de interesses particulares" />
+                </div>
                 <div class="field vacation-period-field hidden">
-                  <label for="inicio-ferias">Início das férias</label>
+                  <label for="inicio-ferias" id="inicio-ferias-label">Início das férias</label>
                   <input id="inicio-ferias" name="inicioFerias" type="date" />
                 </div>
                 <div class="field vacation-period-field hidden">
-                  <label for="fim-ferias">Fim das férias</label>
+                  <label for="fim-ferias" id="fim-ferias-label">Fim das férias</label>
                   <input id="fim-ferias" name="fimFerias" type="date" />
                 </div>
               </div>
@@ -601,6 +607,11 @@
       const functionInput = document.getElementById('funcao-exercida');
       const substituteField = document.getElementById('substitute-field');
       const substituteInput = document.getElementById('substituto');
+      const otherTypeField = document.getElementById('other-type-field');
+      const otherTypeInput = document.getElementById('tipo-outros');
+      const monthLabel = document.getElementById('data-ferias-label');
+      const periodStartLabel = document.getElementById('inicio-ferias-label');
+      const periodEndLabel = document.getElementById('fim-ferias-label');
 
       const passwordChangeDialog = document.getElementById('password-change-dialog');
       const passwordChangeForm = document.getElementById('password-change-form');
@@ -671,30 +682,43 @@
 
       let currentOption = 'ferias';
 
-      const openForm = (option) => {
-        const labels = {
-          ferias: ['Férias', 'Preencha os dados abaixo para encaminhar sua solicitação de férias.'],
-          capacitação: ['Licença Capacitação', 'Preencha os dados abaixo para encaminhar sua solicitação de licença capacitação.'],
-          especial: ['Licença Especial', 'Preencha os dados abaixo para encaminhar sua solicitação de licença especial.']
-        };
+      const optionConfig = {
+        ferias: { title: 'Férias', subtitle: 'Preencha os dados abaixo para encaminhar sua solicitação de férias.', mode: 'vacation' },
+        premio: { title: 'Licença Prêmio', subtitle: 'Preencha os dados abaixo para encaminhar sua solicitação de licença prêmio.', mode: 'cycle' },
+        capacitacao: { title: 'Licença Capacitação', subtitle: 'Preencha os dados abaixo para encaminhar sua solicitação de licença capacitação.', mode: 'cycle' },
+        medica: { title: 'Licença Médica', subtitle: 'Preencha os dados abaixo para encaminhar sua solicitação de licença médica.', mode: 'period' },
+        outros: { title: 'Outros', subtitle: 'Descreva o tipo de solicitação e informe o período desejado.', mode: 'period', specify: true }
+      };
 
-        const [title, subtitle] = labels[option] || labels.ferias;
-        const isLicense = option === 'capacitação' || option === 'especial';
-        const isVacation = !isLicense;
+      const getOptionConfig = option => optionConfig[option] || optionConfig.ferias;
+
+      const openForm = (option) => {
+        const config = getOptionConfig(option);
+        const mode = config.mode;
+        const isCycle = mode === 'cycle';
+        const isVacation = mode === 'vacation';
+        const usesPeriod = mode === 'vacation' || mode === 'period';
         const showFgFields = isVacation && isFgServer;
         currentOption = option;
 
-        formTitle.textContent = title;
-        formSubtitle.textContent = isVacation && isFgServer
-          ? `${subtitle} Como servidor com Função Gratificada, informe também a função exercida e o substituto.`
-          : subtitle;
-        cycleField.classList.toggle('hidden', !isLicense);
-        cycleSelect.required = isLicense;
-        monthField.classList.toggle('hidden', isLicense);
-        monthSelect.required = !isLicense;
-        vacationPeriodFields.forEach(field => field.classList.toggle('hidden', isLicense));
-        vacationStartInput.required = isVacation;
-        vacationEndInput.required = isVacation;
+        formTitle.textContent = config.title;
+        formSubtitle.textContent = showFgFields
+          ? `${config.subtitle} Como servidor com Função Gratificada, informe também a função exercida e o substituto.`
+          : config.subtitle;
+
+        cycleField.classList.toggle('hidden', !isCycle);
+        cycleSelect.required = isCycle;
+        monthField.classList.toggle('hidden', !usesPeriod);
+        monthSelect.required = usesPeriod;
+        monthLabel.textContent = isVacation ? 'Mês de férias' : 'Mês de referência';
+        vacationPeriodFields.forEach(field => field.classList.toggle('hidden', !usesPeriod));
+        vacationStartInput.required = usesPeriod;
+        vacationEndInput.required = usesPeriod;
+        periodStartLabel.textContent = isVacation ? 'Início das férias' : 'Início';
+        periodEndLabel.textContent = isVacation ? 'Fim das férias' : 'Término';
+        otherTypeField.classList.toggle('hidden', !config.specify);
+        otherTypeInput.required = Boolean(config.specify);
+        if (!config.specify) otherTypeInput.value = '';
         functionField.classList.toggle('hidden', !showFgFields);
         functionInput.required = showFgFields;
         if (!showFgFields) functionInput.value = '';
@@ -702,11 +726,8 @@
         substituteInput.required = showFgFields;
         if (!showFgFields) substituteInput.value = '';
 
-        if (!isLicense) {
-          cycleSelect.value = '';
-        } else {
-          monthSelect.value = '';
-        }
+        if (!isCycle) cycleSelect.value = '';
+        if (!usesPeriod) monthSelect.value = '';
 
         selectionPanel.classList.add('hidden');
         formPanel.classList.remove('hidden');
@@ -737,30 +758,44 @@
           return;
         }
 
-        if (cycleSelect.required && !cycleSelect.value) {
+        const config = getOptionConfig(currentOption);
+        const isCycle = config.mode === 'cycle';
+        const usesPeriod = config.mode === 'vacation' || config.mode === 'period';
+
+        if (isCycle && !cycleSelect.value) {
           cycleSelect.focus();
           cycleSelect.reportValidity();
           return;
         }
+
+        if (config.specify && !otherTypeInput.value.trim()) {
+          otherTypeInput.setCustomValidity('Descreva o tipo de solicitação.');
+          otherTypeInput.reportValidity();
+          otherTypeInput.focus();
+          return;
+        }
+        if (config.specify) otherTypeInput.setCustomValidity('');
 
         const nome = nameInput.value.trim() || autoName;
         const emailUsuario = (emailInput && emailInput.value.trim()) || googleEmail;
         const cpf = cpfInput.value.trim();
         const unidade = document.getElementById('unidade').value.trim();
         const equipe = document.getElementById('equipe').value.trim();
-        const funcaoExercida = !cycleSelect.required ? functionInput.value.trim() : '';
-        const substituto = !cycleSelect.required ? substituteInput.value.trim() : '';
-        const dataSolicitacao = document.getElementById('data-ferias').value;
-        const inicioFerias = !cycleSelect.required ? vacationStartInput.value : '';
-        const fimFerias = !cycleSelect.required ? vacationEndInput.value : '';
-        if (!cycleSelect.required && (!inicioFerias || !fimFerias || fimFerias < inicioFerias)) {
-          submitMessage.textContent = 'Informe um período válido para as férias.';
+        const funcaoExercida = usesPeriod ? functionInput.value.trim() : '';
+        const substituto = usesPeriod ? substituteInput.value.trim() : '';
+        const dataSolicitacao = usesPeriod ? monthSelect.value : '';
+        const inicioFerias = usesPeriod ? vacationStartInput.value : '';
+        const fimFerias = usesPeriod ? vacationEndInput.value : '';
+        if (usesPeriod && (!inicioFerias || !fimFerias || fimFerias < inicioFerias)) {
+          submitMessage.textContent = 'Informe um período válido para a solicitação.';
           vacationStartInput.reportValidity();
           if (inicioFerias && fimFerias < inicioFerias) vacationEndInput.focus();
           return;
         }
-        const tipoSolicitacao = formTitle.textContent.trim();
-        const ciclo = cycleSelect.required ? cycleSelect.value : 'Não se aplica';
+        const tipoSolicitacao = config.specify && otherTypeInput.value.trim()
+          ? otherTypeInput.value.trim()
+          : config.title;
+        const ciclo = isCycle ? cycleSelect.value : '';
         const rhEmail = 'centralrhumuarama@policiapenal.pr.gov.br';
         const storageKey = 'brisa-vacation-requests-v1';
 
@@ -780,7 +815,7 @@
           end: fimFerias || '',
           month: dataSolicitacao,
           days: inicioFerias && fimFerias ? Math.round((new Date(`${fimFerias}T12:00:00`) - new Date(`${inicioFerias}T12:00:00`)) / 86400000) + 1 : 1,
-          note: `${tipoSolicitacao} • ${equipe} • ${unidade} • Ciclo ${ciclo}`,
+          note: [tipoSolicitacao, equipe, unidade, isCycle ? `Ciclo ${ciclo}` : (dataSolicitacao ? `Mês de ${dataSolicitacao}` : '')].filter(Boolean).join(' • '),
           created: 'Agora',
           status: 'pending',
           type: tipoSolicitacao.toLowerCase(),
@@ -822,10 +857,10 @@
           `Equipe: ${equipe}\n` +
           (funcaoExercida ? `Função exercida: ${funcaoExercida}\n` : '') +
           (substituto ? `Substituto: ${substituto}\n` : '') +
-          `Ciclo: ${ciclo}\n` +
-          `Mês: ${dataSolicitacao}\n\n` +
-          (inicioFerias ? `Início das férias: ${inicioFerias}\n` : '') +
-          (fimFerias ? `Fim das férias: ${fimFerias}\n\n` : '\n') +
+          (isCycle ? `Ciclo: ${ciclo}\n` : '') +
+          (dataSolicitacao ? `Mês de referência: ${dataSolicitacao}\n` : '\n') +
+          (inicioFerias ? `Início: ${inicioFerias}\n` : '') +
+          (fimFerias ? `Término: ${fimFerias}\n\n` : '\n') +
           `Esta solicitação foi enviada para a Central de Recursos Humanos e também foi encaminhada em cópia para o e-mail do usuário.`
         );
 

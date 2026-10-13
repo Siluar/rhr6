@@ -1962,6 +1962,8 @@ function openRequestDetails(requestId) {
   const actions = document.getElementById("request-details-actions");
   const rejectionSection = document.getElementById("request-rejection-section");
   const rejectionForm = document.getElementById("request-rejection-form");
+  const approvalSection = document.getElementById("request-approval-section");
+  const approvalForm = document.getElementById("request-approval-form");
   const requestType = String(request.type || "Férias").trim();
   const detailRows = [
     ["Servidor", request.person || "Não identificado"],
@@ -1975,11 +1977,14 @@ function openRequestDetails(requestId) {
     ["Função exercida", request.funcaoExercida || request.functionExercised],
     ["Substituto", request.substituto || request.substitute],
     ["Observações", request.note],
-    ["Justificativa da recusa", request.rejectionJustification]
+    ["Justificativa da recusa", request.rejectionJustification],
+    ["Justificativa da concessão", request.approvalJustification]
   ].filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== "");
 
   rejectionForm.reset();
   rejectionSection.hidden = true;
+  approvalForm.reset();
+  approvalSection.hidden = true;
   actions.hidden = false;
   rejectionForm.querySelector('[name="requestId"]').value = request.id;
   document.getElementById("request-details-title").textContent = `Solicitação de ${request.person || "servidor"}`;
@@ -2092,6 +2097,34 @@ async function rejectRequestWithDetails(event) {
   } finally {
     submitButton.disabled = false;
   }
+}
+
+async function approveRequestWithDetails(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+  const requestId = String(formData.get("requestId") || "");
+  const justification = String(formData.get("justification") || "").trim();
+  const request = requests.find(item => item.id === requestId);
+  if (!request || request.status !== "pending") {
+    showToast("Esta solicitação não está mais pendente.");
+    return;
+  }
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.disabled = true;
+  const previousStatus = request.status;
+  const previousJustification = request.approvalJustification;
+  request.status = "approved";
+  request.approvalJustification = justification || null;
+  if (!saveRequests()) {
+    request.status = previousStatus;
+    request.approvalJustification = previousJustification;
+    if (submitButton) submitButton.disabled = false;
+    return;
+  }
+  document.getElementById("request-details-dialog").close();
+  renderAll();
+  showToast(`Solicitação de ${request.person} concedida.`);
 }
 
 function renderTeam(elementId, limit) {
@@ -2573,6 +2606,7 @@ document.getElementById("vacation-launch-server-search").addEventListener("keydo
   if (event.key === "Escape") document.getElementById("vacation-launch-suggestions").hidden = true;
 });
 document.getElementById("request-rejection-form").addEventListener("submit", rejectRequestWithDetails);
+document.getElementById("request-approval-form").addEventListener("submit", approveRequestWithDetails);
 document.getElementById("request-rejection-reason").addEventListener("input", event => {
   event.currentTarget.setCustomValidity("");
 });
@@ -2792,30 +2826,27 @@ document.addEventListener("click", event => {
   if (actionButton) {
     const request = requests.find(item => item.id === actionButton.dataset.requestId);
     if (!request) return;
-    if (actionButton.dataset.requestAction === "reject") {
+    const action = actionButton.dataset.requestAction;
+    if (action === "reject" || action === "approve") {
       if (!document.getElementById("request-details-dialog").open) openRequestDetails(request.id);
-      const rejectionSection = document.getElementById("request-rejection-section");
-      rejectionSection.hidden = false;
+      const isReject = action === "reject";
+      document.getElementById("request-rejection-section").hidden = !isReject;
+      document.getElementById("request-approval-section").hidden = isReject;
       document.getElementById("request-details-actions").hidden = true;
-      document.getElementById("request-rejection-form").querySelector('[name="requestId"]').value = request.id;
-      document.getElementById("request-rejection-reason").focus();
+      const formId = isReject ? "request-rejection-form" : "request-approval-form";
+      const fieldId = isReject ? "request-rejection-reason" : "request-approval-reason";
+      document.getElementById(formId).querySelector('[name="requestId"]').value = request.id;
+      if (isReject) document.getElementById("request-rejection-reason").setCustomValidity("");
+      document.getElementById(fieldId).focus();
       return;
     }
-    if (actionButton.dataset.requestAction === "cancel-reject") {
-      document.getElementById("request-rejection-form").reset();
-      document.getElementById("request-rejection-section").hidden = true;
+    if (action === "cancel-reject" || action === "cancel-approve") {
+      const isReject = action === "cancel-reject";
+      document.getElementById(isReject ? "request-rejection-form" : "request-approval-form").reset();
+      document.getElementById(isReject ? "request-rejection-section" : "request-approval-section").hidden = true;
       document.getElementById("request-details-actions").hidden = false;
       return;
     }
-    const previousStatus = request.status;
-    request.status = "approved";
-    if (!saveRequests()) {
-      request.status = previousStatus;
-      return;
-    }
-    document.getElementById("request-details-dialog").close();
-    renderAll();
-    showToast(`Solicitação de ${request.person} aprovada.`);
   }
   const removeServerDataButton = event.target.closest("[data-remove-server-data]");
   if (removeServerDataButton) {
