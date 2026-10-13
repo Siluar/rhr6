@@ -92,15 +92,31 @@
     ).then(() => payload);
   };
 
+  // O Firestore limita cada batch a 500 escritas. Fatiar em lotes menores
+  // evita a falha "maximum 500 writes" quando a lista cresce.
+  const BATCH_LIMIT = 400;
+
+  function commitInChunks(col, records) {
+    let chain = Promise.resolve();
+    for (let index = 0; index < records.length; index += BATCH_LIMIT) {
+      const chunk = records.slice(index, index + BATCH_LIMIT);
+      chain = chain.then(() => {
+        const batch = RH_SYNC._db.batch();
+        chunk.forEach(record => batch.set(col.doc(record.id), record.data, { merge: true }));
+        return batch.commit();
+      });
+    }
+    return chain;
+  }
+
   RH_SYNC.saveRequests = function (requests) {
     return RH_SYNC.waitForAuth().then(() => {
-      const batch = RH_SYNC._db.batch();
       const col = requestsCol();
-      requests.forEach(request => {
+      const records = requests.map(request => {
         const docId = request.id || col.doc().id;
-        batch.set(col.doc(docId), Object.assign({}, request, { id: docId }), { merge: true });
+        return { id: docId, data: Object.assign({}, request, { id: docId }) };
       });
-      return batch.commit();
+      return commitInChunks(col, records);
     });
   };
 
@@ -121,13 +137,12 @@
 
   RH_SYNC.saveDocs = function (collection, docs) {
     return RH_SYNC.waitForAuth().then(() => {
-      const batch = RH_SYNC._db.batch();
       const col = RH_SYNC._db.collection(collection);
-      docs.forEach(doc => {
+      const records = docs.map(doc => {
         const id = doc.id || col.doc().id;
-        batch.set(col.doc(id), Object.assign({}, doc, { id }), { merge: true });
+        return { id, data: Object.assign({}, doc, { id }) };
       });
-      return batch.commit();
+      return commitInChunks(col, records);
     });
   };
 

@@ -844,7 +844,7 @@ function renderServerPersonalData() {
       return `<tr><td>${escapeHtml(record.name)}</td><td>${escapeHtml(record.cpf)}</td><td>${escapeHtml(record.rg)}</td><td>${escapeHtml(formattedBirthDate)}</td><td>${escapeHtml(record.phone)}</td><td>${escapeHtml(record.email)}</td><td>${escapeHtml(record.unidadePenal || "Não informado")}</td><td>${escapeHtml(record.cargo || "Não informado")}</td><td>${escapeHtml(record.quadro || "Não informado")}</td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-server-data="${escapeHtml(record.id)}" aria-label="Editar dados de ${escapeHtml(record.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-server-data="${escapeHtml(record.id)}" aria-label="Remover dados de ${escapeHtml(record.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
     }).join("")
     : `<tr><td class="detailed-report-empty" colspan="10">${serverPersonalData.length ? "Nenhum servidor corresponde ao filtro informado." : "Nenhum dado de servidor cadastrado."}</td></tr>`;
-  renderServerDirectoryReport();
+  if (document.getElementById("view-report-servers")?.classList.contains("active")) renderServerDirectoryReport();
   refreshIcons();
 }
 
@@ -3231,8 +3231,16 @@ async function initializeApp() {
   renderTasks();
   loadReferenceDataFromFirestore();
   if (window.RH_SYNC && window.RH_SYNC.enabled) {
+    let initialSignature = null;
     window.RH_SYNC.subscribeRequests(list => {
-      requests = (list.length ? list : requests).map(normalizeRequest);
+      const normalized = (list.length ? list : requests).map(normalizeRequest);
+      // O primeiro snapshot repete o que loadRequests() já trouxe: evita um
+      // renderAll completo redundante logo na abertura.
+      if (initialSignature === null) {
+        initialSignature = JSON.stringify(requests);
+        if (JSON.stringify(normalized) === initialSignature) return;
+      }
+      requests = normalized;
       renderAll();
     }, error => console.warn("Assinatura do Firestore falhou:", error));
     loadUsuariosFromFirestore();
@@ -3295,12 +3303,21 @@ async function loadReferenceDataFromFirestore() {
 
 function mergeServerRecords(localList, remoteList, keyFor) {
   const merged = localList.map(item => ({ ...item }));
-  const localKeys = new Set(merged.map(keyFor));
+  const indexByKey = new Map();
+  merged.forEach((item, index) => {
+    const key = keyFor(item);
+    if (key) indexByKey.set(key, index);
+  });
   remoteList.forEach(remote => {
     const remoteKey = keyFor(remote);
-    const index = merged.findIndex(item => keyFor(item) === remoteKey);
-    if (index >= 0) merged[index] = remote;
-    else if (remoteKey && !localKeys.has(remoteKey)) merged.push(remote);
+    if (!remoteKey) return;
+    const index = indexByKey.get(remoteKey);
+    if (index !== undefined) {
+      merged[index] = remote;
+    } else {
+      indexByKey.set(remoteKey, merged.length);
+      merged.push(remote);
+    }
   });
   return merged;
 }
