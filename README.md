@@ -86,6 +86,9 @@ Como ativar:
 4. **Configurações do projeto → Seus apps → Web** e copie o `firebaseConfig`.
 5. Cole esse objeto em `config.js`, na chave `firebase`.
 6. Em **Firestore → Regras**, cole o conteúdo de `firestore.rules` e publique.
+   Alternativa por linha de comando (com o Firebase CLI autenticado): o projeto
+   já inclui `firebase.json` e `.firebaserc`, então basta rodar
+   `firebase deploy --only firestore:rules`.
 7. Em **Authentication → Configurações → Domínios autorizados**, adicione os
    domínios do site (ex.: `siluar.github.io`, `rhr6.vercel.app`, `localhost`).
 
