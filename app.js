@@ -3,20 +3,30 @@ const weekdays = ["D", "S", "T", "Q", "Q", "S", "S"];
 const calendarScale = { width: 24, height: 72 };
 const calendarMaxMonth = new Date(2028, 0, 1);
 const avatarColors = ["#728e70", "#bd785e", "#718da0", "#a58a58", "#8a7798", "#5f917f", "#c38174", "#7c8764", "#a77b57", "#688b98", "#a06a69", "#8b9369"];
-const people = [
-  { id: "luiza", name: "Luiza Martins", initials: "LM", role: "Design", balance: 18, next: "05 out – 09 out", status: "Férias", color: avatarColors[0] },
-  { id: "caio", name: "Caio Almeida", initials: "CA", role: "Produto", balance: 12, next: "28 set – 02 out", status: "Férias", color: avatarColors[1] },
-  { id: "marina", name: "Marina Costa", initials: "MC", role: "Engenharia", balance: 22, next: "12 out – 16 out", status: "Ativa", color: avatarColors[2] },
-  { id: "pedro", name: "Pedro Nunes", initials: "PN", role: "Marketing", balance: 15, next: "A definir", status: "Ativa", color: avatarColors[3] },
-  { id: "sofia", name: "Sofia Rocha", initials: "SR", role: "Design", balance: 20, next: "19 out – 23 out", status: "Ativa", color: avatarColors[4] },
-  { id: "rafael", name: "Rafael Lima", initials: "RL", role: "Engenharia", balance: 8, next: "A definir", status: "Ativa", color: avatarColors[5] },
-  { id: "bia", name: "Beatriz Souza", initials: "BS", role: "Produto", balance: 25, next: "02 nov – 06 nov", status: "Ativa", color: avatarColors[6] },
-  { id: "davi", name: "Davi Ferreira", initials: "DF", role: "Marketing", balance: 14, next: "A definir", status: "Ativa", color: avatarColors[7] },
-  { id: "helena", name: "Helena Prado", initials: "HP", role: "Design", balance: 19, next: "09 nov – 13 nov", status: "Ativa", color: avatarColors[8] },
-  { id: "igor", name: "Igor Mendes", initials: "IM", role: "Engenharia", balance: 11, next: "A definir", status: "Ativa", color: avatarColors[9] },
-  { id: "nina", name: "Nina Carvalho", initials: "NC", role: "Produto", balance: 17, next: "A definir", status: "Ativa", color: avatarColors[10] },
-  { id: "enzo", name: "Enzo Barros", initials: "EB", role: "Engenharia", balance: 21, next: "A definir", status: "Ativa", color: avatarColors[11] }
-];
+// A lista "Equipe" é montada a partir dos servidores realmente cadastrados,
+// sem nomes fictícios.
+function getTeamMembers() {
+  return serverPersonalData.map((record, index) => {
+    const name = String(record.name || "").trim();
+    const initials = name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(part => part[0])
+      .join("")
+      .toLocaleUpperCase("pt-BR") || "?";
+    return {
+      id: record.id || `server-${index}`,
+      name,
+      initials,
+      role: record.cargo || record.unidadePenal || "",
+      balance: null,
+      next: "A definir",
+      status: "Ativa",
+      color: avatarColors[index % avatarColors.length]
+    };
+  });
+}
 const seedRequests = [
   { id: "r0", person: "Bravo", initials: "BR", color: avatarColors[0], start: "2026-10-01", end: "2026-10-01", days: 1, note: "24h de trabalho • 72h de descanso", created: "Turno ativo", status: "approved" },
   { id: "r1", person: "Charlie", initials: "CH", color: avatarColors[1], start: "2026-10-02", end: "2026-10-02", days: 1, note: "24h de trabalho • 72h de descanso", created: "Turno ativo", status: "pending" },
@@ -899,6 +909,7 @@ function renderServerPersonalData() {
     }).join("")
     : `<tr><td class="detailed-report-empty" colspan="10">${serverPersonalData.length ? "Nenhum servidor corresponde ao filtro informado." : "Nenhum dado de servidor cadastrado."}</td></tr>`;
   if (document.getElementById("view-report-servers")?.classList.contains("active")) renderServerDirectoryReport();
+  renderVacationTodayStat();
   refreshIcons();
 }
 
@@ -1667,7 +1678,7 @@ function renderAll() {
   renderMeta4();
   renderFgProtocols();
   renderTeam("overview-team", 4);
-  renderTeam("full-team", people.length);
+  renderTeam("full-team", getTeamMembers().length);
   renderCurrentMonthVacations();
   renderServerPersonalData();
   renderReportYear();
@@ -1678,6 +1689,7 @@ function renderAll() {
   renderUnidades();
   renderCargos();
   renderQuadros();
+  renderVacationTodayStat();
   updateCounts();
   updateSelectedDay();
   refreshIcons();
@@ -1697,6 +1709,7 @@ function renderRequestsDependentViews() {
   renderReportUnit();
   renderReportPerson();
   renderReportFg();
+  renderVacationTodayStat();
   updateCounts();
   updateSelectedDay();
   refreshIcons();
@@ -2067,9 +2080,18 @@ async function rejectRequestWithDetails(event) {
 function renderTeam(elementId, limit) {
   const container = document.getElementById(elementId);
   if (!container) return;
+  const members = getTeamMembers();
   const query = (elementId === "full-team" ? document.getElementById("team-search")?.value : "")?.trim().toLocaleLowerCase("pt-BR") || "";
-  const filteredPeople = people.filter(person => `${person.name} ${person.role}`.toLocaleLowerCase("pt-BR").includes(query)).slice(0, limit);
-  if (filteredPeople.length === 0) { container.innerHTML = `<tr><td colspan="5" class="team-empty">Nenhuma pessoa encontrada.</td></tr>`; return; }
+  const filteredPeople = members.filter(person => `${person.name} ${person.role}`.toLocaleLowerCase("pt-BR").includes(query)).slice(0, limit);
+  if (elementId === "full-team") {
+    const totalLabel = document.querySelector(".team-total");
+    if (totalLabel) totalLabel.textContent = `${members.length} ${members.length === 1 ? "pessoa" : "pessoas"}`;
+  }
+  if (filteredPeople.length === 0) {
+    const message = members.length === 0 ? "Nenhum servidor cadastrado." : "Nenhum resultado para a busca.";
+    container.innerHTML = `<tr><td colspan="5" class="team-empty">${message}</td></tr>`;
+    return;
+  }
   container.innerHTML = filteredPeople.map(person => {
     const nextRequest = requests.find(request => request.person === person.name && request.status === "approved");
     const upcoming = nextRequest
@@ -2077,9 +2099,45 @@ function renderTeam(elementId, limit) {
       : person.next;
     const today = dateKey(new Date());
     const status = nextRequest && (!nextRequest.month ? nextRequest.start <= today && nextRequest.end >= today : true) ? "Férias" : person.status;
-    const width = `${Math.min(100, Math.round(person.balance / 30 * 100))}%`;
-    return `<tr><td><div class="person-cell">${avatar(person.initials, person.color)}<span><strong>${escapeHtml(person.name)}</strong><small>${escapeHtml(person.role)}</small></span></div></td><td>${escapeHtml(person.role)}</td><td><div class="balance-cell"><span>${person.balance} dias</span><span class="balance-track"><i style="width:${width}"></i></span></div></td><td>${escapeHtml(upcoming)}</td><td><span class="status-pill ${status === "Férias" ? "status-away" : "status-approved"}">${status}</span></td></tr>`;
+    const hasBalance = typeof person.balance === "number";
+    const width = hasBalance ? `${Math.min(100, Math.round(person.balance / 30 * 100))}%` : "0%";
+    const balanceLabel = hasBalance ? `${person.balance} dias` : "—";
+    return `<tr><td><div class="person-cell">${avatar(person.initials, person.color)}<span><strong>${escapeHtml(person.name)}</strong><small>${escapeHtml(person.role)}</small></span></div></td><td>${escapeHtml(person.role)}</td><td><div class="balance-cell"><span>${balanceLabel}</span><span class="balance-track"><i style="width:${width}"></i></span></div></td><td>${escapeHtml(upcoming)}</td><td><span class="status-pill ${status === "Férias" ? "status-away" : "status-approved"}">${status}</span></td></tr>`;
   }).join("");
+}
+// Atualiza o card "Pessoas de férias" do painel (hoje) com dados reais.
+function renderVacationTodayStat() {
+  const countEl = document.getElementById("vacation-today-count");
+  if (!countEl) return;
+  const today = dateKey(new Date());
+  const onLeave = requests.filter(request => {
+    if (request.status === "rejected" || request.month) return false;
+    const start = String(request.start || "");
+    const end = String(request.end || "");
+    return /^\d{4}-\d{2}-\d{2}$/.test(start) && /^\d{4}-\d{2}-\d{2}$/.test(end) && start <= today && end >= today;
+  });
+  const seen = new Set();
+  const away = [];
+  onLeave.forEach(request => {
+    const key = request.person || request.initials || request.id;
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    away.push({ name: request.person || "Servidor", initials: request.initials || "", color: request.color || "" });
+  });
+  countEl.textContent = String(away.length);
+  const totalEl = document.getElementById("vacation-today-total");
+  if (totalEl) {
+    const total = serverPersonalData.length;
+    totalEl.textContent = `de ${total} ${total === 1 ? "servidor" : "servidores"}`;
+  }
+  const avatarsEl = document.getElementById("vacation-today-avatars");
+  if (avatarsEl) avatarsEl.innerHTML = away.slice(0, 3).map(person => avatar(person.initials, person.color)).join("");
+  const namesEl = document.getElementById("vacation-today-names");
+  if (namesEl) {
+    if (away.length === 0) namesEl.textContent = "Ninguém de férias hoje";
+    else if (away.length === 1) namesEl.textContent = `${away[0].name} está fora`;
+    else namesEl.textContent = `${away[0].name} e ${away[1].name} estão fora`;
+  }
 }
 function updateCounts() {
   const pendingCount = getPendingRequests().length;
@@ -3174,7 +3232,7 @@ document.addEventListener("keydown", event => {
   document.getElementById(openSubmenuToggle.getAttribute("aria-controls")).hidden = true;
   openSubmenuToggle.focus();
 });
-document.getElementById("team-search").addEventListener("input", debounce(() => renderTeam("full-team", people.length)));
+document.getElementById("team-search").addEventListener("input", debounce(() => renderTeam("full-team", getTeamMembers().length)));
 document.getElementById("current-vacation-search").addEventListener("input", debounce(renderCurrentMonthVacations));
 document.getElementById("current-vacation-month").addEventListener("change", event => {
   selectedVacationMonth = event.currentTarget.value;
@@ -3305,7 +3363,7 @@ serverDataForm.addEventListener("submit", event => {
 document.getElementById("global-search").addEventListener("input", debounce(event => {
   const query = event.target.value.trim();
   if (!query) return;
-  setView("team"); document.getElementById("team-search").value = query; renderTeam("full-team", people.length);
+  setView("team"); document.getElementById("team-search").value = query; renderTeam("full-team", getTeamMembers().length);
 }));
 document.getElementById("global-search").addEventListener("keydown", event => { if (event.key === "Escape") { event.target.value = ""; event.target.blur(); } });
 document.addEventListener("keydown", event => {

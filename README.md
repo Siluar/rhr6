@@ -188,8 +188,8 @@ apenas por compatibilidade e **não** fazem parte do fluxo atual:
 - O botão/diálogo **Alterar senha** no painel é legado: compara a senha atual com
   `window.RH_CONFIG.initialAdminPassword` (hoje vazio) ou com um hash salvo no
   navegador.
-- A visão **Equipe** usa dados de exemplo (`people` em `app.js`); hoje ela só é
-  acessível pela busca global (não há item no menu).
+- A visão **Equipe** é montada a partir dos servidores cadastrados (não há mais
+  nomes fictícios); como não há item no menu, ela é acessível pela busca global.
 
 ## Aviso
 
