@@ -454,6 +454,13 @@
                     <option value="Expediente">Expediente</option>
                   </select>
                 </div>
+                <div class="field checkbox-field" id="fg-flag-field" style="grid-column: 1 / -1;">
+                  <label class="checkbox">
+                    <input type="checkbox" id="possui-fg" />
+                    <span>Possui Função Gratificada</span>
+                  </label>
+                  <small>Marque caso exerça função gratificada neste período.</small>
+                </div>
                 <div class="field hidden" id="function-field">
                   <label for="funcao-exercida">Função exercida</label>
                   <input id="funcao-exercida" name="funcaoExercida" type="text" placeholder="Informe a função gratificada" />
@@ -702,11 +709,18 @@
         const isCycle = mode === 'cycle';
         const isVacation = mode === 'vacation';
         const usesPeriod = mode === 'vacation' || mode === 'period';
-        const showFgFields = isVacation && isFgServer;
         currentOption = option;
 
         formTitle.textContent = config.title;
-        formSubtitle.textContent = showFgFields
+
+        if (fgFlagField) fgFlagField.classList.toggle('hidden', !isVacation);
+        if (fgFlagCheckbox) {
+          fgFlagCheckbox.checked = isFgServer;
+          fgFlagCheckbox.indeterminate = false;
+        }
+
+        const showFgFieldsInitial = isVacation && (isFgServer || fgFlagCheckbox.checked);
+        formSubtitle.textContent = showFgFieldsInitial
           ? `${config.subtitle} Como servidor com Função Gratificada, informe também a função exercida e o substituto.`
           : config.subtitle;
 
@@ -723,12 +737,14 @@
         otherTypeField.classList.toggle('hidden', !config.specify);
         otherTypeInput.required = Boolean(config.specify);
         if (!config.specify) otherTypeInput.value = '';
-        functionField.classList.toggle('hidden', !showFgFields);
-        functionInput.required = showFgFields;
-        if (!showFgFields) functionInput.value = '';
-        substituteField.classList.toggle('hidden', !showFgFields);
-        substituteInput.required = showFgFields;
-        if (!showFgFields) substituteInput.value = '';
+        // Recalcula caso o usuário marque/desmarque a caixa
+        let finalShowFgFields = isVacation && (isFgServer || fgFlagCheckbox.checked);
+        functionField.classList.toggle('hidden', !finalShowFgFields);
+        functionInput.required = finalShowFgFields;
+        if (!finalShowFgFields) functionInput.value = '';
+        substituteField.classList.toggle('hidden', !finalShowFgFields);
+        substituteInput.required = finalShowFgFields;
+        if (!finalShowFgFields) substituteInput.value = '';
 
         if (!isCycle) cycleSelect.value = '';
         if (!usesPeriod) monthSelect.value = '';
@@ -743,6 +759,19 @@
           openForm(tab.dataset.option);
         });
       });
+
+      // Atualiza campos de FG ao alternar o checkbox manual
+      if (fgFlagCheckbox) {
+        fgFlagCheckbox.addEventListener('change', () => {
+          const config = getOptionConfig(currentOption);
+          const isVacationMode = (config && config.mode === 'vacation');
+          const finalShow = isVacationMode && (isFgServer || fgFlagCheckbox.checked);
+          functionField.classList.toggle('hidden', !finalShow);
+          functionInput.required = finalShow;
+          substituteField.classList.toggle('hidden', !finalShow);
+          substituteInput.required = finalShow;
+        });
+      }
 
       // Permite abrir direto em um tipo, vindo do menu "Fazer solicitação" do painel
       // (ex.: solicitacao-ferias.html?tipo=medica).
@@ -842,6 +871,7 @@
         };
         if (funcaoExercida) request.funcaoExercida = funcaoExercida;
         if (substituto) request.substituto = substituto;
+        request.temFG = !!(fgFlagCheckbox.checked || funcaoExercida || substituto || isFgServer);
 
         try {
           const existing = JSON.parse(localStorage.getItem(storageKey) || '[]');
@@ -863,6 +893,59 @@
             submitMessage.textContent = 'Atenção: a solicitação foi registrada, mas NÃO foi salva na nuvem. Verifique a internet, envie o e-mail e avise a Central de Recursos Humanos.';
             submitMessage.classList.add('error');
           });
+        }
+
+        // Enriquecimento automático dos cadastros com base na solicitação
+        try {
+          const cpfDigits = String(cpf).replace(/\D/g, '');
+          const temFGAtual = !!(fgFlagCheckbox.checked || funcaoExercida || substituto || isFgServer);
+          const normalizarTexto = text => String(text || '').trim();
+
+          // Cadastro de Dados dos Servidores
+          if (cpfDigits || nome) {
+            const serverDataKey = 'brisa-server-personal-data-v1';
+            let serverDataList = [];
+            try { serverDataList = JSON.parse(localStorage.getItem(serverDataKey) || '[]'); } catch {}
+            if (!Array.isArray(serverDataList)) serverDataList = [];
+            const existente = serverDataList.find(item => {
+              const itemCpf = String(item && item.cpf || '').replace(/\D/g, '');
+              if (cpfDigits && itemCpf === cpfDigits) return true;
+              if (!cpfDigits && normalizarTexto(item.name) === normalizarTexto(nome)) return true;
+              return false;
+            });
+            const registro = existente || { id: crypto.randomUUID() };
+            if (normalizarTexto(nome) && !normalizarTexto(registro.name)) registro.name = normalizarTexto(nome);
+            if (cpfDigits && !String(registro.cpf || '')) registro.cpf = cpf;
+            if (unidade && !normalizarTexto(registro.unidadePenal)) registro.unidadePenal = unidade;
+            if (equipe && !normalizarTexto(registro.equipe)) registro.equipe = equipe;
+            if (emailUsuario && !normalizarTexto(registro.email)) registro.email = emailUsuario;
+            if (!existente) serverDataList.push(registro);
+            try { localStorage.setItem(serverDataKey, JSON.stringify(serverDataList)); } catch {}
+          }
+
+          // Cadastro de Servidores com Função Gratificada
+          if (temFGAtual && (cpfDigits || nome)) {
+            const fgKey = 'brisa-fg-server-roster-v1';
+            let fgList = [];
+            try { fgList = JSON.parse(localStorage.getItem(fgKey) || '[]'); } catch {}
+            if (!Array.isArray(fgList)) fgList = [];
+            const existenteFg = fgList.find(item => {
+              const itemCpf = String(item && item.cpf || '').replace(/\D/g, '');
+              if (cpfDigits && itemCpf === cpfDigits) return true;
+              if (!cpfDigits && normalizarTexto(item.name) === normalizarTexto(nome)) return true;
+              return false;
+            });
+            const slugBase = normalizarTexto(nome).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            const registroFg = existenteFg || { id: `fg-${slugBase || 'sem-nome'}`, name: normalizarTexto(nome) || nome, cpf: cpf };
+            if (normalizarTexto(nome)) registroFg.name = normalizarTexto(nome);
+            if (cpfDigits || cpf) registroFg.cpf = cpfDigits ? cpf : cpf;
+            if (funcaoExercida) registroFg.funcaoExercida = funcaoExercida;
+            if (substituto) registroFg.substituto = substituto;
+            if (!existenteFg) fgList.push(registroFg);
+            try { localStorage.setItem(fgKey, JSON.stringify(fgList)); } catch {}
+          }
+        } catch (e) {
+          console.warn('Não foi possível enriquecer os cadastros automaticamente:', e);
         }
 
         const subject = encodeURIComponent(`Solicitação de ${tipoSolicitacao} - ${nome}`);

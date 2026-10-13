@@ -103,9 +103,11 @@ function loadRequests() {
           return merged;
         }
         // Nuvem vazia: reaproveita apenas o que houver no navegador (sem
-        // injetar solicitações de exemplo em produção). A baseline fica de fora
-        // para que a primeira gravação envie esses dados locais à nuvem.
-        return legacyLoadRequests(false).map(normalizeRequest);
+        // injetar solicitações de exemplo em produção) e sobe tudo para a nuvem,
+        // para que solicitações feitas sem rede não fiquem só aqui.
+        const localRequests = legacyLoadRequests(false).map(normalizeRequest);
+        syncCollectionToFirestore("requests", localRequests);
+        return localRequests;
       })
       .catch(error => {
         console.warn("Falha ao carregar as solicitações do Firestore:", error);
@@ -554,6 +556,32 @@ function syncIdForCollection(collection) {
   return null;
 }
 
+// Onde cada lista é guardada no navegador (usado quando a nuvem manda novidades:
+// o estado local precisa acompanhar, senão uma exclusão feita em outro
+// computador voltaria ao recarregar a página).
+const collectionStorageKeys = {
+  requests: storageKey,
+  servidores: serverDataStorageKey,
+  usuarios: usuariosStorageKey,
+  unidades: unidadesStorageKey,
+  cargos: cargosStorageKey,
+  quadros: quadrosStorageKey,
+  tarefas: taskStorageKey,
+  fgServidores: fgRosterStorageKey,
+  contasLegado: serverAccountsStorageKey
+};
+
+function persistCollectionLocally(collection) {
+  const storageKeyForCollection = collectionStorageKeys[collection];
+  const source = collectionSyncSources[collection];
+  if (!storageKeyForCollection || !source) return;
+  try {
+    localStorage.setItem(storageKeyForCollection, JSON.stringify(source()));
+  } catch {
+    // Sem espaço no navegador: o que veio da nuvem continua valendo na sessão.
+  }
+}
+
 function loadPersistedFirestoreSyncState() {
   try {
     const saved = JSON.parse(localStorage.getItem(firestoreSyncStateStorageKey) || "{}");
@@ -816,6 +844,10 @@ function setupSyncRetryLoop() {
 //    computador, então sai daqui também.
 function mergeRemoteCollection(collection, localList, remoteList, idFor) {
   const baseline = firestoreSyncState.get(collection);
+  // Enquanto existe alteração local ainda não confirmada, a ausência de um
+  // documento na nuvem não é confiável (a nuvem pode estar um passo atrás):
+  // nesse caso nada é descartado daqui.
+  const trustRemovals = !pendingSyncCollections.has(collection);
   const idOf = doc => {
     const rawId = idFor ? idFor(doc) : doc && doc.id;
     return rawId ? String(rawId) : "";
@@ -833,11 +865,11 @@ function mergeRemoteCollection(collection, localList, remoteList, idFor) {
     known.add(id);
     const remote = remoteById.get(id);
     if (!remote) {
-      // Ausente na nuvem: mantém apenas se nunca chegou a subir (senão foi
-      // excluído em outro computador e sai daqui também).
+      // Ausente na nuvem: mantém se nunca chegou a subir (senão foi excluído em
+      // outro computador e sai daqui também).
       const signature = documentSignature(Object.assign({}, local, { id }));
       const confirmed = baseline ? baseline.get(id) === signature : false;
-      if (!confirmed) merged.push(local);
+      if (!confirmed || !trustRemovals) merged.push(local);
       return;
     }
     // Presente nos dois lados: fica a versão local só enquanto houver algo nela
@@ -915,6 +947,9 @@ function applyRemoteCollection(collection, remoteRaw) {
   const merged = mergeRemoteCollection(collection, handler.read(), remote, handler.idFor);
   seedFirestoreSyncState(collection, remote, handler.idFor);
   handler.write(merged);
+  // Guarda o estado da nuvem também no navegador: sem isso uma exclusão feita em
+  // outro computador voltaria na próxima abertura da página.
+  persistCollectionLocally(collection);
   // Envia somente quando existe algo aqui que ainda não está na nuvem. Sem isso
   // cada aviso da nuvem provocaria uma nova gravação (e um aviso novo).
   const hasLocalOnly = merged.some(doc => {
