@@ -347,12 +347,13 @@
               <div class="panel-heading"><div><p class="section-kicker">TODAS AS SOLICITAÇÕES</p><h2 id="report-requests-title">Relatório de solicitações</h2></div></div>
               <div class="report-requests-filters">
                 <label class="table-search report-filter-search"><i data-lucide="search"></i><input id="report-requests-search" type="search" placeholder="Filtrar servidor" aria-label="Filtrar solicitações pelo nome do servidor" /></label>
+                <label class="report-unit-filter" for="report-requests-category">Categoria<select id="report-requests-category"><option value="">Todas</option><option value="ferias">Férias</option><option value="licencas">Licenças</option><option value="outros">Outros</option></select></label>
                 <label class="report-unit-filter" for="report-requests-status">Status<select id="report-requests-status"><option value="">Todos</option><option value="pending">Pendentes</option><option value="approved">Aprovadas</option><option value="rejected">Recusadas</option></select></label>
                 <label class="report-unit-filter" for="report-requests-type">Tipo<select id="report-requests-type"><option value="">Todos os tipos</option></select></label>
                 <label class="report-unit-filter" for="report-requests-year">Ano<select id="report-requests-year"><option value="">Todos os anos</option></select></label>
               </div>
               <div class="report-month-toolbar"><span class="task-count" id="report-requests-count">0 solicitações</span><div class="report-export-actions" data-report-export-table="report-requests-table" data-report-export-title="Relatório de solicitações"></div></div>
-              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-requests-table"><thead><tr><th scope="col">Servidor</th><th scope="col">CPF</th><th scope="col">Tipo</th><th scope="col">Unidade</th><th scope="col">Período</th><th scope="col">Justificativa</th></tr></thead><tbody id="report-requests-body"></tbody></table></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-requests-table"><thead><tr><th scope="col">Servidor</th><th scope="col">CPF</th><th scope="col">Categoria</th><th scope="col">Tipo</th><th scope="col">Unidade</th><th scope="col">Período</th><th scope="col">Justificativa</th></tr></thead><tbody id="report-requests-body"></tbody></table></div>
             </section>
           </section>
           <section class="view-panel" id="view-report-capacitacao" aria-label="Relatório de licença-capacitação">

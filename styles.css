@@ -322,7 +322,7 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 #view-report-requests .panel { border-color: #596168; background: #41474d; color: #f2f4f5; }
 #view-report-requests .panel-heading h2 { color: #f2f4f5; }
 #view-report-requests .section-kicker { color: #bec7cd; }
-#view-report-requests .report-requests-filters { display: grid; grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(150px, 220px)); align-items: end; gap: 12px; margin: 14px 0; }
+#view-report-requests .report-requests-filters { display: grid; grid-template-columns: minmax(200px, 1fr) repeat(4, minmax(140px, 200px)); align-items: end; gap: 12px; margin: 14px 0; }
 #view-report-requests .report-requests-filters .report-unit-filter { color: #f2f4f5; }
 #view-report-requests .report-requests-filters select { min-height: 38px; padding: 0 10px; border: 1px solid #9ba5ac; border-radius: 5px; background: #fff; color: #20272c; font: inherit; }
 #view-report-requests .report-filter-search { width: 100%; margin: 0; border-color: #9ba5ac; background: #fff; }

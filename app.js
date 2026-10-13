@@ -78,6 +78,7 @@ let selectedCapacitacaoMonth = "";
 let selectedPremioMonth = "";
 let selectedMedicaMonth = "";
 let selectedReportRequestsStatus = "";
+let selectedReportRequestsCategory = "";
 let selectedReportRequestsType = "";
 let selectedReportRequestsYear = "";
 let toastTimer;
@@ -1417,8 +1418,12 @@ const licenseCycleMonths = {
   C: ["setembro", "outubro", "novembro"]
 };
 
+function normalizeTypeText(value) {
+  return String(value || "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
 function normalizeRequestType(request) {
-  return String(request?.type || "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return normalizeTypeText(request?.type);
 }
 
 function getRequestCycleLabel(request) {
@@ -1635,23 +1640,49 @@ function getRequestJustification(request) {
   return "";
 }
 
+// Categorias dos relatórios: férias, licenças (prêmio, capacitação, médica e afins)
+// e "outros" (qualquer tipo especificado livremente pelo servidor).
+const requestCategoryLabels = { ferias: "Férias", licencas: "Licenças", outros: "Outros" };
+const requestCategoryOrder = ["ferias", "licencas", "outros"];
+
+function getRequestCategory(requestOrType) {
+  const type = typeof requestOrType === "string" ? normalizeTypeText(requestOrType) : normalizeRequestType(requestOrType);
+  if (!type || type.startsWith("ferias")) return "ferias";
+  if (type.startsWith("licenca")) return "licencas";
+  return "outros";
+}
+
+function getRequestCategoryLabel(requestOrType) {
+  return requestCategoryLabels[getRequestCategory(requestOrType)] || "Outros";
+}
+
 function renderReportRequests() {
   const body = document.getElementById("report-requests-body");
   const statusSelect = document.getElementById("report-requests-status");
+  const categorySelect = document.getElementById("report-requests-category");
   const typeSelect = document.getElementById("report-requests-type");
   const yearSelect = document.getElementById("report-requests-year");
   const searchInput = document.getElementById("report-requests-search");
   const countElement = document.getElementById("report-requests-count");
   if (!body || !statusSelect || !typeSelect || !yearSelect) return;
 
-  // Filtro de tipos montado a partir das solicitações existentes.
+  if (categorySelect) {
+    categorySelect.value = requestCategoryOrder.includes(selectedReportRequestsCategory) ? selectedReportRequestsCategory : "";
+    selectedReportRequestsCategory = categorySelect.value;
+  }
+  const categoryFilter = categorySelect ? categorySelect.value : "";
+
+  // Filtro de tipos montado a partir das solicitações existentes e limitado à categoria escolhida.
   const typeLabels = new Map();
   requests.forEach(request => {
     const key = String(request?.type || "").trim().toLocaleLowerCase("pt-BR");
     if (key && !typeLabels.has(key)) typeLabels.set(key, getRequestTypeLabel(request));
   });
-  const sortedTypes = Array.from(typeLabels.entries()).sort((left, right) => left[1].localeCompare(right[1], "pt-BR"));
-  if (!typeLabels.has(selectedReportRequestsType)) selectedReportRequestsType = "";
+  const sortedTypes = Array.from(typeLabels.entries())
+    .filter(([key]) => !categoryFilter || getRequestCategory(key) === categoryFilter)
+    .sort((left, right) => left[1].localeCompare(right[1], "pt-BR"));
+  const availableTypeKeys = new Set(sortedTypes.map(([key]) => key));
+  if (!availableTypeKeys.has(selectedReportRequestsType)) selectedReportRequestsType = "";
   typeSelect.innerHTML = `<option value="">Todos os tipos</option>${sortedTypes.map(([key, label]) => `<option value="${escapeHtml(key)}">${escapeHtml(label)}</option>`).join("")}`;
   typeSelect.value = selectedReportRequestsType;
   selectedReportRequestsType = typeSelect.value;
@@ -1675,6 +1706,7 @@ function renderReportRequests() {
   const searchTerm = searchInput ? searchInput.value.trim().toLocaleLowerCase("pt-BR") : "";
   const filtered = requests.filter(request => {
     if (statusFilter && String(request.status || "") !== statusFilter) return false;
+    if (categoryFilter && getRequestCategory(request) !== categoryFilter) return false;
     if (typeFilter && String(request.type || "").trim().toLocaleLowerCase("pt-BR") !== typeFilter) return false;
     if (yearFilter && getRequestYearValue(request) !== yearFilter) return false;
     if (searchTerm && !String(request.person || "Não identificado").toLocaleLowerCase("pt-BR").includes(searchTerm)) return false;
@@ -1684,7 +1716,7 @@ function renderReportRequests() {
   if (countElement) countElement.textContent = `${filtered.length} ${filtered.length === 1 ? "solicitação" : "solicitações"}`;
 
   if (!filtered.length) {
-    body.innerHTML = `<tr><td class="detailed-report-empty" colspan="6">Nenhuma solicitação encontrada com esses filtros.</td></tr>`;
+    body.innerHTML = `<tr><td class="detailed-report-empty" colspan="7">Nenhuma solicitação encontrada com esses filtros.</td></tr>`;
     return;
   }
 
@@ -1698,7 +1730,7 @@ function renderReportRequests() {
     const period = getRequestPeriodDisplay(request);
     const displayPeriod = period && period !== "Não informado" ? period : getRequestMonthCycleDisplay(request);
     const justification = getRequestJustification(request) || "—";
-    return `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(formatCpfLabel(request.cpf))}</td><td>${escapeHtml(getRequestTypeLabel(request))}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(displayPeriod)}</td><td>${escapeHtml(justification)}</td></tr>`;
+    return `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(formatCpfLabel(request.cpf))}</td><td>${escapeHtml(getRequestCategoryLabel(request))}</td><td>${escapeHtml(getRequestTypeLabel(request))}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(displayPeriod)}</td><td>${escapeHtml(justification)}</td></tr>`;
   };
 
   body.innerHTML = groupedStatuses
@@ -1708,7 +1740,7 @@ function renderReportRequests() {
         .filter(request => String(request.status || "") === status)
         .sort((left, right) => String(left.person || "").localeCompare(String(right.person || ""), "pt-BR") || String(left.start || left.month || "").localeCompare(String(right.start || right.month || "")));
       if (!items.length) return "";
-      return `<tr class="report-requests-group"><th scope="colgroup" colspan="6">${escapeHtml(requestStatusLabels[status] || status)} (${items.length})</th></tr>${items.map(renderRow).join("")}`;
+      return `<tr class="report-requests-group"><th scope="colgroup" colspan="7">${escapeHtml(requestStatusLabels[status] || status)} (${items.length})</th></tr>${items.map(renderRow).join("")}`;
     })
     .join("");
 }
@@ -2523,15 +2555,23 @@ document.querySelectorAll("[data-report-export-table]").forEach(exportControls =
     else printReportTable(title, main.headers, main.rows, extraSections);
   });
 });
-document.getElementById("meta4-month-filter").addEventListener("change", renderMeta4);
-document.getElementById("meta4-year-filter").addEventListener("change", renderMeta4);
-document.getElementById("meta4-launch-filter").addEventListener("change", renderMeta4);
-document.getElementById("protocols-fg-month-filter").addEventListener("change", renderFgProtocols);
-document.getElementById("protocols-fg-year-filter").addEventListener("change", renderFgProtocols);
-document.getElementById("protocols-fg-status-filter").addEventListener("change", renderFgProtocols);
-document.getElementById("meta4-search").addEventListener("input", debounce(renderMeta4));
-document.getElementById("protocols-fg-search").addEventListener("input", debounce(renderFgProtocols));
-document.getElementById("protocols-fg-body").addEventListener("change", event => {
+// Registra um listener apenas quando o elemento existe no documento.
+// Isso mantem o app.js utilizavel em paginas que nao possuem todas as secoes
+// (por exemplo recusada.html, que traz um subconjunto das telas).
+function on(elementId, eventName, handler) {
+  const element = document.getElementById(elementId);
+  if (element) element.addEventListener(eventName, handler);
+}
+
+on("meta4-month-filter", "change", renderMeta4);
+on("meta4-year-filter", "change", renderMeta4);
+on("meta4-launch-filter", "change", renderMeta4);
+on("protocols-fg-month-filter", "change", renderFgProtocols);
+on("protocols-fg-year-filter", "change", renderFgProtocols);
+on("protocols-fg-status-filter", "change", renderFgProtocols);
+on("meta4-search", "input", debounce(renderMeta4));
+on("protocols-fg-search", "input", debounce(renderFgProtocols));
+on("protocols-fg-body", "change", event => {
   const statusSelect = event.target.closest("[data-fg-protocol-status]");
   const numberInput = event.target.closest("[data-fg-protocol-number]");
   const checkedInput = event.target.closest("[data-fg-protocol-checked]");
@@ -2559,7 +2599,7 @@ document.getElementById("protocols-fg-body").addEventListener("change", event =>
       ? `Número do protocolo de ${request.person || "servidor"} salvo.`
       : `Protocolo de ${request.person || "servidor"} ${request.fgProtocolChecked ? "marcado como conferido" : "desmarcado"}.`);
 });
-document.getElementById("meta4-body").addEventListener("change", event => {
+on("meta4-body", "change", event => {
   const control = event.target.closest("[data-meta4-launch], [data-meta4-launch-date]");
   if (!control) return;
   const request = requests.find(item => item.id === control.dataset.requestId);
@@ -2586,13 +2626,13 @@ document.getElementById("meta4-body").addEventListener("change", event => {
 const accountPasswordDialog = document.getElementById("account-password-dialog");
 const accountPasswordForm = document.getElementById("account-password-form");
 const accountPasswordMessage = document.getElementById("account-password-message");
-document.getElementById("open-password-change").addEventListener("click", () => {
+on("open-password-change", "click", () => {
   accountPasswordForm.reset();
   accountPasswordMessage.textContent = "";
   accountPasswordMessage.classList.remove("error");
   accountPasswordDialog.showModal();
 });
-document.getElementById("account-password-cancel").addEventListener("click", () => accountPasswordDialog.close());
+on("account-password-cancel", "click", () => accountPasswordDialog.close());
 accountPasswordForm.addEventListener("submit", async event => {
   event.preventDefault();
   accountPasswordMessage.textContent = "";
@@ -2662,24 +2702,24 @@ accountPasswordForm.addEventListener("submit", async event => {
     accountPasswordMessage.classList.add("error");
   }
 });
-document.getElementById("task-entry-form").addEventListener("submit", addTask);
-document.getElementById("task-list").addEventListener("change", event => {
+on("task-entry-form", "submit", addTask);
+on("task-list", "change", event => {
   const checkbox = event.target.closest("[data-task-toggle]");
   if (checkbox) updateTask(checkbox.dataset.taskToggle, checkbox.checked);
 });
-document.getElementById("task-list").addEventListener("click", event => {
+on("task-list", "click", event => {
   const removeButton = event.target.closest("[data-task-remove]");
   if (removeButton) removeTask(removeButton.dataset.taskRemove);
 });
-document.getElementById("task-calendar-prev").addEventListener("click", () => shiftTaskCalendar(-1));
-document.getElementById("task-calendar-next").addEventListener("click", () => shiftTaskCalendar(1));
-document.getElementById("task-calendar").addEventListener("click", event => {
+on("task-calendar-prev", "click", () => shiftTaskCalendar(-1));
+on("task-calendar-next", "click", () => shiftTaskCalendar(1));
+on("task-calendar", "click", event => {
   const day = event.target.closest("[data-task-calendar-date]");
   if (!day) return;
   selectedTaskDate = selectedTaskDate === day.dataset.taskCalendarDate ? null : day.dataset.taskCalendarDate;
   renderTasks();
 });
-document.getElementById("task-calendar").addEventListener("keydown", event => {
+on("task-calendar", "keydown", event => {
   if (event.key !== "Enter" && event.key !== " ") return;
   const day = event.target.closest("[data-task-calendar-date]");
   if (!day) return;
@@ -2687,11 +2727,11 @@ document.getElementById("task-calendar").addEventListener("keydown", event => {
   selectedTaskDate = selectedTaskDate === day.dataset.taskCalendarDate ? null : day.dataset.taskCalendarDate;
   renderTasks();
 });
-document.getElementById("task-clear-selected-date").addEventListener("click", () => {
+on("task-clear-selected-date", "click", () => {
   selectedTaskDate = null;
   renderTasks();
 });
-document.getElementById("task-calendar-today").addEventListener("click", () => {
+on("task-calendar-today", "click", () => {
   const today = new Date();
   shownTaskMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   selectedTaskDate = null;
@@ -2704,10 +2744,10 @@ document.addEventListener("click", event => {
     if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close();
   }
 });
-document.getElementById("server-fg-form").addEventListener("submit", addFgServerFromForm);
-document.getElementById("vacation-launch-form").addEventListener("submit", addVacationLaunch);
-document.getElementById("vacation-launch-server-search").addEventListener("input", debounce(renderVacationSuggestions));
-document.getElementById("vacation-launch-suggestions").addEventListener("mousedown", event => {
+on("server-fg-form", "submit", addFgServerFromForm);
+on("vacation-launch-form", "submit", addVacationLaunch);
+on("vacation-launch-server-search", "input", debounce(renderVacationSuggestions));
+on("vacation-launch-suggestions", "mousedown", event => {
   const option = event.target.closest("[data-server-id]");
   if (!option) return;
   event.preventDefault();
@@ -2718,24 +2758,24 @@ document.getElementById("vacation-launch-suggestions").addEventListener("mousedo
   document.getElementById("vacation-launch-suggestions").hidden = true;
   syncVacationLaunchFg();
 });
-document.getElementById("vacation-launch-fg").addEventListener("change", syncVacationLaunchFg);
-document.getElementById("vacation-launch-server-search").addEventListener("blur", () => {
+on("vacation-launch-fg", "change", syncVacationLaunchFg);
+on("vacation-launch-server-search", "blur", () => {
   document.getElementById("vacation-launch-suggestions").hidden = true;
 });
-document.getElementById("vacation-launch-server-search").addEventListener("keydown", event => {
+on("vacation-launch-server-search", "keydown", event => {
   if (event.key === "Escape") document.getElementById("vacation-launch-suggestions").hidden = true;
 });
-document.getElementById("request-rejection-form").addEventListener("submit", rejectRequestWithDetails);
-document.getElementById("request-approval-form").addEventListener("submit", approveRequestWithDetails);
-document.getElementById("request-rejection-reason").addEventListener("input", event => {
+on("request-rejection-form", "submit", rejectRequestWithDetails);
+on("request-approval-form", "submit", approveRequestWithDetails);
+on("request-rejection-reason", "input", event => {
   event.currentTarget.setCustomValidity("");
 });
-document.getElementById("server-fg-body").addEventListener("click", event => {
+on("server-fg-body", "click", event => {
   const removeButton = event.target.closest("[data-remove-fg-server]");
   if (removeButton) removeFgServer(removeButton.dataset.removeFgServer);
 });
-document.getElementById("server-data-search").addEventListener("input", debounce(renderServerPersonalData));
-document.getElementById("server-data-export-csv").addEventListener("click", () => {
+on("server-data-search", "input", debounce(renderServerPersonalData));
+on("server-data-export-csv", "click", () => {
   const records = getFilteredServerPersonalData();
   if (!records.length) {
     showToast("Não há servidores para exportar com o filtro atual.");
@@ -2769,7 +2809,7 @@ document.getElementById("server-data-export-csv").addEventListener("click", () =
   downloadLink.remove();
   setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
 });
-document.getElementById("server-data-export-pdf").addEventListener("click", () => {
+on("server-data-export-pdf", "click", () => {
   const records = getFilteredServerPersonalData();
   if (!records.length) {
     showToast("Não há servidores para gerar o relatório com o filtro atual.");
@@ -3000,10 +3040,10 @@ document.addEventListener("click", event => {
   }
 });
 serverDataCancelEdit.addEventListener("click", resetServerDataEdit);
-document.getElementById("usuario-add").addEventListener("click", () => openUsuarioDialog(null));
-document.getElementById("usuario-cancel").addEventListener("click", () => document.getElementById("usuario-dialog").close());
-document.getElementById("usuarios-search").addEventListener("input", debounce(renderUsuarios));
-document.getElementById("usuarios-body").addEventListener("change", event => {
+on("usuario-add", "click", () => openUsuarioDialog(null));
+on("usuario-cancel", "click", () => document.getElementById("usuario-dialog").close());
+on("usuarios-search", "input", debounce(renderUsuarios));
+on("usuarios-body", "change", event => {
   const perfilSelect = event.target.closest("[data-usuario-perfil]");
   if (!perfilSelect) return;
   const user = usuarios.find(item => item.id === perfilSelect.dataset.usuarioPerfil);
@@ -3017,7 +3057,7 @@ document.getElementById("usuarios-body").addEventListener("change", event => {
   renderUsuarios();
   showToast(`Perfil de ${user.name} atualizado para ${user.perfil === "admin" ? "Administrador" : "Usuário"}.`);
 });
-document.getElementById("usuarios-body").addEventListener("click", event => {
+on("usuarios-body", "click", event => {
   const approveButton = event.target.closest("[data-approve-usuario]");
   const denyButton = event.target.closest("[data-deny-usuario]");
   const editButton = event.target.closest("[data-edit-usuario]");
@@ -3059,7 +3099,7 @@ document.getElementById("usuarios-body").addEventListener("click", event => {
   renderUsuarios();
   showToast("Usuário removido.");
 });
-document.getElementById("usuario-form").addEventListener("submit", event => {
+on("usuario-form", "submit", event => {
   event.preventDefault();
   const form = event.currentTarget;
   const name = String(form.elements.nome.value).trim();
@@ -3094,10 +3134,10 @@ document.getElementById("usuario-form").addEventListener("submit", event => {
   renderUsuarios();
   showToast(editingUsuarioId ? "Usuário atualizado." : "Usuário adicionado.");
 });
-document.getElementById("unidade-add").addEventListener("click", () => openUnidadeDialog(null));
-document.getElementById("unidade-cancel").addEventListener("click", () => document.getElementById("unidade-dialog").close());
-document.getElementById("unidades-search").addEventListener("input", debounce(renderUnidades));
-document.getElementById("unidades-body").addEventListener("click", event => {
+on("unidade-add", "click", () => openUnidadeDialog(null));
+on("unidade-cancel", "click", () => document.getElementById("unidade-dialog").close());
+on("unidades-search", "input", debounce(renderUnidades));
+on("unidades-body", "click", event => {
   const editButton = event.target.closest("[data-edit-unidade]");
   const removeButton = event.target.closest("[data-remove-unidade]");
   if (editButton) {
@@ -3121,7 +3161,7 @@ document.getElementById("unidades-body").addEventListener("click", event => {
   renderUnidades();
   showToast("Unidade removida.");
 });
-document.getElementById("unidade-form").addEventListener("submit", event => {
+on("unidade-form", "submit", event => {
   event.preventDefault();
   const form = event.currentTarget;
   const name = String(form.elements.nome.value).trim();
@@ -3151,10 +3191,10 @@ document.getElementById("unidade-form").addEventListener("submit", event => {
   renderUnidades();
   showToast(editingUnidadeId ? "Unidade atualizada." : "Unidade adicionada.");
 });
-document.getElementById("cargo-add").addEventListener("click", () => openCargoDialog(null));
-document.getElementById("cargo-cancel").addEventListener("click", () => document.getElementById("cargo-dialog").close());
-document.getElementById("cargos-search").addEventListener("input", debounce(renderCargos));
-document.getElementById("cargos-body").addEventListener("click", event => {
+on("cargo-add", "click", () => openCargoDialog(null));
+on("cargo-cancel", "click", () => document.getElementById("cargo-dialog").close());
+on("cargos-search", "input", debounce(renderCargos));
+on("cargos-body", "click", event => {
   const editButton = event.target.closest("[data-edit-cargo]");
   const removeButton = event.target.closest("[data-remove-cargo]");
   if (editButton) {
@@ -3178,7 +3218,7 @@ document.getElementById("cargos-body").addEventListener("click", event => {
   renderCargos();
   showToast("Cargo removido.");
 });
-document.getElementById("cargo-form").addEventListener("submit", event => {
+on("cargo-form", "submit", event => {
   event.preventDefault();
   const form = event.currentTarget;
   const name = String(form.elements.nome.value).trim();
@@ -3241,9 +3281,9 @@ document.addEventListener("click", event => {
     }
   }
 });
-document.getElementById("unidade-import").addEventListener("click", () => openReferenceImportDialog("unidade"));
-document.getElementById("unidade-import-cancel").addEventListener("click", () => document.getElementById("unidade-import-dialog").close());
-document.getElementById("unidade-import-form").addEventListener("submit", event => {
+on("unidade-import", "click", () => openReferenceImportDialog("unidade"));
+on("unidade-import-cancel", "click", () => document.getElementById("unidade-import-dialog").close());
+on("unidade-import-form", "submit", event => {
   event.preventDefault();
   const form = event.currentTarget;
   const raw = String(form.elements.lista.value || "");
@@ -3268,9 +3308,9 @@ document.getElementById("unidade-import-form").addEventListener("submit", event 
   renderUnidades();
   showToast(`${names.length} unidade${names.length === 1 ? "" : "s"} importada${names.length === 1 ? "" : "s"}.`);
 });
-document.getElementById("cargo-import").addEventListener("click", () => openReferenceImportDialog("cargo"));
-document.getElementById("cargo-import-cancel").addEventListener("click", () => document.getElementById("cargo-import-dialog").close());
-document.getElementById("cargo-import-form").addEventListener("submit", event => {
+on("cargo-import", "click", () => openReferenceImportDialog("cargo"));
+on("cargo-import-cancel", "click", () => document.getElementById("cargo-import-dialog").close());
+on("cargo-import-form", "submit", event => {
   event.preventDefault();
   const form = event.currentTarget;
   const raw = String(form.elements.lista.value || "");
@@ -3299,10 +3339,10 @@ document.getElementById("cargo-import-form").addEventListener("submit", event =>
   renderCargos();
   showToast(`${newCargos.length} cargo${newCargos.length === 1 ? "" : "s"} importado${newCargos.length === 1 ? "" : "s"}.`);
 });
-document.getElementById("quadro-add").addEventListener("click", () => openQuadroDialog(null));
-document.getElementById("quadro-cancel").addEventListener("click", () => document.getElementById("quadro-dialog").close());
-document.getElementById("quadros-search").addEventListener("input", debounce(renderQuadros));
-document.getElementById("quadros-body").addEventListener("click", event => {
+on("quadro-add", "click", () => openQuadroDialog(null));
+on("quadro-cancel", "click", () => document.getElementById("quadro-dialog").close());
+on("quadros-search", "input", debounce(renderQuadros));
+on("quadros-body", "click", event => {
   const editButton = event.target.closest("[data-edit-quadro]");
   const removeButton = event.target.closest("[data-remove-quadro]");
   if (editButton) {
@@ -3326,7 +3366,7 @@ document.getElementById("quadros-body").addEventListener("click", event => {
   renderQuadros();
   showToast("Quadro removido.");
 });
-document.getElementById("quadro-form").addEventListener("submit", event => {
+on("quadro-form", "submit", event => {
   event.preventDefault();
   const form = event.currentTarget;
   const name = String(form.elements.nome.value).trim();
@@ -3357,9 +3397,9 @@ document.getElementById("quadro-form").addEventListener("submit", event => {
   renderQuadros();
   showToast(editingQuadroId ? "Quadro atualizado." : "Quadro adicionado.");
 });
-document.getElementById("quadro-import").addEventListener("click", () => openReferenceImportDialog("quadro"));
-document.getElementById("quadro-import-cancel").addEventListener("click", () => document.getElementById("quadro-import-dialog").close());
-document.getElementById("quadro-import-form").addEventListener("submit", event => {
+on("quadro-import", "click", () => openReferenceImportDialog("quadro"));
+on("quadro-import-cancel", "click", () => document.getElementById("quadro-import-dialog").close());
+on("quadro-import-form", "submit", event => {
   event.preventDefault();
   const form = event.currentTarget;
   const raw = String(form.elements.lista.value || "");
@@ -3384,8 +3424,8 @@ document.getElementById("quadro-import-form").addEventListener("submit", event =
   renderQuadros();
   showToast(`${names.length} quadro${names.length === 1 ? "" : "s"} importado${names.length === 1 ? "" : "s"}.`);
 });
-document.getElementById("request-edit-cancel").addEventListener("click", () => document.getElementById("request-edit-dialog").close());
-document.getElementById("request-edit-form").addEventListener("submit", event => {
+on("request-edit-cancel", "click", () => document.getElementById("request-edit-dialog").close());
+on("request-edit-form", "submit", event => {
   event.preventDefault();
   const form = event.currentTarget;
   const request = requests.find(item => item.id === editingRequestId);
@@ -3431,58 +3471,63 @@ document.addEventListener("keydown", event => {
   document.getElementById(openSubmenuToggle.getAttribute("aria-controls")).hidden = true;
   openSubmenuToggle.focus();
 });
-document.getElementById("team-search").addEventListener("input", debounce(() => renderTeam("full-team", getTeamMembers().length)));
-document.getElementById("current-vacation-search").addEventListener("input", debounce(renderCurrentMonthVacations));
-document.getElementById("current-vacation-month").addEventListener("change", event => {
+on("team-search", "input", debounce(() => renderTeam("full-team", getTeamMembers().length)));
+on("current-vacation-search", "input", debounce(renderCurrentMonthVacations));
+on("current-vacation-month", "change", event => {
   selectedVacationMonth = event.currentTarget.value;
   renderCurrentMonthVacations();
 });
-document.getElementById("current-vacation-year").addEventListener("change", event => {
+on("current-vacation-year", "change", event => {
   selectedVacationYear = event.currentTarget.value;
   renderCurrentMonthVacations();
 });
-document.getElementById("report-year-select").addEventListener("change", event => {
+on("report-year-select", "change", event => {
   selectedReportYear = event.currentTarget.value;
   renderReportYear();
 });
-document.getElementById("report-unit-select").addEventListener("change", event => {
+on("report-unit-select", "change", event => {
   selectedReportUnit = event.currentTarget.value;
   renderReportUnit();
 });
-document.getElementById("report-unit-person-search").addEventListener("input", debounce(renderReportUnit));
-document.getElementById("report-person-search").addEventListener("input", debounce(renderReportPerson));
-document.getElementById("report-servers-select").addEventListener("input", debounce(renderServerDirectoryReport));
-document.getElementById("report-servers-unit").addEventListener("change", renderServerDirectoryReport);
+on("report-unit-person-search", "input", debounce(renderReportUnit));
+on("report-person-search", "input", debounce(renderReportPerson));
+on("report-servers-select", "input", debounce(renderServerDirectoryReport));
+on("report-servers-unit", "change", renderServerDirectoryReport);
 document.querySelectorAll("[data-request-type]").forEach(link => {
   link.addEventListener("click", () => {
     window.location.href = `solicitacao-ferias.html?tipo=${encodeURIComponent(link.dataset.requestType)}`;
   });
 });
-document.getElementById("report-requests-search").addEventListener("input", debounce(renderReportRequests));
-document.getElementById("report-requests-status").addEventListener("change", event => {
+on("report-requests-search", "input", debounce(renderReportRequests));
+on("report-requests-status", "change", event => {
   selectedReportRequestsStatus = event.currentTarget.value;
   renderReportRequests();
 });
-document.getElementById("report-requests-type").addEventListener("change", event => {
+on("report-requests-category", "change", event => {
+  selectedReportRequestsCategory = event.currentTarget.value;
+  selectedReportRequestsType = "";
+  renderReportRequests();
+});
+on("report-requests-type", "change", event => {
   selectedReportRequestsType = event.currentTarget.value;
   renderReportRequests();
 });
-document.getElementById("report-requests-year").addEventListener("change", event => {
+on("report-requests-year", "change", event => {
   selectedReportRequestsYear = event.currentTarget.value;
   renderReportRequests();
 });
-document.getElementById("report-capacitacao-name").addEventListener("input", debounce(renderReportCapacitacao));
-document.getElementById("report-capacitacao-month").addEventListener("change", event => {
+on("report-capacitacao-name", "input", debounce(renderReportCapacitacao));
+on("report-capacitacao-month", "change", event => {
   selectedCapacitacaoMonth = event.currentTarget.value;
   renderReportCapacitacao();
 });
-document.getElementById("report-premio-name").addEventListener("input", debounce(renderReportPremio));
-document.getElementById("report-premio-month").addEventListener("change", event => {
+on("report-premio-name", "input", debounce(renderReportPremio));
+on("report-premio-month", "change", event => {
   selectedPremioMonth = event.currentTarget.value;
   renderReportPremio();
 });
-document.getElementById("report-medica-name").addEventListener("input", debounce(renderReportMedica));
-document.getElementById("report-medica-month").addEventListener("change", event => {
+on("report-medica-name", "input", debounce(renderReportMedica));
+on("report-medica-month", "change", event => {
   selectedMedicaMonth = event.currentTarget.value;
   renderReportMedica();
 });
@@ -3582,12 +3627,12 @@ serverDataForm.addEventListener("submit", event => {
   renderServerPersonalData();
   showToast(wasEditing ? "Dados do servidor atualizados." : "Dados do servidor cadastrados.");
 });
-document.getElementById("global-search").addEventListener("input", debounce(event => {
+on("global-search", "input", debounce(event => {
   const query = event.target.value.trim();
   if (!query) return;
   setView("team"); document.getElementById("team-search").value = query; renderTeam("full-team", getTeamMembers().length);
 }));
-document.getElementById("global-search").addEventListener("keydown", event => { if (event.key === "Escape") { event.target.value = ""; event.target.blur(); } });
+on("global-search", "keydown", event => { if (event.key === "Escape") { event.target.value = ""; event.target.blur(); } });
 document.addEventListener("keydown", event => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); const search = document.getElementById("global-search"); search.style.width = "230px"; search.focus(); }
 });

@@ -14,7 +14,8 @@ O sistema permite:
 - Lançamento de férias e controle de saldos.
 - Cadastro de servidores, dados e funções gratificadas.
 - Relatórios por mês, ano, unidade e servidor.
-- Licença-capacitação e licença especial.
+- Relatório de solicitações com filtros de categoria (Férias, Licenças e Outros), status, tipo, ano e servidor.
+- Relatórios de licenças concedidas: prêmio, capacitação e médica.
 
 Por padrão, os dados são mantidos no navegador (`localStorage` / `sessionStorage`).
 Com o backend opcional do **Firebase** (seção abaixo), as solicitações são
