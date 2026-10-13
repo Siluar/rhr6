@@ -524,18 +524,18 @@ function renderUnidades() {
   const container = document.getElementById("unidades-body");
   if (!container) return;
   const query = (document.getElementById("unidades-search")?.value || "").trim().toLocaleLowerCase("pt-BR");
-  const filtered = unidades
-    .filter(unidade => unidade.name.toLocaleLowerCase("pt-BR").includes(query))
-    .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
+  const filtered = unidades.filter(unidade => unidade.name.toLocaleLowerCase("pt-BR").includes(query));
   if (filtered.length === 0) {
     container.innerHTML = `<tr><td colspan="3" class="team-empty">Nenhuma unidade cadastrada.</td></tr>`;
     refreshIcons();
     return;
   }
-  container.innerHTML = filtered.map(unidade => {
+  container.innerHTML = filtered.map((unidade, index) => {
     const usedCount = serverPersonalData.filter(record => String(record.unidadePenal || "") === unidade.name).length;
     const countCell = usedCount > 0 ? `<span class="status-pill status-approved">${usedCount} servidor${usedCount === 1 ? "" : "es"}</span>` : "—";
-    return `<tr><td><strong>${escapeHtml(unidade.name)}</strong></td><td>${countCell}</td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-unidade="${escapeHtml(unidade.id)}" aria-label="Editar unidade ${escapeHtml(unidade.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-unidade="${escapeHtml(unidade.id)}" aria-label="Remover unidade ${escapeHtml(unidade.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+    const upDisabled = index === 0;
+    const downDisabled = index === filtered.length - 1;
+    return `<tr><td><strong>${escapeHtml(unidade.name)}</strong></td><td>${countCell}</td><td><div class="request-actions"><button class="action-icon move" type="button" data-move-unidade="${escapeHtml(unidade.id)}" data-direction="-1" aria-label="Mover ${escapeHtml(unidade.name)} para cima" title="Mover para cima"${upDisabled ? " disabled" : ""}><i data-lucide="chevron-up"></i></button><button class="action-icon move" type="button" data-move-unidade="${escapeHtml(unidade.id)}" data-direction="1" aria-label="Mover ${escapeHtml(unidade.name)} para baixo" title="Mover para baixo"${downDisabled ? " disabled" : ""}><i data-lucide="chevron-down"></i></button><button class="action-icon approve" type="button" data-edit-unidade="${escapeHtml(unidade.id)}" aria-label="Editar unidade ${escapeHtml(unidade.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-unidade="${escapeHtml(unidade.id)}" aria-label="Remover unidade ${escapeHtml(unidade.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
   }).join("");
   refreshIcons();
   fillServerDataReferenceSelects();
@@ -545,19 +545,19 @@ function renderCargos() {
   const container = document.getElementById("cargos-body");
   if (!container) return;
   const query = (document.getElementById("cargos-search")?.value || "").trim().toLocaleLowerCase("pt-BR");
-  const filtered = cargos
-    .filter(cargo => cargo.name.toLocaleLowerCase("pt-BR").includes(query))
-    .sort((a, b) => String(a.name).localeCompare(String(b.name), "pt-BR"));
+  const filtered = cargos.filter(cargo => cargo.name.toLocaleLowerCase("pt-BR").includes(query));
   if (filtered.length === 0) {
     container.innerHTML = `<tr><td colspan="5" class="team-empty">Nenhum cargo cadastrado.</td></tr>`;
     refreshIcons();
     return;
   }
-  container.innerHTML = filtered.map(cargo => {
+  container.innerHTML = filtered.map((cargo, index) => {
     const usedCount = serverPersonalData.filter(record => String(record.cargo || "") === cargo.name).length;
     const countCell = usedCount > 0 ? `<span class="status-pill status-approved">${usedCount} servidor${usedCount === 1 ? "" : "es"}</span>` : "—";
     const observacoesCell = cargo.observacoes ? `<span title="${escapeHtml(cargo.observacoes)}">${escapeHtml(cargo.observacoes)}</span>` : "—";
-    return `<tr><td><strong>${escapeHtml(cargo.name)}</strong></td><td>${cargo.quadro ? `<span class="status-pill status-approved">${escapeHtml(cargo.quadro)}</span>` : "—"}</td><td>${countCell}</td><td>${observacoesCell}</td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-cargo="${escapeHtml(cargo.id)}" aria-label="Editar cargo ${escapeHtml(cargo.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-cargo="${escapeHtml(cargo.id)}" aria-label="Remover cargo ${escapeHtml(cargo.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+    const upDisabled = index === 0;
+    const downDisabled = index === filtered.length - 1;
+    return `<tr><td><strong>${escapeHtml(cargo.name)}</strong></td><td>${cargo.quadro ? `<span class="status-pill status-approved">${escapeHtml(cargo.quadro)}</span>` : "—"}</td><td>${countCell}</td><td>${observacoesCell}</td><td><div class="request-actions"><button class="action-icon move" type="button" data-move-cargo="${escapeHtml(cargo.id)}" data-direction="-1" aria-label="Mover ${escapeHtml(cargo.name)} para cima" title="Mover para cima"${upDisabled ? " disabled" : ""}><i data-lucide="chevron-up"></i></button><button class="action-icon move" type="button" data-move-cargo="${escapeHtml(cargo.id)}" data-direction="1" aria-label="Mover ${escapeHtml(cargo.name)} para baixo" title="Mover para baixo"${downDisabled ? " disabled" : ""}><i data-lucide="chevron-down"></i></button><button class="action-icon approve" type="button" data-edit-cargo="${escapeHtml(cargo.id)}" aria-label="Editar cargo ${escapeHtml(cargo.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-cargo="${escapeHtml(cargo.id)}" aria-label="Remover cargo ${escapeHtml(cargo.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
   }).join("");
   refreshIcons();
   fillServerDataReferenceSelects();
@@ -585,6 +585,21 @@ function fillServerDataReferenceSelects() {
     const quadro = getServerDataQuadroForCargo(cargoSelect.value);
     if (quadro) serverDataQuadro.value = quadro;
   }
+}
+
+function moveReferenceItem(list, id, direction, searchInputId, nameKey) {
+  const query = (document.getElementById(searchInputId)?.value || "").trim().toLocaleLowerCase("pt-BR");
+  const visible = list.filter(item => String(item[nameKey]).toLocaleLowerCase("pt-BR").includes(query));
+  const fromVisible = visible.findIndex(item => item.id === id);
+  if (fromVisible < 0) return null;
+  const toVisible = fromVisible + direction;
+  if (toVisible < 0 || toVisible >= visible.length) return null;
+  const target = visible[toVisible];
+  const reordered = list.slice();
+  const fromIndex = reordered.findIndex(item => item.id === id);
+  const targetIndex = reordered.findIndex(item => item.id === target.id);
+  [reordered[fromIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[fromIndex]];
+  return reordered;
 }
 
 function setUnidadeMessage(message, isError) {
@@ -2734,6 +2749,27 @@ document.getElementById("cargo-form").addEventListener("submit", event => {
   form.closest("dialog").close();
   renderCargos();
   showToast(editingCargoId ? "Cargo atualizado." : "Cargo adicionado.");
+});
+document.addEventListener("click", event => {
+  const unidadeMoveButton = event.target.closest("[data-move-unidade]");
+  if (unidadeMoveButton && !unidadeMoveButton.disabled) {
+    const reordered = moveReferenceItem(unidades, unidadeMoveButton.dataset.moveUnidade, Number(unidadeMoveButton.dataset.direction), "unidades-search", "name");
+    if (reordered) {
+      unidades = reordered;
+      saveUnidades();
+      renderUnidades();
+    }
+    return;
+  }
+  const cargoMoveButton = event.target.closest("[data-move-cargo]");
+  if (cargoMoveButton && !cargoMoveButton.disabled) {
+    const reordered = moveReferenceItem(cargos, cargoMoveButton.dataset.moveCargo, Number(cargoMoveButton.dataset.direction), "cargos-search", "name");
+    if (reordered) {
+      cargos = reordered;
+      saveCargos();
+      renderCargos();
+    }
+  }
 });
 document.getElementById("request-edit-cancel").addEventListener("click", () => document.getElementById("request-edit-dialog").close());
 document.getElementById("request-edit-form").addEventListener("submit", event => {

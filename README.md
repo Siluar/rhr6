@@ -112,12 +112,14 @@ editar e excluir), persistida nas coleções do Firestore:
   servidores e aparecem nos relatórios. Vem pré-populada com as unidades da
   região. A lista mostra quantos servidores usam cada unidade; unidades em uso
   não podem ser excluídas, e renomear atualiza em cascata os servidores.
+  A ordem da lista pode ser ajustada com as setas ↑↓ de cada linha.
 - **Cadastro de Cargos** — nova seção no menu **Servidores** para criar,
   editar e excluir os cargos (coleção `cargos`). Cada cargo pode indicar o
   **quadro padrão** (QPPP/QPPE), que preenche automaticamente o campo Quadro
   no formulário de dados, e **observações** opcionais. O select "Cargo" do
   formulário passa a ser alimentado por este cadastro. Vale a mesma proteção:
   cargos em uso não podem ser excluídos e renomear atualiza os servidores.
+  A ordem da lista pode ser ajustada com as setas ↑↓ de cada linha.
 - **Usuários & Acessos** — nova seção no menu (reproduz o item "GESTÃO") para
   gerenciar quem pode entrar com o Google: nome, e-mail, perfil (usuário ou
   administrador) e situação (ativo/inativo), na coleção `usuarios`. O perfil
