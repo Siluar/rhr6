@@ -75,7 +75,8 @@ let selectedReportUnit = "";
 let selectedVacationMonth = String(new Date().getMonth());
 let selectedVacationYear = String(new Date().getFullYear());
 let selectedCapacitacaoMonth = "";
-let selectedEspecialMonth = "";
+let selectedPremioMonth = "";
+let selectedMedicaMonth = "";
 let selectedReportRequestsStatus = "";
 let selectedReportRequestsType = "";
 let selectedReportRequestsYear = "";
@@ -1409,100 +1410,108 @@ function formatCpfLabel(value) {
   return `CPF ${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
 }
 
-function renderReportCapacitacao() {
-  const reportBody = document.getElementById("report-capacitacao-body");
-  const monthSelect = document.getElementById("report-capacitacao-month");
-  const nameSearch = document.getElementById("report-capacitacao-name");
-  if (!reportBody || !monthSelect || !nameSearch) return;
+// Tipos de solicitação de licença e como cada relatório os agrupa.
+const licenseCycleMonths = {
+  A: ["março", "abril", "maio"],
+  B: ["junho", "julho", "agosto"],
+  C: ["setembro", "outubro", "novembro"]
+};
 
-  const cycleMonths = {
-    A: ["março", "abril", "maio"],
-    B: ["junho", "julho", "agosto"],
-    C: ["setembro", "outubro", "novembro"]
-  };
-  const approvedRequests = requests
-    .filter(request => {
-      const requestType = String(request.type || "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      return request.status === "approved" && requestType === "licenca capacitacao";
-    })
-    .sort((left, right) => String(left.person || "").localeCompare(String(right.person || ""), "pt-BR"));
-
-  const getRequestCycle = request => {
-    const cycle = String(request.ciclo || "").trim().toUpperCase();
-    if (cycleMonths[cycle]) return cycle;
-    const month = String(request.month || "").trim().toLocaleLowerCase("pt-BR");
-    return Object.keys(cycleMonths).find(key => cycleMonths[key].includes(month)) || "";
-  };
-  const availableCycles = new Set(approvedRequests.map(getRequestCycle).filter(Boolean));
-  monthSelect.innerHTML = `<option value="">Todos os ciclos</option>${Object.keys(cycleMonths).filter(cycle => availableCycles.has(cycle)).map(cycle => `<option value="${cycle}">Ciclo ${cycle} — ${cycleMonths[cycle].join(", ")}</option>`).join("")}`;
-  if (selectedCapacitacaoMonth && !availableCycles.has(selectedCapacitacaoMonth)) selectedCapacitacaoMonth = "";
-  monthSelect.value = selectedCapacitacaoMonth;
-
-  const nameQuery = nameSearch.value.trim().toLocaleLowerCase("pt-BR");
-  const filteredRequests = approvedRequests.filter(request => {
-    const name = String(request.person || "Não identificado").toLocaleLowerCase("pt-BR");
-    return name.includes(nameQuery) && (!selectedCapacitacaoMonth || getRequestCycle(request) === selectedCapacitacaoMonth);
-  });
-
-  reportBody.innerHTML = filteredRequests.length
-    ? filteredRequests.map(request => {
-      const cycle = String(request.ciclo || "").trim().toUpperCase();
-      const months = cycleMonths[cycle] || [String(request.month || "").trim().toLocaleLowerCase("pt-BR")].filter(Boolean);
-      const monthLabels = months.length
-        ? months.map(month => `${month.charAt(0).toLocaleUpperCase("pt-BR")}${month.slice(1)}`).join(", ")
-        : "Não informado";
-      const period = cycleMonths[cycle] ? `Ciclo ${cycle}` : "Não informado";
-      return `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(monthLabels)}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(period)}</td></tr>`;
-    }).join("")
-    : `<tr><td class="detailed-report-empty" colspan="4">Nenhuma licença-capacitação aprovada.</td></tr>`;
+function normalizeRequestType(request) {
+  return String(request?.type || "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
-function renderReportEspecial() {
-  const reportBody = document.getElementById("report-especial-body");
-  const monthSelect = document.getElementById("report-especial-month");
-  const nameSearch = document.getElementById("report-especial-name");
-  if (!reportBody || !monthSelect || !nameSearch) return;
+function getRequestCycleLabel(request) {
+  const cycle = String(request?.ciclo || "").trim().toUpperCase();
+  if (licenseCycleMonths[cycle]) return cycle;
+  const month = String(request?.month || "").trim().toLocaleLowerCase("pt-BR");
+  return Object.keys(licenseCycleMonths).find(key => licenseCycleMonths[key].includes(month)) || "";
+}
 
-  const cycleMonths = {
-    A: ["março", "abril", "maio"],
-    B: ["junho", "julho", "agosto"],
-    C: ["setembro", "outubro", "novembro"]
-  };
+// Relatórios de licenças concedidas por ciclo (licença prêmio e capacitação).
+function renderCycleLicenseReport({ type, bodyId, cycleSelectId, searchInputId, selectedCycle, onSelectedCycle, emptyMessage }) {
+  const reportBody = document.getElementById(bodyId);
+  const cycleSelect = document.getElementById(cycleSelectId);
+  const nameSearch = document.getElementById(searchInputId);
+  if (!reportBody || !cycleSelect || !nameSearch) return;
+
   const approvedRequests = requests
-    .filter(request => {
-      const requestType = String(request.type || "").trim().toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      return request.status === "approved" && requestType === "licenca especial";
-    })
+    .filter(request => request.status === "approved" && normalizeRequestType(request) === type)
     .sort((left, right) => String(left.person || "").localeCompare(String(right.person || ""), "pt-BR"));
 
-  const getRequestCycle = request => {
-    const cycle = String(request.ciclo || "").trim().toUpperCase();
-    if (cycleMonths[cycle]) return cycle;
-    const month = String(request.month || "").trim().toLocaleLowerCase("pt-BR");
-    return Object.keys(cycleMonths).find(key => cycleMonths[key].includes(month)) || "";
-  };
-  const availableCycles = new Set(approvedRequests.map(getRequestCycle).filter(Boolean));
-  monthSelect.innerHTML = `<option value="">Todos os ciclos</option>${Object.keys(cycleMonths).filter(cycle => availableCycles.has(cycle)).map(cycle => `<option value="${cycle}">Ciclo ${cycle} — ${cycleMonths[cycle].join(", ")}</option>`).join("")}`;
-  if (selectedEspecialMonth && !availableCycles.has(selectedEspecialMonth)) selectedEspecialMonth = "";
-  monthSelect.value = selectedEspecialMonth;
+  const availableCycles = new Set(approvedRequests.map(getRequestCycleLabel).filter(Boolean));
+  cycleSelect.innerHTML = `<option value="">Todos os ciclos</option>${Object.keys(licenseCycleMonths).filter(cycle => availableCycles.has(cycle)).map(cycle => `<option value="${cycle}">Ciclo ${cycle} — ${licenseCycleMonths[cycle].join(", ")}</option>`).join("")}`;
+  if (selectedCycle() && !availableCycles.has(selectedCycle())) onSelectedCycle("");
+  cycleSelect.value = selectedCycle();
 
   const nameQuery = nameSearch.value.trim().toLocaleLowerCase("pt-BR");
   const filteredRequests = approvedRequests.filter(request => {
     const name = String(request.person || "Não identificado").toLocaleLowerCase("pt-BR");
-    return name.includes(nameQuery) && (!selectedEspecialMonth || getRequestCycle(request) === selectedEspecialMonth);
+    return name.includes(nameQuery) && (!selectedCycle() || getRequestCycleLabel(request) === selectedCycle());
   });
 
   reportBody.innerHTML = filteredRequests.length
     ? filteredRequests.map(request => {
       const cycle = String(request.ciclo || "").trim().toUpperCase();
-      const months = cycleMonths[cycle] || [String(request.month || "").trim().toLocaleLowerCase("pt-BR")].filter(Boolean);
+      const months = licenseCycleMonths[cycle] || [String(request.month || "").trim().toLocaleLowerCase("pt-BR")].filter(Boolean);
       const monthLabels = months.length
         ? months.map(month => `${month.charAt(0).toLocaleUpperCase("pt-BR")}${month.slice(1)}`).join(", ")
         : "Não informado";
-      const period = cycleMonths[cycle] ? `Ciclo ${cycle}` : "Não informado";
+      const period = licenseCycleMonths[cycle] ? `Ciclo ${cycle}` : "Não informado";
       return `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(monthLabels)}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(period)}</td></tr>`;
     }).join("")
-    : `<tr><td class="detailed-report-empty" colspan="4">Nenhuma licença especial aprovada.</td></tr>`;
+    : `<tr><td class="detailed-report-empty" colspan="4">${escapeHtml(emptyMessage)}</td></tr>`;
+}
+
+function renderReportPremio() {
+  renderCycleLicenseReport({
+    type: "licenca premio",
+    bodyId: "report-premio-body",
+    cycleSelectId: "report-premio-month",
+    searchInputId: "report-premio-name",
+    selectedCycle: () => selectedPremioMonth,
+    onSelectedCycle: value => { selectedPremioMonth = value; },
+    emptyMessage: "Nenhuma licença prêmio concedida."
+  });
+}
+
+function renderReportCapacitacao() {
+  renderCycleLicenseReport({
+    type: "licenca capacitacao",
+    bodyId: "report-capacitacao-body",
+    cycleSelectId: "report-capacitacao-month",
+    searchInputId: "report-capacitacao-name",
+    selectedCycle: () => selectedCapacitacaoMonth,
+    onSelectedCycle: value => { selectedCapacitacaoMonth = value; },
+    emptyMessage: "Nenhuma licença capacitação concedida."
+  });
+}
+
+// Relatório de licença médica (mês de referência + período; sem ciclos).
+function renderReportMedica() {
+  const reportBody = document.getElementById("report-medica-body");
+  const monthSelect = document.getElementById("report-medica-month");
+  const nameSearch = document.getElementById("report-medica-name");
+  if (!reportBody || !monthSelect || !nameSearch) return;
+
+  const approvedRequests = requests
+    .filter(request => request.status === "approved" && normalizeRequestType(request) === "licenca medica")
+    .sort((left, right) => String(left.person || "").localeCompare(String(right.person || ""), "pt-BR"));
+
+  const availableMonths = new Set(approvedRequests.map(getRequestMonthDisplay).filter(label => label && label !== "Não informado"));
+  monthSelect.innerHTML = `<option value="">Todos os meses</option>${Array.from(availableMonths).sort((left, right) => left.localeCompare(right, "pt-BR")).map(month => `<option value="${escapeHtml(month)}">${escapeHtml(month)}</option>`).join("")}`;
+  if (selectedMedicaMonth && !availableMonths.has(selectedMedicaMonth)) selectedMedicaMonth = "";
+  monthSelect.value = selectedMedicaMonth;
+
+  const nameQuery = nameSearch.value.trim().toLocaleLowerCase("pt-BR");
+  const filteredRequests = approvedRequests.filter(request => {
+    const name = String(request.person || "Não identificado").toLocaleLowerCase("pt-BR");
+    return name.includes(nameQuery) && (!selectedMedicaMonth || getRequestMonthDisplay(request) === selectedMedicaMonth);
+  });
+
+  reportBody.innerHTML = filteredRequests.length
+    ? filteredRequests.map(request => `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(getRequestMonthDisplay(request))}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(getRequestPeriodDisplay(request))}</td></tr>`).join("")
+    : `<tr><td class="detailed-report-empty" colspan="4">Nenhuma licença médica concedida.</td></tr>`;
 }
 
 function getAvailableReportYears(approvedRequests, currentYear) {
@@ -1831,6 +1840,9 @@ function renderRequestsDependentViews() {
   renderReportUnit();
   renderReportPerson();
   renderReportRequests();
+  renderReportPremio();
+  renderReportCapacitacao();
+  renderReportMedica();
   renderReportFg();
   renderVacationTodayStat();
   updateCounts();
@@ -2333,7 +2345,7 @@ function setView(view) {
     toggle.setAttribute("aria-expanded", String(hasActiveItem));
     submenu.hidden = !hasActiveItem;
   });
-  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Unidades", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Cargos", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "cadastro-quadros": ["Quadros", "Cadastro de Quadros", "Cadastre os quadros usados pelos cargos."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatórios", "Relatório de servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-requests": ["Solicitações", "Relatório de solicitações", "Consulte todas as solicitações agrupadas por situação."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-especial": ["Licença especial", "Relatório de licença especial", "Consulte as solicitações de licença especial aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
+  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Unidades", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Cargos", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "cadastro-quadros": ["Quadros", "Cadastro de Quadros", "Cadastre os quadros usados pelos cargos."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatórios", "Relatório de servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-requests": ["Solicitações", "Relatório de solicitações", "Consulte todas as solicitações agrupadas por situação."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-premio": ["Licença prêmio", "Relatório de licença prêmio", "Consulte as solicitações de licença prêmio aprovadas."], "report-medica": ["Licença médica", "Relatório de licença médica", "Consulte as solicitações de licença médica aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
   const [breadcrumb, title, subtitle] = titles[view] || (view === "tasks" ? ["Gestão", "Lista de tarefas", "Registre e acompanhe suas tarefas."] : view === "meta4" ? ["Solicitações", "META 4", "Consulte os pedidos de férias enviados pelos usuários."] : view === "protocols-fg" ? ["Solicitações", "Protocolos F.G", "Acompanhe o status e o número dos protocolos de férias com Função Gratificada."] : titles.overview);
   document.getElementById("breadcrumb-current").textContent = breadcrumb;
   const pageTitle = document.getElementById("page-title");
@@ -2356,8 +2368,9 @@ function setView(view) {
   if (view === "report-person") renderReportPerson();
   if (view === "report-requests") renderReportRequests();
   if (view === "report-servers") renderServerDirectoryReport();
+  if (view === "report-premio") renderReportPremio();
   if (view === "report-capacitacao") renderReportCapacitacao();
-  if (view === "report-especial") renderReportEspecial();
+  if (view === "report-medica") renderReportMedica();
   if (view === "usuarios") {
     // Relê a coleção ao abrir a seção para mostrar acessos pendentes novos.
     if (window.RH_SYNC && window.RH_SYNC.enabled) loadUsuariosFromFirestore();
@@ -3463,10 +3476,15 @@ document.getElementById("report-capacitacao-month").addEventListener("change", e
   selectedCapacitacaoMonth = event.currentTarget.value;
   renderReportCapacitacao();
 });
-document.getElementById("report-especial-name").addEventListener("input", debounce(renderReportEspecial));
-document.getElementById("report-especial-month").addEventListener("change", event => {
-  selectedEspecialMonth = event.currentTarget.value;
-  renderReportEspecial();
+document.getElementById("report-premio-name").addEventListener("input", debounce(renderReportPremio));
+document.getElementById("report-premio-month").addEventListener("change", event => {
+  selectedPremioMonth = event.currentTarget.value;
+  renderReportPremio();
+});
+document.getElementById("report-medica-name").addEventListener("input", debounce(renderReportMedica));
+document.getElementById("report-medica-month").addEventListener("change", event => {
+  selectedMedicaMonth = event.currentTarget.value;
+  renderReportMedica();
 });
 serverDataForm.addEventListener("submit", event => {
   event.preventDefault();

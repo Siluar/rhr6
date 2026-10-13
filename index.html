@@ -95,8 +95,9 @@
               <button class="nav-submenu-link" type="button" data-open-report="report-servers" data-report-count="unit">Relatório de servidores &mdash; Unidade</button>
               <button class="nav-submenu-link" type="button" data-open-report="report-servers" data-report-count="role">Relatório de servidores &mdash; Cargo</button>
               <button class="nav-submenu-link" type="button" data-open-report="report-servers" data-report-count="quadro">Relatório de servidores &mdash; Quadro</button>
-              <button class="nav-submenu-link" type="button" data-view="report-capacitacao">Licença-capacitação</button>
-              <button class="nav-submenu-link" type="button" data-view="report-especial">Licença especial</button>
+              <button class="nav-submenu-link" type="button" data-view="report-premio">Licença prêmio</button>
+              <button class="nav-submenu-link" type="button" data-view="report-capacitacao">Licença capacitação</button>
+              <button class="nav-submenu-link" type="button" data-view="report-medica">Licença médica</button>
             </div>
           </div>
         </nav>
@@ -365,15 +366,26 @@
               <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-capacitacao-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Mês</th><th scope="col">Unidade</th><th scope="col">Período</th></tr></thead><tbody id="report-capacitacao-body"></tbody></table></div>
             </section>
           </section>
-          <section class="view-panel" id="view-report-especial" aria-label="Relatório de licença especial">
-            <section class="panel detailed-reports-panel" aria-labelledby="report-especial-title">
-              <div class="panel-heading"><div><p class="section-kicker">LICENÇAS APROVADAS</p><h2 id="report-especial-title">Relatório de licença especial</h2></div></div>
+          <section class="view-panel" id="view-report-premio" aria-label="Relatório de licença prêmio">
+            <section class="panel detailed-reports-panel" aria-labelledby="report-premio-title">
+              <div class="panel-heading"><div><p class="section-kicker">LICENÇAS CONCEDIDAS</p><h2 id="report-premio-title">Relatório de licença prêmio</h2></div></div>
               <div class="report-capacitacao-filters">
-                <label class="table-search report-capacitacao-name-filter"><i data-lucide="search"></i><input id="report-especial-name" type="search" placeholder="Filtrar servidor pelo nome" aria-label="Filtrar servidor pelo nome" /></label>
-                <label class="report-unit-filter" for="report-especial-month">Ciclo<select id="report-especial-month"><option value="">Todos os ciclos</option></select></label>
+                <label class="table-search report-capacitacao-name-filter"><i data-lucide="search"></i><input id="report-premio-name" type="search" placeholder="Filtrar servidor pelo nome" aria-label="Filtrar servidor pelo nome" /></label>
+                <label class="report-unit-filter" for="report-premio-month">Ciclo<select id="report-premio-month"><option value="">Todos os ciclos</option></select></label>
               </div>
-              <div class="report-export-actions" data-report-export-table="report-especial-table" data-report-export-title="Relatório de licença especial"></div>
-              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-especial-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Mês</th><th scope="col">Unidade</th><th scope="col">Período</th></tr></thead><tbody id="report-especial-body"></tbody></table></div>
+              <div class="report-export-actions" data-report-export-table="report-premio-table" data-report-export-title="Relatório de licença prêmio"></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-premio-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Mês</th><th scope="col">Unidade</th><th scope="col">Período</th></tr></thead><tbody id="report-premio-body"></tbody></table></div>
+            </section>
+          </section>
+          <section class="view-panel" id="view-report-medica" aria-label="Relatório de licença médica">
+            <section class="panel detailed-reports-panel" aria-labelledby="report-medica-title">
+              <div class="panel-heading"><div><p class="section-kicker">LICENÇAS CONCEDIDAS</p><h2 id="report-medica-title">Relatório de licença médica</h2></div></div>
+              <div class="report-capacitacao-filters">
+                <label class="table-search report-capacitacao-name-filter"><i data-lucide="search"></i><input id="report-medica-name" type="search" placeholder="Filtrar servidor pelo nome" aria-label="Filtrar servidor pelo nome" /></label>
+                <label class="report-unit-filter" for="report-medica-month">Mês<select id="report-medica-month"><option value="">Todos os meses</option></select></label>
+              </div>
+              <div class="report-export-actions" data-report-export-table="report-medica-table" data-report-export-title="Relatório de licença médica"></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-medica-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Mês</th><th scope="col">Unidade</th><th scope="col">Período</th></tr></thead><tbody id="report-medica-body"></tbody></table></div>
             </section>
           </section>
           <section class="view-panel" id="view-report-servers" aria-label="Relatório - Servidores">
