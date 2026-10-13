@@ -51,6 +51,27 @@ try {
   }
 } catch {}
 
+// Se o Firebase já tem uma sessão válida, redireciona automaticamente.
+if (window.RH_SYNC && window.RH_SYNC.enabled) {
+  window.RH_SYNC.waitForAuth().then(async user => {
+    if (user && user.email) {
+      const normalizedEmail = String(user.email).toLowerCase();
+      const decision = await resolveGoogleRole(normalizedEmail, user.displayName);
+      if (decision.allowed) {
+        const role = decision.role;
+        try {
+          sessionStorage.setItem("brisa-demo-user", role);
+          sessionStorage.setItem("brisa-demo-username", normalizedEmail);
+          sessionStorage.setItem("brisa-demo-profile", JSON.stringify({ name: user.displayName || normalizedEmail, email: normalizedEmail, role }));
+        } catch {}
+        window.location.href = role === "admin" ? "index.html" : "solicitacao-ferias.html";
+      }
+    }
+  }).catch(error => {
+    console.warn("Não foi possível restaurar a sessão do Firebase:", error);
+  });
+}
+
 if (passwordToggle) {
   passwordToggle.addEventListener("click", () => {
     const shouldShow = passwordInput.type === "password";

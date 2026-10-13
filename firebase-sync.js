@@ -36,6 +36,11 @@
   try {
     if (!firebase.apps.length) firebase.initializeApp(config);
     RH_SYNC._auth = firebase.auth();
+    try {
+      firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    } catch (error) {
+      console.warn("Não foi possível definir a persistência do Firebase Auth:", error);
+    }
     RH_SYNC._db = firebase.firestore();
     RH_SYNC.enabled = true;
   } catch (error) {
