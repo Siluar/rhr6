@@ -126,6 +126,16 @@ editar e excluir), persistida nas coleções do Firestore:
   coleção `servidores`; o **Cadastro de Servidores com Função Gratificada** usa
   a coleção `fgServidores` (a guia "Cadastro de Login", obsoleta com o acesso
   só-Google, foi removida do menu). As tarefas do painel ficam em `tarefas`.
+  O botão **"Importar Excel"** lê uma planilha `.xlsx`, `.xls` ou `.csv` e
+  cadastra os servidores de uma vez: as colunas são reconhecidas **pelo título,
+  em qualquer ordem** (Servidor, E-mail, CPF, RG, Telefone, Quadro, Função,
+  Unidade e, se houver, Data de nascimento e Função Gratificada), procurando a
+  linha de títulos no começo da planilha — pode haver um título antes.
+  Unidades, funções e quadros que ainda não existirem são criados
+  automaticamente, e quem já está cadastrado (mesmo CPF ou e-mail) é **pulado**.
+  **Só o nome é obrigatório:** linhas com outros campos em branco entram mesmo
+  assim e o que ficou faltando é listado em *"Ver o que precisa de atenção"*,
+  para completar depois pela edição (o cadastro manual também só exige o nome).
 - **Cadastro de Unidades** — item **Unidades** próprio na barra lateral para
   criar, editar e excluir as unidades penais (coleção `unidades`). As unidades
   cadastradas alimentam o select "Unidade Penal" do formulário de dados dos

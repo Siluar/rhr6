@@ -423,7 +423,56 @@ test("servidores: colunas na ordem pedida e Função Gratificada na última colu
   });
 });
 
-test("importação: valida as linhas, pula quem já existe e cria o que falta", async () => {
+test("servidores: só o nome é obrigatório, e o resto pode ser completado depois", async () => {
+  await withApp({}, async app => {
+    const { state } = app;
+    app.click('[data-view="server-data"]');
+    await app.settle();
+    const form = app.byId("server-data-form");
+
+    // Sem nome não cadastra (e avisa em vez de ficar calado).
+    app.setValue(form, "name", "");
+    app.submit(form);
+    await app.settle();
+    assert.equal(state().serverPersonalData.length, 0, "linha sem nome não deve ser cadastrada");
+
+    // Só com o nome, o cadastro entra com o resto em branco.
+    app.setValue(form, "name", "Só o Nome");
+    app.submit(form);
+    await app.settle();
+    const soNome = state().serverPersonalData.find(record => record.name === "Só o Nome");
+    assert.ok(soNome, "o cadastro só com o nome deveria entrar");
+    assert.equal(soNome.cpf, "");
+    assert.equal(soNome.rg, "");
+    assert.equal(soNome.birthDate, "");
+    assert.equal(soNome.phone, "");
+    assert.equal(soNome.email, "");
+    assert.equal(soNome.unidadePenal, "");
+    assert.equal(soNome.cargo, "");
+    assert.equal(soNome.quadro, "");
+    assert.match(app.byId("server-data-body").textContent, /Só o Nome/, "deve aparecer na tabela");
+
+    // Depois dá para completar pela edição, aos poucos.
+    app.click(`[data-edit-server-data="${soNome.id}"]`);
+    await app.settle();
+    assert.equal(form.hidden, false, "o formulário deve abrir preenchido para edição");
+    app.setValue(form, "cpf", "123.456.789-09");
+    app.setValue(form, "unidadePenal", "CP Umuarama");
+    app.setValue(form, "cargo", "Policial Penal");
+    app.setValue(form, "quadro", "QPPP");
+    app.submit(form);
+    await app.settle();
+
+    const atualizado = state().serverPersonalData.find(record => record.id === soNome.id);
+    assert.equal(atualizado.cpf, "123.456.789-09", "o CPF foi completado");
+    assert.equal(atualizado.unidadePenal, "CP Umuarama");
+    assert.equal(atualizado.quadro, "QPPP");
+    assert.equal(atualizado.birthDate, "", "o que ainda não foi preenchido continua em branco");
+    assert.equal(state().serverPersonalData.length, 1, "editar não pode duplicar");
+  });
+});
+
+test("importação: linha com dados faltando entra mesmo assim, e o que falta fica listado", async () => {
   await withApp({}, async app => {
     // Já existe um servidor com este CPF.
     createServer(app, { name: "Já Existe", cpf: "11122233344", email: "ja.existe@pp.pr.gov.br" });
@@ -435,32 +484,59 @@ test("importação: valida as linhas, pula quem já existe e cria o que falta", 
       ["Já Existe", "outro@pp.pr.gov.br", "11122233344", "111", "44999990000", "QPPP", "Policial Penal", "CP Umuarama", "Não"],
       ["Sem CPF", "semcpf@pp.pr.gov.br", "123", "222", "44999990000", "QPPP", "Policial Penal", "CP Umuarama", ""],
       ["Novo Lugar", "lugar@pp.pr.gov.br", "98765432100", "333", "44999991111", "QPPE", "Agente de Execução", "Unidade Inédita", "Não"],
-      ["Sem E-mail", "", "55566677788", "444", "44999992222", "QPPP", "Policial Penal", "CP Umuarama", ""]
+      ["Sem E-mail", "", "55566677788", "444", "44999992222", "QPPP", "Policial Penal", "CP Umuarama", ""],
+      ["Só o Nome", "", "", "", "", "", "", "", ""]
     ];
     const plan = app.window.__planServerImport(rows);
 
-    assert.equal(plan.records.length, 2, "só as duas linhas válidas");
+    assert.equal(plan.total, 6, "contei as seis linhas de dados");
+    assert.equal(plan.headerFound, true, "reconheci a linha de títulos");
+    assert.equal(plan.records.length, 5, "todas as linhas com nome entram");
     assert.equal(plan.skipped.length, 1, "uma linha com CPF repetido");
-    assert.equal(plan.errors.length, 2, "CPF inválido e e-mail faltando");
+    assert.equal(plan.errors.length, 0, "nenhuma linha recusada");
+    assert.equal(plan.incomplete.length, 3, "três entraram com dados faltando");
     assert.equal(plan.newUnidades.map(item => item.name).join("|"), "Unidade Inédita", "cria a unidade inédita");
     assert.equal(plan.newCargos.length, 0, "a função já existe no cadastro");
     assert.equal(plan.newQuadros.length, 0, "o quadro já existe no cadastro");
     assert.equal(plan.fgAdds.length, 1, "só quem diz Sim entra no cadastro de Função Gratificada");
     assert.equal(plan.fgAdds[0].name, "Novo Servidor");
-    assert.equal(plan.total, 5, "contei as cinco linhas de dados");
-    assert.equal(plan.headerFound, true, "reconheci a linha de títulos");
 
     const novo = plan.records.find(record => record.email === "novo@pp.pr.gov.br");
-    assert.ok(novo, "a linha válida deveria virar registro");
+    assert.ok(novo, "a linha completa deveria virar registro");
     assert.equal(novo.cpf, "12345678909", "CPF guardado só com dígitos");
     assert.equal(novo.phone, "44988887777", "telefone guardado só com dígitos");
     assert.equal(novo.birthDate, "", "sem data de nascimento na planilha, fica em branco");
     assert.equal(novo.quadro, "QPPP");
     assert.equal(novo.unidadePenal, "CP Umuarama");
 
+    // A linha só com o nome entra com o resto em branco, sem quebrar nada.
+    const soNome = plan.records.find(record => record.name === "Só o Nome");
+    assert.ok(soNome, "a linha só com o nome deveria entrar");
+    assert.equal(soNome.cpf, "");
+    assert.equal(soNome.email, "");
+    assert.equal(soNome.rg, "");
+    assert.equal(soNome.phone, "");
+    assert.equal(soNome.unidadePenal, "");
+    assert.equal(soNome.cargo, "");
+    assert.equal(soNome.quadro, "");
+
     assert.ok(plan.skipped[0].startsWith("Já Existe"), "mensagem aponta a linha repetida");
-    assert.ok(plan.errors.some(item => item.startsWith("Sem CPF")), "aponta o CPF inválido");
-    assert.ok(plan.errors.some(item => item.startsWith("Sem E-mail")), "aponta o e-mail faltando");
+    assert.ok(plan.incomplete.some(item => item.startsWith("Sem CPF")), "aponta o CPF incompleto");
+    assert.ok(plan.incomplete.some(item => item.startsWith("Sem E-mail")), "aponta o e-mail faltando");
+    assert.ok(plan.incomplete.some(item => item.startsWith("Só o Nome")), "aponta a linha só com o nome");
+  });
+});
+
+test("importação: linha sem nome é recusada (é o único campo obrigatório)", async () => {
+  await withApp({}, async app => {
+    const plan = app.window.__planServerImport([
+      ["Servidor", "E-mail", "CPF", "RG", "Telefone", "Quadro", "Função", "Unidade"],
+      ["", "so.email@pp.pr.gov.br", "12345678909", "123", "44999998888", "QPPP", "Policial Penal", "CP Umuarama"]
+    ]);
+    assert.equal(plan.records.length, 0, "sem nome não entra");
+    assert.equal(plan.errors.length, 1, "explica que falta o nome");
+    assert.ok(plan.errors[0].includes("sem o nome"), plan.errors[0]);
+    assert.ok(plan.errors[0].startsWith("so.email@pp.pr.gov.br"), "identifica a linha pelo e-mail");
   });
 });
 
@@ -518,6 +594,7 @@ test("importação: acha a linha de títulos mesmo com um título antes dela", a
     assert.equal(plan.headerFound, true, "deveria achar a linha de títulos");
     assert.equal(plan.records.length, 1, "a única linha de dados deveria entrar");
     assert.equal(plan.errors.length, 0, "o título e o cabeçalho não podem virar erro");
+    assert.equal(plan.incomplete.length, 0, "a linha está completa");
     const record = plan.records[0];
     assert.equal(record.name, "Com Título Antes");
     assert.equal(record.email, "titulo@pp.pr.gov.br", "as colunas não podem trocar de lugar");

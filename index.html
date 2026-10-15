@@ -221,20 +221,21 @@
               <div class="server-data-content">
                 <form class="server-data-form" id="server-data-form" hidden>
                   <label>Nome<input name="name" type="text" autocomplete="name" required /></label>
-                  <label>CPF<input name="cpf" type="text" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="14" required /></label>
-                  <label>RG<input name="rg" type="text" autocomplete="off" required /></label>
-                  <label>Data de nascimento<input name="birthDate" type="date" autocomplete="bday" required /></label>
-                  <label>Telefone celular<input name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" required /></label>
-                  <label>E-mail institucional<input name="email" type="email" autocomplete="email" placeholder="nome@instituicao.gov.br" required /></label>
-                  <label>Unidade Penal<select name="unidadePenal" required>
+                  <label>CPF<input name="cpf" type="text" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="14" /></label>
+                  <label>RG<input name="rg" type="text" autocomplete="off" /></label>
+                  <label>Data de nascimento<input name="birthDate" type="date" autocomplete="bday" /></label>
+                  <label>Telefone celular<input name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(00) 00000-0000" /></label>
+                  <label>E-mail institucional<input name="email" type="email" autocomplete="email" placeholder="nome@instituicao.gov.br" /></label>
+                  <label>Unidade Penal<select name="unidadePenal">
                     <option value="">Selecione a unidade penal</option>
                   </select></label>
-                  <label>Cargo<select name="cargo" required>
+                  <label>Cargo<select name="cargo">
                     <option value="">Selecione o cargo</option>
                   </select></label>
-                  <label>Quadro<select name="quadro" required>
+                  <label>Quadro<select name="quadro">
                     <option value="">Selecione o quadro</option>
                   </select></label>
+                  <p class="server-data-form-note">Só o <strong>nome</strong> é obrigatório. Os outros campos podem ficar em branco e ser preenchidos depois — é o que acontece com quem entra pela planilha.</p>
                   <div class="server-data-form-actions">
                     <button class="button button-primary" id="server-data-submit" type="submit"><i data-lucide="user-round-plus"></i><span>Cadastrar dados</span></button>
                     <button class="button button-secondary" id="server-data-cancel-edit" type="button" hidden>Cancelar edição</button>
@@ -584,7 +585,7 @@
       <div class="request-details-dialog-heading"><div><p class="section-kicker">IMPORTAR</p><h2 id="server-data-import-title">Importar servidores de uma planilha</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
       <form id="server-data-import-form">
         <label for="server-data-import-file">Arquivo do Excel (.xlsx, .xls ou .csv)<input id="server-data-import-file" name="arquivo" type="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" required /></label>
-        <p class="empty-note">Procuro a linha de títulos no começo da planilha (pode haver um título antes). São reconhecidos, em qualquer ordem: <strong>Servidor</strong>, <strong>E-mail</strong>, <strong>CPF</strong>, <strong>RG</strong>, <strong>Telefone</strong>, <strong>Quadro</strong>, <strong>Função</strong> e <strong>Unidade</strong> — e, se existirem, <strong>Data de nascimento</strong> (opcional) e <strong>Função Gratificada</strong> (Sim/Não). Unidades, funções e quadros que ainda não existirem no cadastro são criados automaticamente.</p>
+        <p class="empty-note">Procuro a linha de títulos no começo da planilha (pode haver um título antes). São reconhecidos, em qualquer ordem: <strong>Servidor</strong>, <strong>E-mail</strong>, <strong>CPF</strong>, <strong>RG</strong>, <strong>Telefone</strong>, <strong>Quadro</strong>, <strong>Função</strong> e <strong>Unidade</strong> — e, se existirem, <strong>Data de nascimento</strong> (opcional) e <strong>Função Gratificada</strong> (Sim/Não). Só o <strong>nome</strong> é obrigatório: as linhas com outros campos em branco entram mesmo assim (ficam listadas para você completar depois). Unidades, funções e quadros que ainda não existirem no cadastro são criados automaticamente.</p>
         <p id="server-data-import-message" role="status" aria-live="polite"></p>
         <details class="server-import-problems" id="server-data-import-problems" hidden>
           <summary id="server-data-import-problems-summary">Ver as linhas que não entraram</summary>

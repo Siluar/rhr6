@@ -3603,10 +3603,11 @@ function parseImportDate(value) {
   return `${match[3]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
-// Planeja a importação sem alterar nada: devolve o que será criado e o que foi
-// ignorado (já cadastrado) ou recusado (com o motivo), linha por linha.
+// Planeja a importação sem alterar nada: devolve o que será criado, o que entrou
+// com dados faltando (para preencher depois), o que foi ignorado (já cadastrado)
+// e o que foi recusado (com o motivo), linha por linha.
 function planServerImport(rows) {
-  const plan = { records: [], skipped: [], errors: [], newUnidades: [], newCargos: [], newQuadros: [], fgAdds: [], total: 0, headerFound: false };
+  const plan = { records: [], incomplete: [], skipped: [], errors: [], newUnidades: [], newCargos: [], newQuadros: [], fgAdds: [], total: 0, headerFound: false };
   const mapped = mapServerImportRows(rows);
   const entries = mapped.entries;
   plan.total = entries.length;
@@ -3641,34 +3642,46 @@ function planServerImport(rows) {
     const quadroName = String(entry.quadro || "").trim();
     const label = name || email || `linha ${line}`;
 
-    if (!name || !email || !cpfDigits || !rg || !phoneDigits || !unidadeName || !cargoName) {
-      plan.errors.push(`${label}: faltam dados obrigatórios (Servidor, E-mail, CPF, RG, Telefone, Função e Unidade).`);
-      return;
-    }
-    if (!/^\d{11}$/.test(cpfDigits)) {
-      plan.errors.push(`${label}: CPF inválido (${cpfDigits.length} dígito(s)).`);
-      return;
-    }
-    if (!/^\d{10,11}$/.test(phoneDigits)) {
-      plan.errors.push(`${label}: telefone inválido (precisa de DDD).`);
-      return;
-    }
-    if (takenCpfs.has(cpfDigits)) {
-      plan.skipped.push(`${label}: CPF já cadastrado.`);
-      return;
-    }
-    const emailKey = email.toLocaleLowerCase("pt-BR");
-    if (takenEmails.has(emailKey)) {
-      plan.skipped.push(`${label}: e-mail já cadastrado.`);
+    // Só o nome é obrigatório: sem ele não dá para identificar o servidor.
+    // Os demais campos podem vir em branco e serem preenchidos depois.
+    if (!name) {
+      plan.errors.push(`${label}: sem o nome do servidor (essa linha não entrou).`);
       return;
     }
 
-    // Unidade: usa a do cadastro ou cria uma nova.
-    let unidade = findRegistered(unidades, pendingUnidades, unidadeName);
-    if (!unidade) {
-      unidade = { id: crypto.randomUUID(), name: unidadeName };
-      pendingUnidades.push(unidade);
-      plan.newUnidades.push(unidade);
+    // Campos em branco ou incompletos viram pendência, mas não barram a linha.
+    const gaps = [];
+    if (!cpfDigits) gaps.push("CPF");
+    else if (cpfDigits.length !== 11) gaps.push(`CPF com ${cpfDigits.length} dígito(s)`);
+    if (!rg) gaps.push("RG");
+    if (!phoneDigits) gaps.push("telefone");
+    else if (!/^\d{10,11}$/.test(phoneDigits)) gaps.push("telefone sem DDD");
+    if (!email) gaps.push("e-mail");
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) gaps.push("e-mail inválido");
+    if (!unidadeName) gaps.push("unidade");
+    if (!cargoName) gaps.push("função");
+
+    // Repetidos (só quando há CPF/e-mail) são ignorados para não duplicar.
+    if (cpfDigits && takenCpfs.has(cpfDigits)) {
+      plan.skipped.push(`${label}: CPF já cadastrado (essa linha não entrou).`);
+      return;
+    }
+    const emailKey = email.toLocaleLowerCase("pt-BR");
+    if (emailKey && takenEmails.has(emailKey)) {
+      plan.skipped.push(`${label}: e-mail já cadastrado (essa linha não entrou).`);
+      return;
+    }
+
+    // Unidade: usa a do cadastro ou cria uma nova (só quando informada).
+    let unidadeResolved = "";
+    if (unidadeName) {
+      let unidade = findRegistered(unidades, pendingUnidades, unidadeName);
+      if (!unidade) {
+        unidade = { id: crypto.randomUUID(), name: unidadeName };
+        pendingUnidades.push(unidade);
+        plan.newUnidades.push(unidade);
+      }
+      unidadeResolved = unidade.name;
     }
 
     // Quadro: o do cargo já cadastrado manda; senão o da planilha; senão o padrão do cargo.
@@ -3680,17 +3693,18 @@ function planServerImport(rows) {
       pendingQuadros.push(quadro);
       plan.newQuadros.push(quadro);
     }
-    if (!quadro) {
-      plan.errors.push(`${label}: não consegui definir o quadro (inclua a coluna Quadro).`);
-      return;
-    }
+    const quadroResolved = quadro ? quadro.name : "";
 
     // Função (cargo): usa a do cadastro ou cria uma nova com o quadro resolvido.
-    let cargo = registeredCargo;
-    if (!cargo) {
-      cargo = { id: crypto.randomUUID(), name: cargoName, quadro: quadro.name, observacoes: "" };
-      pendingCargos.push(cargo);
-      plan.newCargos.push(cargo);
+    let cargoResolved = "";
+    if (cargoName) {
+      let cargo = registeredCargo;
+      if (!cargo) {
+        cargo = { id: crypto.randomUUID(), name: cargoName, quadro: quadroResolved, observacoes: "" };
+        pendingCargos.push(cargo);
+        plan.newCargos.push(cargo);
+      }
+      cargoResolved = cargo.name;
     }
 
     const record = {
@@ -3699,17 +3713,19 @@ function planServerImport(rows) {
       birthDate: parseImportDate(entry.birthDate),
       phone: phoneDigits,
       email,
-      unidadePenal: unidade.name,
-      cargo: cargo.name,
-      quadro: quadro.name
+      unidadePenal: unidadeResolved,
+      cargo: cargoResolved,
+      quadro: quadroResolved
     };
     plan.records.push(record);
-    takenCpfs.add(cpfDigits);
-    takenEmails.add(emailKey);
+    if (cpfDigits) takenCpfs.add(cpfDigits);
+    if (emailKey) takenEmails.add(emailKey);
+    if (gaps.length) plan.incomplete.push(`${name}: entrou faltando ${gaps.join(", ")}.`);
 
     // Função Gratificada: quando a planilha indica Sim, entra no cadastro de FG.
-    if (/^(sim|s|x|1|true|verdadeiro)$/.test(normalizeImportText(entry.fg)) && !fgKeys.has(cpfDigits)) {
-      fgKeys.add(cpfDigits);
+    const fgKey = cpfDigits || normalizeImportText(name);
+    if (/^(sim|s|x|1|true|verdadeiro)$/.test(normalizeImportText(entry.fg)) && fgKey && !fgKeys.has(fgKey)) {
+      fgKeys.add(fgKey);
       plan.fgAdds.push({ id: record.id, name: record.name, cpf: record.cpf });
     }
   });
@@ -3763,7 +3779,7 @@ function setServerDataImportProblems(problems) {
     item.textContent = text;
     list.appendChild(item);
   });
-  if (summary) summary.textContent = `Ver as ${problems.length} linha${problems.length === 1 ? "" : "s"} que não entraram`;
+  if (summary) summary.textContent = `Ver o que precisa de atenção (${problems.length})`;
   details.hidden = false;
   details.open = true;
 }
@@ -3817,8 +3833,9 @@ on("server-data-import-form", "submit", async event => {
   renderServerPersonalData();
 
   const parts = [`${plan.records.length} servidor${plan.records.length === 1 ? "" : "es"} importado${plan.records.length === 1 ? "" : "s"}`];
+  if (plan.incomplete.length) parts.push(`${plan.incomplete.length} com dados faltando`);
   if (plan.skipped.length) parts.push(`${plan.skipped.length} ignorado${plan.skipped.length === 1 ? "" : "s"} (já cadastrado${plan.skipped.length === 1 ? "" : "s"})`);
-  if (plan.errors.length) parts.push(`${plan.errors.length} com problema`);
+  if (plan.errors.length) parts.push(`${plan.errors.length} recusado${plan.errors.length === 1 ? "" : "s"}`);
   if (plan.newUnidades.length) parts.push(`${plan.newUnidades.length} unidade${plan.newUnidades.length === 1 ? "" : "s"} criada${plan.newUnidades.length === 1 ? "" : "s"}`);
   if (plan.newCargos.length) parts.push(`${plan.newCargos.length} função${plan.newCargos.length === 1 ? "" : "ões"} criada${plan.newCargos.length === 1 ? "" : "s"}`);
   if (plan.newQuadros.length) parts.push(`${plan.newQuadros.length} quadro${plan.newQuadros.length === 1 ? "" : "s"} criado${plan.newQuadros.length === 1 ? "" : "s"}`);
@@ -3828,16 +3845,17 @@ on("server-data-import-form", "submit", async event => {
   const readNote = ` Li ${plan.total} linha${plan.total === 1 ? "" : "s"} de dados da planilha${sheet.sheetCount > 1 ? ` (usei a aba "${sheet.sheetName}"; a planilha tem ${sheet.sheetCount} abas)` : ""}.`;
   const headerNote = plan.headerFound ? "" : " Não reconheci a linha de títulos; usei a ordem padrão (Servidor, E-mail, CPF, RG, Telefone, Quadro, Função, Unidade).";
   const nothingImported = plan.records.length === 0;
-  setServerDataImportMessage(`${parts.join("; ")}.${createdNote}${readNote}${headerNote}`, plan.errors.length > 0);
-  setServerDataImportProblems([...plan.errors, ...plan.skipped]);
+  const observations = plan.incomplete.length + plan.skipped.length + plan.errors.length;
+  setServerDataImportMessage(`${parts.join("; ")}.${createdNote}${readNote}${headerNote}`, nothingImported && plan.errors.length > 0);
+  setServerDataImportProblems([...plan.errors, ...plan.skipped, ...plan.incomplete]);
   if (plan.errors.length) {
     console.warn("Importação de servidores — linhas com problema:", plan.errors);
   }
   showToast(nothingImported
     ? "Nenhum servidor novo foi importado."
-    : `Importação concluída: ${plan.records.length} servidor${plan.records.length === 1 ? "" : "es"} cadastrado${plan.records.length === 1 ? "" : "s"}.`);
-  // Mantém o diálogo aberto quando nada entrou, para a pessoa ver o motivo.
-  if (!nothingImported) form.closest("dialog").close();
+    : `Importação concluída: ${plan.records.length} servidor${plan.records.length === 1 ? "" : "es"} cadastrado${plan.records.length === 1 ? "" : "s"}${plan.incomplete.length ? ` (${plan.incomplete.length} com dados a preencher)` : ""}.`);
+  // Só fecha sozinho quando não há nada para a pessoa ler (nem faltando, nem ignorado, nem recusado).
+  if (observations === 0) form.closest("dialog").close();
 });
 
 const serverDataForm = document.getElementById("server-data-form");
@@ -4042,7 +4060,7 @@ document.addEventListener("click", event => {
     const previousAccounts = serverAccounts;
     const previousPersonalDataStorage = localStorage.getItem(serverDataStorageKey);
     const previousAccountsStorage = localStorage.getItem(serverAccountsStorageKey);
-    serverAccounts = serverAccounts.filter(account => String(account.cpf || "").replace(/\D/g, "") !== removedCpf);
+    serverAccounts = removedCpf ? serverAccounts.filter(account => String(account.cpf || "").replace(/\D/g, "") !== removedCpf) : serverAccounts;
     const accountsSaved = saveServerAccounts();
     const personalDataSaved = accountsSaved && saveServerPersonalData();
     if (!accountsSaved || !personalDataSaved) {
@@ -4573,14 +4591,19 @@ serverDataForm.addEventListener("submit", event => {
   const editedRecord = editingServerDataId
     ? serverPersonalData.find(record => record.id === editingServerDataId)
     : null;
-  if (!name || !rg || !birthDate || !phone || !email || !unidadePenal || !cargo || !quadro) return;
+  // Só o nome é obrigatório: os outros campos podem ficar em branco (é o caso
+  // de quem entra pela planilha) e serem completados depois, aos poucos.
+  if (!name) {
+    showToast("Informe o nome do servidor. Os outros campos podem ficar em branco.");
+    return;
+  }
   const expectedQuadro = getServerDataQuadroForCargo(cargo);
   if (expectedQuadro && quadro !== expectedQuadro) {
     showToast("O quadro selecionado não corresponde ao cargo informado.");
     return;
   }
-  if (!/^\d{11}$/.test(cpfDigits)) {
-    showToast("Informe um CPF com 11 dígitos.");
+  if (cpfDigits && !/^\d{11}$/.test(cpfDigits)) {
+    showToast("Informe um CPF com 11 dígitos (ou deixe o campo em branco).");
     return;
   }
   if (editingServerDataId && !editedRecord) {
@@ -4589,26 +4612,27 @@ serverDataForm.addEventListener("submit", event => {
     renderServerPersonalData();
     return;
   }
-  if (serverPersonalData.some(record => record.id !== editingServerDataId && String(record.cpf || "").replace(/\D/g, "") === cpfDigits)) {
+  if (cpfDigits && serverPersonalData.some(record => record.id !== editingServerDataId && String(record.cpf || "").replace(/\D/g, "") === cpfDigits)) {
     showToast("Já existem dados cadastrados para esse CPF.");
     return;
   }
-  if (!/^\d{10,11}$/.test(phoneDigits)) {
-    showToast("Informe um telefone celular com DDD.");
+  if (phoneDigits && !/^\d{10,11}$/.test(phoneDigits)) {
+    showToast("Informe um telefone celular com DDD (ou deixe o campo em branco).");
     return;
   }
-  if (birthDate > dateKey(new Date())) {
+  if (birthDate && birthDate > dateKey(new Date())) {
     showToast("A data de nascimento não pode ser futura.");
     return;
   }
-  if (serverPersonalData.some(record => record.id !== editingServerDataId && String(record.email || "").toLocaleLowerCase("pt-BR") === email.toLocaleLowerCase("pt-BR"))) {
+  if (email && serverPersonalData.some(record => record.id !== editingServerDataId && String(record.email || "").toLocaleLowerCase("pt-BR") === email.toLocaleLowerCase("pt-BR"))) {
     showToast("Esse e-mail institucional já está cadastrado.");
     return;
   }
-  const linkedAccount = editedRecord
-    ? serverAccounts.find(account => String(account.cpf || "").replace(/\D/g, "") === String(editedRecord.cpf || "").replace(/\D/g, ""))
+  const editedCpfDigits = String(editedRecord?.cpf || "").replace(/\D/g, "");
+  const linkedAccount = editedRecord && editedCpfDigits
+    ? serverAccounts.find(account => String(account.cpf || "").replace(/\D/g, "") === editedCpfDigits)
     : null;
-  if (linkedAccount && serverAccounts.some(account => account !== linkedAccount && String(account.cpf || "").replace(/\D/g, "") === cpfDigits)) {
+  if (linkedAccount && cpfDigits && serverAccounts.some(account => account !== linkedAccount && String(account.cpf || "").replace(/\D/g, "") === cpfDigits)) {
     showToast("Esse CPF já está vinculado a outra conta de acesso.");
     return;
   }
