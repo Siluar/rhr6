@@ -1185,27 +1185,52 @@
         if (atual) unidadeSelect.value = atual;
       }
 
-      async function loadUnidadesFromCloud() {
+      // Lê as unidades da nuvem usando o MESMO mecanismo do painel
+      // (subscribeDocs / tempo real), que não depende de esperar a sessão.
+      // Se não existir, cai para a leitura única (loadDocs).
+      function loadUnidadesFromCloud() {
         if (!(window.RH_SYNC && window.RH_SYNC.enabled)) return;
-        try {
-          const lista = await window.RH_SYNC.loadDocs('unidades');
+        const aplicar = lista => {
           const unicos = normalizeUnidadesNomes(lista);
           if (unicos.length) {
             populateUnidades(unicos);
             saveUnidadesCache(unicos);
           }
-        } catch (error) {
-          console.warn('Não foi possível carregar as unidades da nuvem; usando a lista local.', error);
+        };
+        if (typeof window.RH_SYNC.subscribeDocs === 'function') {
+          try {
+            window.RH_SYNC.subscribeDocs('unidades', aplicar, error => {
+              console.warn('Assinatura de unidades falhou; usando a lista local.', error);
+            });
+            return;
+          } catch (error) {
+            console.warn('Não foi possível assinar as unidades; tentando leitura única.', error);
+          }
         }
+        Promise.resolve(window.RH_SYNC.loadDocs('unidades')).then(aplicar).catch(error => {
+          console.warn('Não foi possível carregar as unidades da nuvem; usando a lista local.', error);
+        });
       }
 
-      async function loadRequestsForConflictCheck() {
+      // Mesma ideia para as solicitações usadas no aviso de conflito.
+      function loadRequestsForConflictCheck() {
         if (!(window.RH_SYNC && window.RH_SYNC.enabled)) return;
-        try {
-          cloudRequests = await window.RH_SYNC.loadRequests();
-        } catch (error) {
-          console.warn('Não foi possível carregar as solicitações para o aviso de conflito.', error);
+        if (typeof window.RH_SYNC.subscribeRequests === 'function') {
+          try {
+            window.RH_SYNC.subscribeRequests(
+              lista => { cloudRequests = Array.isArray(lista) ? lista : []; },
+              error => console.warn('Assinatura de solicitações falhou; usando a lista local.', error)
+            );
+            return;
+          } catch (error) {
+            console.warn('Não foi possível assinar as solicitações; tentando leitura única.', error);
+          }
         }
+        Promise.resolve(window.RH_SYNC.loadRequests()).then(lista => {
+          cloudRequests = Array.isArray(lista) ? lista : [];
+        }).catch(error => {
+          console.warn('Não foi possível carregar as solicitações para o aviso de conflito.', error);
+        });
       }
 
       // Avisa (sem bloquear) quando outra pessoa da mesma equipe já tem
