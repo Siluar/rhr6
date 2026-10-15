@@ -20,5 +20,11 @@ $RECYCLE.BIN/
 *.tmp
 *.bak
 
+# Dependências de desenvolvimento (testes)
+node_modules/
+
+# Rascunhos locais
+.tmp-check/
+
 # Configuração local com segredos (senha inicial do administrador)
 config.local.js

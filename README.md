@@ -264,18 +264,21 @@ O site pode ser publicado diretamente do repositório via **GitHub Pages**
 | `config.local.example.js` | Modelo da configuração local (referência) |
 | `firebase-sync.js` | Camada de sincronização com o Firestore (backend opcional) |
 | `firestore.rules` | Regras de segurança do Firestore |
-| `package.json` | Scripts de teste (sem dependências) |
+| `package.json` | Scripts de teste (dependência de desenvolvimento: `jsdom`) |
+| `package-lock.json` | Versões travadas das dependências de teste |
 | `test/` | Testes automatizados (`node --test`) |
-| `.github/workflows/test.yml` | CI: roda os testes a cada push/PR |
+| `.github/workflows/test.yml` | CI: instala as dependências e roda os testes a cada push/PR |
 | `run-site.bat` | Atalho para iniciar o site no Windows |
 | `VS- CODE.code-workspace` | Workspace do VS Code |
 
 ## Testes
 
-Não há dependências para instalar. Com o **Node.js 18+**:
+A única dependência é o **`jsdom`** (apenas para desenvolvimento — não vai para o
+site). Com o **Node.js 22+** (o `jsdom` exige Node 22.22+/24+):
 
 ```bash
-npm test        # ou: node --test test/logic.test.js test/smoke.test.js
+npm install     # instala o jsdom (uma vez)
+npm test        # ou: node --test test/logic.test.js test/smoke.test.js test/crud.test.js
 ```
 
 - `test/logic.test.js` — funções puras (formatação de datas, escala de plantão e
@@ -283,6 +286,18 @@ npm test        # ou: node --test test/logic.test.js test/smoke.test.js
 - `test/smoke.test.js` — verifica a sintaxe dos scripts e invariantes do projeto
   (ex.: o calendário abre no mês atual; o login legado foi removido; as regras do
   Firestore aplicam as melhorias).
+- `test/crud.test.js` — testes **ponta a ponta** do CRUD. Carrega o `index.html`
+  real dentro do `jsdom`, injeta um Firestore falso em memória (mesma API do
+  `window.RH_SYNC`) e interage com a tela como um usuário: cria, lê, edita e
+  exclui **unidades, cargos, quadros, servidores, usuários, tarefas e Função
+  Gratificada**, lança/edita/exclui **solicitações**, confere o **sino** de
+  pendentes, o **calendário** (mês atual e alinhamento do 1º dia) e o
+  **backup** (exportar/restaurar). Também valida as travas (não excluir
+  unidade/cargo/quadro em uso; recusar CPF repetido, quadro incompatível, período
+  inválido e férias sobrepostas).
+
+> Estes testes rodam sem navegador e sem o Firebase de verdade. O login do Google
+> e a gravação real no Firestore continuam exigindo um teste manual no navegador.
 
 O workflow em `.github/workflows/test.yml` roda os testes automaticamente no
 GitHub a cada `push`/`pull request` para a branch `main`.
