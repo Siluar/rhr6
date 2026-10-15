@@ -313,6 +313,32 @@
 
       .message.error { color: #a0352b; }
 
+      .submit-fallback {
+        margin-top: 8px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--soft);
+      }
+
+      .submit-fallback-title {
+        margin: 0 0 6px;
+        font-weight: 700;
+      }
+
+      .submit-fallback-note {
+        margin: 0 0 12px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.5;
+      }
+
+      .submit-fallback-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
       @media (max-width: 940px) {
         .request-header {
           flex-wrap: wrap;
@@ -516,6 +542,16 @@
               </div>
 
               <p id="submit-message" class="message" aria-live="polite"></p>
+
+              <div id="submit-fallback" class="submit-fallback hidden" aria-live="polite">
+                <p class="submit-fallback-title">O seu e-mail não abriu? Envie a solicitação de outra forma:</p>
+                <p class="submit-fallback-note">Destinatários: <strong id="fallback-recipients"></strong> &middot; Cópia para <span id="fallback-copy"></span></p>
+                <div class="submit-fallback-actions">
+                  <button type="button" class="button button-secondary" id="copy-request">Copiar dados da solicitação</button>
+                  <a class="button button-secondary" id="open-gmail" href="#" target="_blank" rel="noopener">Abrir no Gmail</a>
+                  <a class="button button-secondary" id="open-outlook" href="#" target="_blank" rel="noopener">Abrir no Outlook</a>
+                </div>
+              </div>
             </form>
           </div>
         </div>
@@ -812,7 +848,54 @@
         if (submitMessage) submitMessage.textContent = '';
       });
 
-      document.getElementById('vacation-form').addEventListener('submit', function (event) {
+      let lastRequestEmail = null;
+
+      // Envio automático de e-mail (opcional). Só funciona se as chaves do
+      // EmailJS estiverem preenchidas em config.js; caso contrário retorna false
+      // e o formulário usa o rascunho (mailto:) normalmente.
+      async function tryAutoSendRequest(payload) {
+        const cfg = window.RH_CONFIG && window.RH_CONFIG.emailjs;
+        if (!cfg || !cfg.publicKey || !cfg.serviceId || !cfg.templateId) return false;
+        try {
+          if (!window.emailjs) {
+            await new Promise((resolve, reject) => {
+              const script = document.createElement('script');
+              script.src = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js';
+              script.onload = resolve;
+              script.onerror = reject;
+              document.head.appendChild(script);
+            });
+            window.emailjs.init({ publicKey: cfg.publicKey });
+          }
+          await window.emailjs.send(cfg.serviceId, cfg.templateId, {
+            to_email: payload.recipients,
+            cc_email: payload.emailUsuario,
+            subject: `Solicitação de ${payload.tipo} - ${payload.nome}`,
+            message: payload.body
+          });
+          return true;
+        } catch (error) {
+          console.warn('Envio automático de e-mail indisponível; abrindo rascunho (mailto).', error);
+          return false;
+        }
+      }
+
+      const copyRequestButton = document.getElementById('copy-request');
+      if (copyRequestButton) {
+        copyRequestButton.addEventListener('click', async () => {
+          if (!lastRequestEmail) return;
+          const texto = `Para: ${lastRequestEmail.recipients}\nAssunto: Solicitação de ${lastRequestEmail.tipo} - ${lastRequestEmail.nome}\n\n${lastRequestEmail.body}`;
+          try {
+            await navigator.clipboard.writeText(texto);
+            copyRequestButton.textContent = 'Copiado!';
+          } catch (error) {
+            copyRequestButton.textContent = 'Não foi possível copiar';
+          }
+          setTimeout(() => { copyRequestButton.textContent = 'Copiar dados da solicitação'; }, 2500);
+        });
+      }
+
+      document.getElementById('vacation-form').addEventListener('submit', async function (event) {
         event.preventDefault();
 
         if ((loggedUser !== 'usuario' && loggedUser !== 'admin') || !autoName) {
@@ -858,7 +941,11 @@
           ? otherTypeInput.value.trim()
           : config.title;
         const ciclo = isCycle ? cycleSelect.value : '';
-        const rhEmail = 'centralrhumuarama@policiapenal.pr.gov.br';
+        const rhEmails = (Array.isArray(window.RH_CONFIG && window.RH_CONFIG.notificationEmails) && window.RH_CONFIG.notificationEmails.length
+          ? window.RH_CONFIG.notificationEmails
+          : ['centralrhumuarama@policiapenal.pr.gov.br', 'imc.sidnei@gmail.com'])
+          .map(value => String(value || '').trim())
+          .filter(Boolean);
         const storageKey = 'brisa-vacation-requests-v1';
 
         const initials = nome
@@ -969,7 +1056,7 @@
         }
 
         const subject = encodeURIComponent(`Solicitação de ${tipoSolicitacao} - ${nome}`);
-        const body = encodeURIComponent(
+        const bodyPlain =
           `Solicitação: ${tipoSolicitacao}\n\n` +
           `Nome: ${nome}\n` +
           `E-mail do usuário: ${emailUsuario}\n` +
@@ -982,12 +1069,45 @@
           (dataSolicitacao ? `Mês de referência: ${dataSolicitacao}\n` : '\n') +
           (inicioFerias ? `Início: ${inicioFerias}\n` : '') +
           (fimFerias ? `Término: ${fimFerias}\n\n` : '\n') +
-          `Esta solicitação foi enviada para a Central de Recursos Humanos e também foi encaminhada em cópia para o e-mail do usuário.`
-        );
+          `Solicitação enviada pelo formulário da Central de Recursos Humanos.`;
+        const body = encodeURIComponent(bodyPlain);
 
-        window.location.href = `mailto:${rhEmail}?cc=${encodeURIComponent(emailUsuario)}&subject=${subject}&body=${body}`;
+        const recipients = rhEmails.join(',');
+        const recipientsForUrl = encodeURIComponent(recipients);
+        const ccForUrl = encodeURIComponent(emailUsuario);
 
-        submitMessage.textContent = 'Solicitação enviada com sucesso. Um e-mail foi aberto com cópia para o usuário e para a Central de Recursos Humanos.';
+        lastRequestEmail = { recipients, tipo: tipoSolicitacao, nome, emailUsuario, body: bodyPlain };
+
+        // Alternativas de envio, para o caso de o aplicativo de e-mail não abrir.
+        const fallbackBox = document.getElementById('submit-fallback');
+        const fallbackRecipients = document.getElementById('fallback-recipients');
+        const fallbackCopy = document.getElementById('fallback-copy');
+        const gmailLink = document.getElementById('open-gmail');
+        const outlookLink = document.getElementById('open-outlook');
+        if (fallbackRecipients) fallbackRecipients.textContent = recipients;
+        if (fallbackCopy) fallbackCopy.textContent = emailUsuario;
+        if (gmailLink) gmailLink.href = `https://mail.google.com/mail/?view=cm&fs=1&to=${recipientsForUrl}&cc=${ccForUrl}&su=${subject}&body=${body}`;
+        if (outlookLink) outlookLink.href = `https://outlook.office.com/mail/deeplink/compose?to=${recipientsForUrl}&subject=${subject}&body=${body}`;
+
+        // Tenta o envio automático (se configurado). Se não estiver, ou falhar,
+        // abre o rascunho no aplicativo de e-mail do usuário.
+        const sentAutomatically = await tryAutoSendRequest({ recipients, emailUsuario, tipo: tipoSolicitacao, nome, body: bodyPlain });
+
+        if (sentAutomatically) {
+          if (fallbackBox) fallbackBox.classList.add('hidden');
+          if (submitMessage) {
+            submitMessage.classList.remove('error');
+            submitMessage.textContent = 'Solicitação enviada por e-mail para ' + recipients + ', com cópia para você.';
+          }
+        } else {
+          window.location.href = `mailto:${recipients}?cc=${ccForUrl}&subject=${subject}&body=${body}`;
+          if (fallbackBox) fallbackBox.classList.remove('hidden');
+          if (submitMessage) {
+            submitMessage.classList.remove('error');
+            submitMessage.textContent = 'Solicitação registrada. Abrimos um rascunho de e-mail para ' + recipients + ', com cópia para você — revise e clique em "Enviar" no seu e-mail. Se o rascunho não abrir, use as opções abaixo.';
+          }
+        }
+
         this.reset();
         document.getElementById('nome').value = autoName;
         document.getElementById('cpf').value = cpf;

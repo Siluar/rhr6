@@ -19,6 +19,25 @@ window.RH_CONFIG = Object.assign({}, window.RH_CONFIG, {
     "sidnei@policiapenal.pr.gov.br"
   ],
 
+  // Destinatários das solicitações feitas no formulário público
+  // (solicitacao-ferias.html). O e-mail informado pelo próprio solicitante
+  // entra automaticamente em cópia (CC).
+  notificationEmails: [
+    "centralrhumuarama@policiapenal.pr.gov.br",
+    "imc.sidnei@gmail.com"
+  ],
+
+  // Envio AUTOMÁTICO de e-mail (opcional). Enquanto os campos abaixo estiverem
+  // vazios, o formulário apenas abre o rascunho no aplicativo de e-mail do
+  // usuário (mailto:) e mostra as opções alternativas na tela.
+  // Para ativar o envio automático, crie uma conta gratuita em https://emailjs.com,
+  // configure um serviço/template e preencha os três valores abaixo.
+  emailjs: {
+    publicKey: "",
+    serviceId: "",
+    templateId: ""
+  },
+
   // Configuracao do Firebase (Console > Configuracoes do projeto > Seus apps > Web).
   // Enquanto estiver null, o app usa apenas o armazenamento local do navegador.
   firebase: {
