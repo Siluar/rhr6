@@ -3555,17 +3555,30 @@ function normalizeImportText(value) {
 }
 
 // Converte a planilha (matriz de células) em uma lista de objetos do cadastro.
+// Devolve também se a linha de títulos foi reconhecida (para avisar o usuário).
 function mapServerImportRows(rows) {
   const list = (Array.isArray(rows) ? rows : []).filter(row => Array.isArray(row) && row.some(cell => String(cell == null ? "" : cell).trim()));
-  if (list.length === 0) return [];
-  const header = list[0].map(normalizeImportText);
-  const fieldsByColumn = header.map(text => {
-    const hit = serverImportColumns.find(([, pattern]) => pattern.test(text));
+  if (list.length === 0) return { entries: [], hasHeader: false, listedRows: 0 };
+  const fieldsOf = row => row.map(text => {
+    const hit = serverImportColumns.find(([, pattern]) => pattern.test(String(text == null ? "" : text)));
     return hit ? hit[0] : "";
   });
-  const hasHeader = fieldsByColumn.filter(Boolean).length >= 3;
-  const dataRows = hasHeader ? list.slice(1) : list;
-  return dataRows.map(row => {
+  // A planilha pode ter um título antes do cabeçalho (ou colunas fora de
+  // ordem): procuro, nas primeiras linhas, a que reconhece mais títulos.
+  let headerIndex = -1;
+  let bestScore = 2; // precisa reconhecer pelo menos 3 colunas para valer como cabeçalho
+  const scanLimit = Math.min(list.length, 15);
+  for (let index = 0; index < scanLimit; index += 1) {
+    const score = fieldsOf(list[index].map(normalizeImportText)).filter(Boolean).length;
+    if (score > bestScore) {
+      bestScore = score;
+      headerIndex = index;
+    }
+  }
+  const hasHeader = headerIndex >= 0;
+  const fieldsByColumn = hasHeader ? fieldsOf(list[headerIndex].map(normalizeImportText)) : [];
+  const dataRows = hasHeader ? list.slice(headerIndex + 1) : list;
+  const entries = dataRows.map(row => {
     const entry = {};
     row.forEach((cell, index) => {
       const field = hasHeader ? fieldsByColumn[index] : serverImportFallbackOrder[index];
@@ -3574,6 +3587,7 @@ function mapServerImportRows(rows) {
     });
     return entry;
   });
+  return { entries, hasHeader, listedRows: list.length };
 }
 
 // Aceita 1990-05-10, 10/05/1990, 10-05-1990. Devolve "" quando não dá para ler.
@@ -3592,8 +3606,11 @@ function parseImportDate(value) {
 // Planeja a importação sem alterar nada: devolve o que será criado e o que foi
 // ignorado (já cadastrado) ou recusado (com o motivo), linha por linha.
 function planServerImport(rows) {
-  const plan = { records: [], skipped: [], errors: [], newUnidades: [], newCargos: [], newQuadros: [], fgAdds: [] };
-  const entries = mapServerImportRows(rows);
+  const plan = { records: [], skipped: [], errors: [], newUnidades: [], newCargos: [], newQuadros: [], fgAdds: [], total: 0, headerFound: false };
+  const mapped = mapServerImportRows(rows);
+  const entries = mapped.entries;
+  plan.total = entries.length;
+  plan.headerFound = mapped.hasHeader;
   if (entries.length === 0) {
     plan.errors.push("Não encontrei nenhuma linha de dados na planilha.");
     return plan;
@@ -3700,22 +3717,25 @@ function planServerImport(rows) {
   return plan;
 }
 
-// Lê o arquivo escolhido e devolve a matriz de células da primeira aba.
+// Lê o arquivo escolhido e devolve as linhas da primeira aba, junto do nome da
+// aba e de quantas abas a planilha tem (para avisar se usamos a aba certa).
 async function readSpreadsheetRows(file) {
   const fileName = String(file.name || "").toLocaleLowerCase("pt-BR");
   if (fileName.endsWith(".csv")) {
     const text = await file.text();
     const lines = text.split(/\r?\n/).filter(line => line.trim());
     const delimiter = (lines[0] || "").includes("\t") ? "\t" : (lines[0] || "").includes(";") ? ";" : (lines[0] || "").includes(",") ? "," : ";";
-    return lines.map(line => line.split(delimiter).map(cell => cell.replace(/^"|"$/g, "").trim()));
+    return { rows: lines.map(line => line.split(delimiter).map(cell => cell.replace(/^"|"$/g, "").trim())), sheetName: file.name, sheetCount: 1 };
   }
   if (typeof XLSX === "undefined") {
     throw new Error("Biblioteca de planilhas indisponível");
   }
   const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
   if (!sheet) throw new Error("Planilha vazia");
-  return XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "", blankrows: false });
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "", blankrows: false });
+  return { rows, sheetName, sheetCount: workbook.SheetNames.length };
 }
 
 function setServerDataImportMessage(message, isError) {
@@ -3725,12 +3745,36 @@ function setServerDataImportMessage(message, isError) {
   element.classList.toggle("error", Boolean(isError));
 }
 
+// Lista, uma a uma, as linhas que não entraram (recusadas ou já cadastradas).
+function setServerDataImportProblems(problems) {
+  const details = document.getElementById("server-data-import-problems");
+  const list = document.getElementById("server-data-import-problems-list");
+  const summary = document.getElementById("server-data-import-problems-summary");
+  if (!details || !list) return;
+  list.innerHTML = "";
+  if (!problems.length) {
+    details.hidden = true;
+    details.open = false;
+    if (summary) summary.textContent = "";
+    return;
+  }
+  problems.forEach(text => {
+    const item = document.createElement("li");
+    item.textContent = text;
+    list.appendChild(item);
+  });
+  if (summary) summary.textContent = `Ver as ${problems.length} linha${problems.length === 1 ? "" : "s"} que não entraram`;
+  details.hidden = false;
+  details.open = true;
+}
+
 on("server-data-import", "click", () => {
   const dialog = document.getElementById("server-data-import-dialog");
   if (!dialog) return;
   const form = document.getElementById("server-data-import-form");
   if (form) form.reset();
   setServerDataImportMessage("");
+  setServerDataImportProblems([]);
   dialog.showModal();
 });
 on("server-data-import-cancel", "click", () => {
@@ -3747,16 +3791,16 @@ on("server-data-import-form", "submit", async event => {
     return;
   }
   setServerDataImportMessage("Lendo a planilha...");
-  let rows;
+  let sheet;
   try {
-    rows = await readSpreadsheetRows(file);
+    sheet = await readSpreadsheetRows(file);
   } catch (error) {
     const detail = error instanceof Error ? ` (${error.message})` : "";
     setServerDataImportMessage(`Não consegui ler o arquivo${detail}. Use um .xlsx, .xls ou .csv salvo pelo Excel.`, true);
     return;
   }
 
-  const plan = planServerImport(rows);
+  const plan = planServerImport(sheet.rows);
   plan.newUnidades.forEach(item => unidades.push(item));
   plan.newQuadros.forEach(item => quadros.push(item));
   plan.newCargos.forEach(item => cargos.push(item));
@@ -3780,10 +3824,12 @@ on("server-data-import-form", "submit", async event => {
   if (plan.newQuadros.length) parts.push(`${plan.newQuadros.length} quadro${plan.newQuadros.length === 1 ? "" : "s"} criado${plan.newQuadros.length === 1 ? "" : "s"}`);
   if (plan.fgAdds.length) parts.push(`${plan.fgAdds.length} com Função Gratificada`);
   const created = [...plan.newUnidades, ...plan.newCargos, ...plan.newQuadros].map(item => item.name);
-  const details = [...plan.errors, ...plan.skipped].slice(0, 6);
   const createdNote = created.length ? ` Novos no cadastro: ${created.join(", ")}.` : "";
+  const readNote = ` Li ${plan.total} linha${plan.total === 1 ? "" : "s"} de dados da planilha${sheet.sheetCount > 1 ? ` (usei a aba "${sheet.sheetName}"; a planilha tem ${sheet.sheetCount} abas)` : ""}.`;
+  const headerNote = plan.headerFound ? "" : " Não reconheci a linha de títulos; usei a ordem padrão (Servidor, E-mail, CPF, RG, Telefone, Quadro, Função, Unidade).";
   const nothingImported = plan.records.length === 0;
-  setServerDataImportMessage(`${parts.join("; ")}.${createdNote}${details.length ? ` ${details.join(" ")}` : ""}`, plan.errors.length > 0);
+  setServerDataImportMessage(`${parts.join("; ")}.${createdNote}${readNote}${headerNote}`, plan.errors.length > 0);
+  setServerDataImportProblems([...plan.errors, ...plan.skipped]);
   if (plan.errors.length) {
     console.warn("Importação de servidores — linhas com problema:", plan.errors);
   }

@@ -447,6 +447,8 @@ test("importação: valida as linhas, pula quem já existe e cria o que falta", 
     assert.equal(plan.newQuadros.length, 0, "o quadro já existe no cadastro");
     assert.equal(plan.fgAdds.length, 1, "só quem diz Sim entra no cadastro de Função Gratificada");
     assert.equal(plan.fgAdds[0].name, "Novo Servidor");
+    assert.equal(plan.total, 5, "contei as cinco linhas de dados");
+    assert.equal(plan.headerFound, true, "reconheci a linha de títulos");
 
     const novo = plan.records.find(record => record.email === "novo@pp.pr.gov.br");
     assert.ok(novo, "a linha válida deveria virar registro");
@@ -500,6 +502,30 @@ test("importação: lê um arquivo .csv, cadastra e mostra na tabela", async () 
     const secondMessage = app.byId("server-data-import-message").textContent;
     assert.equal(app.state().serverPersonalData.length, 2, "nenhum duplicado no segundo envio");
     assert.ok(secondMessage.includes("ignorado"), `a mensagem deve explicar: ${secondMessage}`);
+  });
+});
+
+test("importação: acha a linha de títulos mesmo com um título antes dela", async () => {
+  await withApp({}, async app => {
+    const rows = [
+      ["RELAÇÃO DE SERVIDORES - CR-6 UMUARAMA"],
+      [],
+      ["NOME DO SERVIDOR", "E-MAIL", "CPF", "RG", "TELEFONE", "QUADRO", "FUNÇÃO", "UNIDADE"],
+      ["Com Título Antes", "titulo@pp.pr.gov.br", "123.456.789-09", "12345", "44999998888", "QPPP", "Policial Penal", "CP Umuarama"]
+    ];
+    const plan = app.window.__planServerImport(rows);
+
+    assert.equal(plan.headerFound, true, "deveria achar a linha de títulos");
+    assert.equal(plan.records.length, 1, "a única linha de dados deveria entrar");
+    assert.equal(plan.errors.length, 0, "o título e o cabeçalho não podem virar erro");
+    const record = plan.records[0];
+    assert.equal(record.name, "Com Título Antes");
+    assert.equal(record.email, "titulo@pp.pr.gov.br", "as colunas não podem trocar de lugar");
+    assert.equal(record.cpf, "12345678909");
+    assert.equal(record.phone, "44999998888");
+    assert.equal(record.quadro, "QPPP");
+    assert.equal(record.cargo, "Policial Penal");
+    assert.equal(record.unidadePenal, "CP Umuarama");
   });
 });
 

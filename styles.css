@@ -390,6 +390,12 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 .crud-dialog textarea { min-height: 84px; resize: vertical; }
 .crud-dialog #usuario-message, .crud-dialog #request-edit-message { min-height: 20px; margin: 0; color: #31664d; font-size: 12px; }
 .crud-dialog #usuario-message.error, .crud-dialog #request-edit-message.error { color: #a0352b; }
+.crud-dialog #server-data-import-message { min-height: 20px; margin: 10px 0 0; color: #31664d; font-size: 12px; }
+.crud-dialog #server-data-import-message.error { color: #a0352b; }
+.server-import-problems { margin-top: 8px; color: #3e4a40; font-size: 12px; }
+.server-import-problems > summary { cursor: pointer; font-weight: 600; }
+.server-import-problems ul { max-height: 34vh; margin: 8px 0 0; padding-left: 18px; overflow-y: auto; }
+.server-import-problems li { margin-bottom: 4px; line-height: 1.45; }
 .usuario-perfil-select { min-height: 32px; padding: 4px 8px; border: 1px solid #c4cbc3; border-radius: 5px; background: #fff; color: #20272c; font: inherit; font-size: 12px; }
 .server-data-panel { margin-top: 14px; }
 .detailed-report-table-wrap, .current-vacations-table-wrap { max-width: 100%; overflow-x: auto; }

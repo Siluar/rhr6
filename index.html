@@ -584,8 +584,12 @@
       <div class="request-details-dialog-heading"><div><p class="section-kicker">IMPORTAR</p><h2 id="server-data-import-title">Importar servidores de uma planilha</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
       <form id="server-data-import-form">
         <label for="server-data-import-file">Arquivo do Excel (.xlsx, .xls ou .csv)<input id="server-data-import-file" name="arquivo" type="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" required /></label>
-        <p class="empty-note">A primeira linha deve ter os títulos das colunas. São reconhecidos, em qualquer ordem: <strong>Servidor</strong>, <strong>E-mail</strong>, <strong>CPF</strong>, <strong>RG</strong>, <strong>Telefone</strong>, <strong>Quadro</strong>, <strong>Função</strong> e <strong>Unidade</strong> — e, se existirem, <strong>Data de nascimento</strong> (opcional) e <strong>Função Gratificada</strong> (Sim/Não). Unidades, funções e quadros que ainda não existirem no cadastro são criados automaticamente.</p>
+        <p class="empty-note">Procuro a linha de títulos no começo da planilha (pode haver um título antes). São reconhecidos, em qualquer ordem: <strong>Servidor</strong>, <strong>E-mail</strong>, <strong>CPF</strong>, <strong>RG</strong>, <strong>Telefone</strong>, <strong>Quadro</strong>, <strong>Função</strong> e <strong>Unidade</strong> — e, se existirem, <strong>Data de nascimento</strong> (opcional) e <strong>Função Gratificada</strong> (Sim/Não). Unidades, funções e quadros que ainda não existirem no cadastro são criados automaticamente.</p>
         <p id="server-data-import-message" role="status" aria-live="polite"></p>
+        <details class="server-import-problems" id="server-data-import-problems" hidden>
+          <summary id="server-data-import-problems-summary">Ver as linhas que não entraram</summary>
+          <ul id="server-data-import-problems-list"></ul>
+        </details>
         <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="server-data-import-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="upload"></i><span>Importar servidores</span></button></div>
       </form>
     </dialog>
