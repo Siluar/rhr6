@@ -92,8 +92,11 @@ test("as regras do Firestore aplicam as melhorias de segurança", () => {
   assert.ok(rules.includes("optionalBoundedString"), "falta o limitador de tamanho de campos");
   assert.ok(rules.includes("email == request.auth.token.email || isOwner()"),
     "o get de usuarios deve ser restrito ao próprio usuário ou dono");
-  // A leitura de unidades deve valer para usuários aprovados (formulário público).
+  // A leitura de unidades e publica: o formulario de solicitacao precisa listar
+  // as unidades independente da sessao. A escrita continua so para admin.
   const unidadesBlock = rules.slice(rules.indexOf("match /unidades/"));
-  assert.ok(unidadesBlock.slice(0, 200).includes("isApproved()"),
-    "unidades deve poder ser lida por usuários aprovados");
+  assert.ok(unidadesBlock.slice(0, 120).includes("allow read, list: if true;"),
+    "unidades deve ter leitura publica");
+  assert.ok(unidadesBlock.slice(0, 200).includes("allow create, update, delete: if isAdmin();"),
+    "a escrita de unidades continua restrita ao admin");
 });

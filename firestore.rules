@@ -90,10 +90,11 @@ service cloud.firestore {
     }
 
     // Cadastro basico de unidades, cargos e quadros.
-    // Leitura liberada para usuarios aprovados (a pagina de solicitacao precisa
-    // listar as unidades); a escrita continua restrita ao admin.
+    // A LEITURA das unidades e publica: o formulario de solicitacao precisa
+    // listar as unidades mesmo antes/independente da sessao (nao ha dado pessoal
+    // aqui, apenas os nomes das unidades). A escrita continua restrita ao admin.
     match /unidades/{id} {
-      allow read, list: if isApproved();
+      allow read, list: if true;
       allow create, update, delete: if isAdmin();
     }
 
