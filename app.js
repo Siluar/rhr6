@@ -2520,6 +2520,8 @@ function renderCalendar(elementId, compact) {
   const todayKey = dateKey(new Date());
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const weekdaysMarkup = weekdays.map(day => `<span class="calendar-weekday">${day}</span>`).join("");
+  // Alinha o primeiro dia do mês na coluna do dia da semana correto (D=0).
+  const emptyDaysMarkup = Array.from({ length: new Date(year, month, 1).getDay() }, () => `<span class="calendar-empty" aria-hidden="true"></span>`).join("");
   const daysMarkup = Array.from({ length: daysInMonth }, (_, index) => {
     const day = new Date(year, month, index + 1);
     const key = dateKey(day);
@@ -2539,7 +2541,7 @@ function renderCalendar(elementId, compact) {
     const eventMarkup = compact ? `<span class="calendar-day-shift compact-shift ${teamClass}">${teamDisplay}</span><span class="day-dots">${events.slice(0, 3).map(item => `<i class="${item.status === "pending" ? "dot-peach" : "dot-green"}"></i>`).join("")}</span>` : `<span class="calendar-day-shift ${teamClass}">${teamDisplay}</span><span class="calendar-day-events">${events.slice(0, 2).map(item => `<span class="calendar-entry ${item.status === "pending" ? "entry-pending" : "entry-approved"} ${isAlfa ? "team-entry-alfa" : isBravo ? "team-entry-bravo" : isCharlie ? "team-entry-charlie" : isDelta ? "team-entry-delta" : ""}">${escapeHtml(item.person.split(" ")[0].toUpperCase())}</span>`).join("")}</span>`;
     return `<button class="${classes} ${teamClass}" data-date="${key}" aria-label="${day.getDate()} de ${monthNames[day.getMonth()]}, equipe ${teamDisplay} em escala"><span class="calendar-day-number">${day.getDate()}</span>${eventMarkup}</button>`;
   }).join("");
-  grid.innerHTML = weekdaysMarkup + daysMarkup;
+  grid.innerHTML = weekdaysMarkup + emptyDaysMarkup + daysMarkup;
 }
 function dateKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;

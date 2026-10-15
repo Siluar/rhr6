@@ -162,6 +162,7 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 .today-button { padding: 5px 9px; border: 1px solid var(--line); border-radius: 4px; background: white; color: #707970; cursor: pointer; font-size: 9px; }.today-button:hover { background: #f5f7f2; }
 .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
 .calendar-weekday { display: grid; height: 26px; place-items: center; color: #7d847d; font-size: 7px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; }
+.calendar-empty { min-height: var(--calendar-scale-height, 72px); }
 .calendar-day { position: relative; display: flex; min-width: 0; min-height: var(--calendar-scale-height, 72px); flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px 4px; border: 1px solid #e7e8e3; border-radius: 4px; background: #f7f7f5; color: #606b62; cursor: pointer; font-size: 10px; }
 .calendar-day:hover { background: #f0f4ef; }.calendar-day.outside-month { color: #c2c5bd; }
 .calendar-day-number { display: block; width: 100%; text-align: center; font-size: 11px; font-weight: 800; letter-spacing: 0.02em; }
