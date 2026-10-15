@@ -448,15 +448,18 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
   .task-calendar-day { padding: 3px; }
   .task-calendar-event { font-size: 8px; }
 }
-#view-server-fg .detailed-report-table { width: min(100%, 860px); table-layout: fixed; }
+#view-server-fg .detailed-report-table { width: min(100%, 1000px); table-layout: fixed; }
 #view-server-fg .detailed-report-table th, #view-server-fg .detailed-report-table td { text-align: left; }
-#view-server-fg .detailed-report-table th:first-child, #view-server-fg .detailed-report-table td:first-child { width: 42%; }
-#view-server-fg .detailed-report-table th:nth-child(2), #view-server-fg .detailed-report-table td:nth-child(2) { width: 32%; }
-#view-server-fg .detailed-report-table th:last-child, #view-server-fg .detailed-report-table td:last-child { width: 26%; }
+#view-server-fg .detailed-report-table th:first-child, #view-server-fg .detailed-report-table td:first-child { width: 26%; }
+#view-server-fg .detailed-report-table th:nth-child(2), #view-server-fg .detailed-report-table td:nth-child(2) { width: 20%; }
+#view-server-fg .detailed-report-table th:nth-child(3), #view-server-fg .detailed-report-table td:nth-child(3) { width: 22%; }
+#view-server-fg .detailed-report-table th:nth-child(4), #view-server-fg .detailed-report-table td:nth-child(4) { width: 22%; }
+#view-server-fg .detailed-report-table th:last-child, #view-server-fg .detailed-report-table td:last-child { width: 10%; }
 #view-server-fg .detailed-report-table td.detailed-report-empty { width: auto; text-align: center; }
-.server-fg-form { display: flex; max-width: 720px; align-items: end; gap: 12px; margin: 16px 0 22px; color: #000; font-size: 12px; font-weight: 600; }
+.fg-function-select { width: 100%; min-height: 32px; padding: 0 6px; border: 1px solid #c4cbc3; border-radius: 5px; background: #fff; color: #000; font: inherit; font-size: 12px; }
+.server-fg-form { display: flex; max-width: 1000px; align-items: end; gap: 12px; margin: 16px 0 22px; color: #000; font-size: 12px; font-weight: 600; }
 .server-fg-form label { display: grid; min-width: 0; flex: 1; gap: 6px; }
-.server-fg-form select { width: 100%; min-height: 38px; padding: 0 10px; border: 1px solid #c4cbc3; border-radius: 5px; background: #fff; color: #000; font: inherit; }
+.server-fg-form input, .server-fg-form select { width: 100%; min-height: 38px; padding: 0 10px; border: 1px solid #c4cbc3; border-radius: 5px; background: #fff; color: #000; font: inherit; }
 .server-fg-form .button { min-height: 38px; }
 .server-data-content { padding-top: 8px; }
 .server-data-form-toggle { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; text-align: left; }
@@ -530,10 +533,11 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 #view-report-servers[data-count-mode="role"] label[for="report-servers-unit"] { display: none; }
 #view-report-servers[data-count-mode="quadro"] label[for="report-servers-unit"] { display: none; }
 #view-server-fg .detailed-report-table { width: min(100%, 1000px); }
-#view-server-fg .detailed-report-table th:first-child, #view-server-fg .detailed-report-table td:first-child { width: 32%; }
-#view-server-fg .detailed-report-table th:nth-child(2), #view-server-fg .detailed-report-table td:nth-child(2) { width: 24%; }
-#view-server-fg .detailed-report-table th:nth-child(3), #view-server-fg .detailed-report-table td:nth-child(3) { width: 24%; }
-#view-server-fg .detailed-report-table th:last-child, #view-server-fg .detailed-report-table td:last-child { width: 20%; }
+#view-server-fg .detailed-report-table th:first-child, #view-server-fg .detailed-report-table td:first-child { width: 26%; }
+#view-server-fg .detailed-report-table th:nth-child(2), #view-server-fg .detailed-report-table td:nth-child(2) { width: 20%; }
+#view-server-fg .detailed-report-table th:nth-child(3), #view-server-fg .detailed-report-table td:nth-child(3) { width: 22%; }
+#view-server-fg .detailed-report-table th:nth-child(4), #view-server-fg .detailed-report-table td:nth-child(4) { width: 22%; }
+#view-server-fg .detailed-report-table th:last-child, #view-server-fg .detailed-report-table td:last-child { width: 10%; }
 #view-server-data .detailed-report-table th, #view-server-data .detailed-report-table td { text-align: center !important; vertical-align: middle; }
 #view-server-data .detailed-report-table .request-actions { justify-content: center; }
 .detailed-report-table th, .detailed-report-table td, .current-vacations-table th, .current-vacations-table td { text-align: center !important; vertical-align: middle; }

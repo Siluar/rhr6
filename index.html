@@ -278,10 +278,15 @@
               <div class="panel-heading"><div><p class="section-kicker">FUNÇÕES GRATIFICADAS</p><h2 id="server-fg-title">Cadastro de Servidores com Função Gratificada</h2><p class="server-registry-description">Selecione servidores já cadastrados para manter esta relação administrativa, independente dos relatórios.</p></div></div>
               <div class="server-fg-content">
                 <form class="server-fg-form" id="server-fg-form">
+                  <label for="server-fg-server-search">Buscar servidor<input id="server-fg-server-search" type="search" autocomplete="off" placeholder="Nome, CPF, função ou unidade" /></label>
                   <label for="server-fg-select">Servidor cadastrado<select id="server-fg-select" required><option value="">Selecione um servidor</option></select></label>
+                  <label for="server-fg-function">Função exercida<select id="server-fg-function" name="funcaoExercida" required><option value="">Selecione a função exercida</option></select></label>
                   <button class="button button-primary" type="submit"><i data-lucide="user-round-plus"></i><span>Adicionar servidor</span></button>
                 </form>
-                <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Servidor</th><th scope="col">CPF</th><th scope="col">Unidade</th><th scope="col">Ação</th></tr></thead><tbody id="server-fg-body"></tbody></table></div>
+                <div class="server-data-toolbar">
+                  <label class="table-search server-registry-search"><i data-lucide="search"></i><input id="server-fg-search" type="search" placeholder="Buscar na lista (nome, CPF, unidade ou função)" aria-label="Buscar na lista de Função Gratificada por nome, CPF, unidade ou função" /></label>
+                </div>
+                <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Servidor</th><th scope="col">CPF</th><th scope="col">Unidade</th><th scope="col">Função exercida</th><th scope="col">Ação</th></tr></thead><tbody id="server-fg-body"></tbody></table></div>
               </div>
             </section>
           </section>

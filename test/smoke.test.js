@@ -160,6 +160,29 @@ test("cadastro de servidores: colunas na ordem pedida, com Função Gratificada 
     "a exportação deve trazer a Função Gratificada");
 });
 
+test("cadastro de função gratificada: busca na lista, seletor de função e coluna nova", () => {
+  const html = read("index.html");
+  // A coluna "Função exercida" fica antes de "Ação".
+  const bodyIndex = html.indexOf('id="server-fg-body"');
+  assert.ok(bodyIndex > -1, "a tabela de Função Gratificada deve existir");
+  const thead = html.slice(html.lastIndexOf("<thead>", bodyIndex), bodyIndex);
+  const headers = [...thead.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(match => match[1].trim());
+  assert.deepEqual(headers, ["Servidor", "CPF", "Unidade", "Função exercida", "Ação"]);
+  // Busca da lista e busca do seletor de servidores.
+  assert.ok(html.includes('id="server-fg-search"'), "deve haver busca na lista de Função Gratificada");
+  assert.ok(html.includes('id="server-fg-server-search"'), "deve haver busca no seletor de servidores");
+  // O formulário tem o campo "Função exercida" com as funções pedidas.
+  assert.ok(html.includes('id="server-fg-function"'), "deve haver o seletor de função exercida");
+  const app = read("app.js");
+  const options = app.slice(app.indexOf("const fgFunctionOptions"), app.indexOf("];", app.indexOf("const fgFunctionOptions")));
+  for (const funcao of ["Coordenador", "Diretor", "Chefe Administrativo", "Chefe de Segurança"]) {
+    assert.ok(options.includes(funcao), `a função "${funcao}" deveria estar disponível`);
+  }
+  // A busca da lista usa o mesmo componente dos outros cadastros.
+  assert.ok(html.includes('class="table-search server-registry-search"><i data-lucide="search"></i><input id="server-fg-search"'),
+    "a busca deve seguir o padrão dos outros cadastros");
+});
+
 test("cadastro de servidores: importação de planilha do Excel está disponível", () => {
   const html = read("index.html");
   assert.ok(html.includes('id="server-data-import"'), "deve haver o botão de importar planilha");

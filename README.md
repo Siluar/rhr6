@@ -136,6 +136,12 @@ editar e excluir), persistida nas coleções do Firestore:
   **Só o nome é obrigatório:** linhas com outros campos em branco entram mesmo
   assim e o que ficou faltando é listado em *"Ver o que precisa de atenção"*,
   para completar depois pela edição (o cadastro manual também só exige o nome).
+  A busca do cadastro procura em nome, CPF, RG, e-mail, telefone, quadro,
+  função e unidade.
+  No **Cadastro de Servidores com Função Gratificada** cada entrada guarda a
+  **Função exercida** (Coordenador, Diretor, Chefe Administrativo, Chefe de
+  Segurança), que pode ser trocada direto na tabela; o painel tem busca na
+  lista (nome, CPF, unidade ou função) e busca no seletor de servidores.
 - **Cadastro de Unidades** — item **Unidades** próprio na barra lateral para
   criar, editar e excluir as unidades penais (coleção `unidades`). As unidades
   cadastradas alimentam o select "Unidade Penal" do formulário de dados dos

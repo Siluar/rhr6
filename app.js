@@ -1472,13 +1472,23 @@ async function hashServerPassword(password, saltHex) {
   return toHex(new Uint8Array(digest));
 }
 
+// Busca do cadastro de servidores: procura em nome, CPF, RG, e-mail, telefone,
+// quadro, função e unidade. Basta que todas as palavras digitadas apareçam em
+// algum campo (a ordem não importa).
 function getFilteredServerPersonalData() {
-  const searchTerm = document.getElementById("server-data-search").value.trim().toLocaleLowerCase("pt-BR");
+  const searchInput = document.getElementById("server-data-search");
+  const searchTerm = searchInput ? searchInput.value.trim() : "";
+  const tokens = normalizeSearchText(searchTerm).split(/\s+/).filter(Boolean);
   const cpfSearchTerm = searchTerm.replace(/\D/g, "");
+  if (!tokens.length && !cpfSearchTerm) return serverPersonalData;
   return serverPersonalData.filter(record => {
-    const nameMatches = String(record.name || "").toLocaleLowerCase("pt-BR").includes(searchTerm);
-    const cpfMatches = cpfSearchTerm && String(record.cpf || "").replace(/\D/g, "").includes(cpfSearchTerm);
-    return !searchTerm || nameMatches || cpfMatches;
+    const haystack = normalizeSearchText([
+      record.name, record.email, record.cpf, record.rg, record.phone,
+      record.quadro, record.cargo, record.unidadePenal
+    ].join(" "));
+    if (tokens.length && tokens.every(token => haystack.includes(token))) return true;
+    const cpfDigits = String(record.cpf || "").replace(/\D/g, "");
+    return Boolean(cpfSearchTerm) && cpfDigits.includes(cpfSearchTerm);
   });
 }
 
@@ -1689,6 +1699,10 @@ function getApprovedVacationRequests() {
   });
 }
 
+// Funções gratificadas que podem ser registradas no cadastro de Função
+// Gratificada. Para incluir outra, basta acrescentar aqui.
+const fgFunctionOptions = ["Coordenador", "Diretor", "Chefe Administrativo", "Chefe de Segurança"];
+
 // Identificador estável de uma entrada da lista de Função Gratificada. É usado
 // como id do documento na nuvem (CPF quando existir, senão o nome).
 function fgRosterEntryId(entry) {
@@ -1698,15 +1712,16 @@ function fgRosterEntryId(entry) {
   return `fg-${slug || "sem-nome"}`;
 }
 
-// Sempre trabalha com objetos { id, name, cpf } (as listas antigas guardavam
-// apenas o nome em texto).
+// Sempre trabalha com objetos { id, name, cpf, funcaoExercida } (as listas
+// antigas guardavam apenas o nome em texto).
 function normalizeFgRosterEntry(entry) {
   const name = String((typeof entry === "string" ? entry : entry && entry.name) || "").trim();
   if (!name) return null;
   const cpf = String((typeof entry === "string" ? "" : entry && entry.cpf) || "").trim();
+  const funcaoExercida = String((typeof entry === "string" ? "" : entry && entry.funcaoExercida) || "").trim();
   const base = { name, cpf };
   const id = typeof entry === "string" ? "" : String((entry && entry.id) || "").trim();
-  return { id: id || fgRosterEntryId(base), name, cpf };
+  return { id: id || fgRosterEntryId(base), name, cpf, funcaoExercida };
 }
 
 function fgRosterKey(entry) {
@@ -1727,6 +1742,9 @@ function mergeFgRoster(localList, remoteList) {
       indexByKey.set(key, merged.length);
       merged.push(normalized);
     } else {
+      // A nuvem manda, mas não pode apagar a função exercida que só existe aqui.
+      const current = merged[index];
+      if (!normalized.funcaoExercida && current.funcaoExercida) normalized.funcaoExercida = current.funcaoExercida;
       merged[index] = normalized;
     }
   };
@@ -1787,29 +1805,77 @@ function getFgRosterCpf(entry) {
   return String(currentRecord?.cpf || entry?.cpf || "");
 }
 
+// Acha o registro do servidor correspondente a uma entrada de Função
+// Gratificada (pelo id, pelo CPF ou, em último caso, pelo nome).
+function findFgRegisteredServer(entry, name, cpf) {
+  const cpfDigits = String(cpf || "").replace(/\D/g, "");
+  const normalizedName = String(name || "").trim().toLocaleLowerCase("pt-BR");
+  return serverPersonalData.find(record =>
+    (entry?.id && record.id === entry.id) ||
+    (cpfDigits && String(record.cpf || "").replace(/\D/g, "") === cpfDigits) ||
+    (normalizedName && String(record.name || "").trim().toLocaleLowerCase("pt-BR") === normalizedName)
+  ) || null;
+}
+
 function renderFgServerRoster() {
   const body = document.getElementById("server-fg-body");
   const select = document.getElementById("server-fg-select");
   if (!body || !select) return;
 
+  // Monta as opções de "Função exercida" uma única vez (não mexe na escolha
+  // atual do usuário nas próximas renderizações).
+  const functionSelect = document.getElementById("server-fg-function");
+  if (functionSelect && functionSelect.options.length <= 1) {
+    functionSelect.innerHTML = `<option value="">Selecione a função exercida</option>${fgFunctionOptions.map(option => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join("")}`;
+  }
+
   const enrolledCpfs = new Set(fgServerRoster.map(entry => getFgRosterCpf(entry).replace(/\D/g, "")).filter(Boolean));
   const enrolledNames = new Set(fgServerRoster.map(entry => getFgRosterName(entry).toLocaleLowerCase("pt-BR")));
+  // Busca do seletor: filtra quem ainda pode ser incluído.
+  const pickerTokens = normalizeSearchText(readElementValue("server-fg-server-search")).split(/\s+/).filter(Boolean);
   const availableServers = serverPersonalData
     .filter(record => !enrolledCpfs.has(String(record.cpf || "").replace(/\D/g, "")) && !enrolledNames.has(String(record.name || "").trim().toLocaleLowerCase("pt-BR")))
+    .filter(record => !pickerTokens.length || pickerTokens.every(token =>
+      normalizeSearchText([record.name, record.cpf, record.cargo, record.unidadePenal].join(" ")).includes(token)))
     .sort((left, right) => String(left.name).localeCompare(String(right.name), "pt-BR"));
 
-  select.innerHTML = `<option value="">${availableServers.length ? "Selecione um servidor" : "Nenhum servidor disponível"}</option>${availableServers.map(record => `<option value="${escapeHtml(record.id)}">${escapeHtml(record.name)} — CPF ${escapeHtml(record.cpf)}${record.unidadePenal ? ` — ${escapeHtml(record.unidadePenal)}` : ""}</option>`).join("")}`;
+  const placeholder = availableServers.length
+    ? "Selecione um servidor"
+    : (pickerTokens.length ? "Nenhum servidor corresponde à busca" : "Nenhum servidor disponível");
+  select.innerHTML = `<option value="">${placeholder}</option>${availableServers.map(record => `<option value="${escapeHtml(record.id)}">${escapeHtml(record.name)} — CPF ${escapeHtml(record.cpf)}${record.unidadePenal ? ` — ${escapeHtml(record.unidadePenal)}` : ""}</option>`).join("")}`;
   select.disabled = availableServers.length === 0;
-  body.innerHTML = fgServerRoster.length
-    ? fgServerRoster.map((entry, index) => {
+
+  // Busca da lista: filtra as linhas já cadastradas (nome, CPF, unidade ou função).
+  const listTokens = normalizeSearchText(readElementValue("server-fg-search")).split(/\s+/).filter(Boolean);
+  const rows = fgServerRoster.map((entry, index) => ({ entry, index })).filter(({ entry }) => {
+    if (!listTokens.length) return true;
+    const name = getFgRosterName(entry);
+    const cpf = getFgRosterCpf(entry);
+    const registered = findFgRegisteredServer(entry, name, cpf);
+    const haystack = normalizeSearchText([name, cpf, registered?.unidadePenal || "", entry.funcaoExercida || ""].join(" "));
+    return listTokens.every(token => haystack.includes(token));
+  });
+
+  body.innerHTML = rows.length
+    ? rows.map(({ entry, index }) => {
       const name = getFgRosterName(entry);
-      const cpf = getFgRosterCpf(entry) || serverPersonalData.find(record => String(record.name || "").trim().toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"))?.cpf || "Não informado";
-      const cpfDigits = String(cpf).replace(/\D/g, "");
-      const registered = serverPersonalData.find(record => (entry?.id && record.id === entry.id) || (cpfDigits && String(record.cpf || "").replace(/\D/g, "") === cpfDigits) || String(record.name || "").trim().toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"));
-      return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(cpf)}</td><td>${escapeHtml(registered?.unidadePenal || "Não informado")}</td><td><div class="request-actions"><button class="action-icon reject" type="button" data-remove-fg-server="${index}" aria-label="Remover ${escapeHtml(name)} do cadastro de Função Gratificada" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+      const cpf = getFgRosterCpf(entry) || findFgRegisteredServer(entry, name, "")?.cpf || "Não informado";
+      const registered = findFgRegisteredServer(entry, name, cpf);
+      const funcaoExercida = String(entry.funcaoExercida || "");
+      const options = [`<option value=""${funcaoExercida ? "" : " selected"}>Não informado</option>`]
+        .concat(fgFunctionOptions.map(option => `<option value="${escapeHtml(option)}"${option === funcaoExercida ? " selected" : ""}>${escapeHtml(option)}</option>`))
+        .join("");
+      return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(cpf)}</td><td>${escapeHtml(registered?.unidadePenal || "Não informado")}</td><td><select class="fg-function-select" data-fg-function-index="${index}" aria-label="Função exercida de ${escapeHtml(name)}">${options}</select></td><td><div class="request-actions"><button class="action-icon reject" type="button" data-remove-fg-server="${index}" aria-label="Remover ${escapeHtml(name)} do cadastro de Função Gratificada" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
     }).join("")
-    : `<tr><td class="detailed-report-empty" colspan="4">${serverPersonalData.length ? "Nenhum servidor com Função Gratificada cadastrado." : "Cadastre os dados do servidor antes de incluí-lo nesta lista."}</td></tr>`;
+    : `<tr><td class="detailed-report-empty" colspan="5">${fgServerRoster.length
+      ? "Nenhum servidor corresponde à busca."
+      : (serverPersonalData.length ? "Nenhum servidor com Função Gratificada cadastrado." : "Cadastre os dados do servidor antes de incluí-lo nesta lista.")}</td></tr>`;
   refreshIcons();
+}
+
+function readElementValue(id) {
+  const element = document.getElementById(id);
+  return element ? element.value : "";
 }
 
 function renderVacationLaunch() {
@@ -1921,7 +1987,7 @@ function addVacationLaunch(event) {
   }
   const addedToRoster = isFg && !isServerInFgRoster(server);
   if (addedToRoster) {
-    fgServerRoster.push({ id: server.id, name: server.name, cpf: server.cpf });
+    fgServerRoster.push({ id: server.id, name: server.name, cpf: server.cpf, funcaoExercida: functionName });
     if (!saveFgServerRoster()) {
       fgServerRoster.pop();
       return;
@@ -1950,12 +2016,24 @@ function addVacationLaunch(event) {
   showToast(`Férias de ${server.name} lançadas com sucesso.`);
 }
 
+function resetFgServerForm() {
+  const search = document.getElementById("server-fg-server-search");
+  if (search) search.value = "";
+  const funcao = document.getElementById("server-fg-function");
+  if (funcao) funcao.value = "";
+}
+
 function addFgServerFromForm(event) {
   event.preventDefault();
   const serverId = document.getElementById("server-fg-select").value;
   const server = serverPersonalData.find(record => record.id === serverId);
   if (!server) {
     showToast("Selecione um servidor cadastrado.");
+    return;
+  }
+  const funcaoExercida = String(readElementValue("server-fg-function")).trim();
+  if (!funcaoExercida) {
+    showToast("Selecione a função exercida.");
     return;
   }
 
@@ -1969,14 +2047,35 @@ function addFgServerFromForm(event) {
     return;
   }
 
-  fgServerRoster.push({ id: server.id, name: server.name, cpf: server.cpf });
+  fgServerRoster.push({ id: server.id, name: server.name, cpf: server.cpf, funcaoExercida });
   if (!saveFgServerRoster()) {
     fgServerRoster.pop();
     return;
   }
 
+  resetFgServerForm();
   renderFgServerRoster();
-  showToast(`${server.name} foi incluído no cadastro de Função Gratificada.`);
+  showToast(`${server.name} foi incluído no cadastro de Função Gratificada (${funcaoExercida}).`);
+}
+
+// Altera a função exercida direto na lista (serve também para as entradas
+// antigas, cadastradas antes de existir esse campo).
+function saveFgServerFunction(indexValue, value) {
+  const index = Number(indexValue);
+  if (!Number.isInteger(index) || index < 0 || index >= fgServerRoster.length) return;
+  const entry = fgServerRoster[index];
+  const previous = String(entry.funcaoExercida || "");
+  const funcaoExercida = String(value || "").trim();
+  if (funcaoExercida === previous) return;
+  entry.funcaoExercida = funcaoExercida;
+  if (!saveFgServerRoster()) {
+    entry.funcaoExercida = previous;
+    renderFgServerRoster();
+    return;
+  }
+  showToast(funcaoExercida
+    ? `${getFgRosterName(entry)}: função exercida definida como ${funcaoExercida}.`
+    : `${getFgRosterName(entry)}: função exercida removida.`);
 }
 
 function removeFgServer(indexValue) {
@@ -3479,6 +3578,13 @@ on("server-fg-body", "click", event => {
   const removeButton = event.target.closest("[data-remove-fg-server]");
   if (removeButton) removeFgServer(removeButton.dataset.removeFgServer);
 });
+on("server-fg-body", "change", event => {
+  const functionSelect = event.target.closest("[data-fg-function-index]");
+  if (functionSelect) saveFgServerFunction(functionSelect.dataset.fgFunctionIndex, functionSelect.value);
+});
+// Buscas do cadastro de Função Gratificada: uma filtra a lista e a outra, o seletor.
+on("server-fg-search", "input", debounce(renderFgServerRoster));
+on("server-fg-server-search", "input", debounce(renderFgServerRoster));
 on("server-data-search", "input", debounce(renderServerPersonalData));
 // Colunas do cadastro de servidores nas exportações (mesma ordem exibida na tela).
 const serverDataExportColumns = [
@@ -3726,7 +3832,7 @@ function planServerImport(rows) {
     const fgKey = cpfDigits || normalizeImportText(name);
     if (/^(sim|s|x|1|true|verdadeiro)$/.test(normalizeImportText(entry.fg)) && fgKey && !fgKeys.has(fgKey)) {
       fgKeys.add(fgKey);
-      plan.fgAdds.push({ id: record.id, name: record.name, cpf: record.cpf });
+      plan.fgAdds.push({ id: record.id, name: record.name, cpf: record.cpf, funcaoExercida: "" });
     }
   });
 

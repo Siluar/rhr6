@@ -175,6 +175,27 @@ function createServer(app, overrides = {}) {
 
 const findId = (list, predicate) => (list.find(predicate) || {}).id;
 
+// Digita num campo de busca (o evento "input" dispara a renderização).
+function typeIn(app, id, value) {
+  const input = app.byId(id);
+  assert.ok(input, `campo de busca não encontrado: ${id}`);
+  input.value = value;
+  input.dispatchEvent(new app.window.Event("input", { bubbles: true }));
+  return input;
+}
+
+// As buscas usam debounce (150ms): espera o suficiente para elas rodarem.
+const flushSearch = () => new Promise(resolve => setTimeout(resolve, 220));
+
+// Inclui um servidor no cadastro de Função Gratificada escolhendo a função exercida.
+function addFgServer(app, serverId, funcaoExercida = "Coordenador") {
+  app.click('[data-view="server-fg"]');
+  app.byId("server-fg-select").value = serverId;
+  app.setValue(app.byId("server-fg-form"), "funcaoExercida", funcaoExercida);
+  app.submit(app.byId("server-fg-form"));
+  return funcaoExercida;
+}
+
 // =========================================================================
 // Referências: unidades, cargos e quadros
 // =========================================================================
@@ -390,6 +411,7 @@ test("servidores: colunas na ordem pedida e Função Gratificada na última colu
     const option = [...fgSelect.options].find(item => item.textContent.includes("Servidor Com Fg"));
     assert.ok(option, "o servidor deveria aparecer no seletor de Função Gratificada");
     fgSelect.value = option.value;
+    app.setValue(app.byId("server-fg-form"), "funcaoExercida", "Diretor");
     app.submit(app.byId("server-fg-form"));
     await app.settle();
 
@@ -730,6 +752,7 @@ test("função gratificada: incluir, listar e remover", async () => {
     const select = app.byId("server-fg-select");
     assert.ok([...select.options].some(o => o.value === serverId), "o servidor deveria aparecer no select");
     select.value = serverId;
+    app.setValue(app.byId("server-fg-form"), "funcaoExercida", "Chefe Administrativo");
     app.submit(app.byId("server-fg-form"));
     await app.settle();
 
@@ -740,6 +763,120 @@ test("função gratificada: incluir, listar e remover", async () => {
     app.click('[data-remove-fg-server="0"]');
     await app.settle();
     assert.equal(state().fgServerRoster.length, 0, "deveria remover do cadastro de FG");
+  });
+});
+
+test("função gratificada: coluna Função exercida, troca na tabela e busca na lista", async () => {
+  await withApp({}, async app => {
+    const { state } = app;
+    createServer(app, { name: "Ana Souza Fg", cpf: "11111111111", email: "ana.souza@pp.pr.gov.br", unidadePenal: "CP Umuarama" });
+    createServer(app, { name: "Bruno Lima Fg", cpf: "22222222222", email: "bruno.lima@pp.pr.gov.br", unidadePenal: "Coordenação Regional CR-6" });
+    await app.settle();
+
+    app.click('[data-view="server-fg"]');
+    await app.settle();
+
+    // A coluna nova fica antes de "Ação".
+    assert.deepEqual(app.$$("#view-server-fg thead th").map(th => th.textContent.trim()),
+      ["Servidor", "CPF", "Unidade", "Função exercida", "Ação"]);
+
+    // As funções pedidas estão no seletor do formulário.
+    assert.deepEqual([...app.byId("server-fg-function").options].map(option => option.textContent.trim()), [
+      "Selecione a função exercida", "Coordenador", "Diretor", "Chefe Administrativo", "Chefe de Segurança"
+    ]);
+
+    // Sem escolher a função exercida, não inclui.
+    const anaId = findId(state().serverPersonalData, s => s.name === "Ana Souza Fg");
+    app.byId("server-fg-select").value = anaId;
+    app.submit(app.byId("server-fg-form"));
+    await app.settle();
+    assert.equal(state().fgServerRoster.length, 0, "sem a função exercida o servidor não deveria entrar");
+
+    // Inclui os dois, cada um com a sua função.
+    addFgServer(app, anaId, "Coordenador");
+    await app.settle();
+    addFgServer(app, findId(state().serverPersonalData, s => s.name === "Bruno Lima Fg"), "Chefe de Segurança");
+    await app.settle();
+
+    const functionSelects = () => app.$$("#server-fg-body [data-fg-function-index]");
+    assert.equal(functionSelects().length, 2, "os dois servidores deveriam estar na lista");
+    assert.equal(functionSelects()[0].value, "Coordenador", "a função da Ana deveria ficar salva");
+    assert.equal(functionSelects()[1].value, "Chefe de Segurança", "a função do Bruno deveria ficar salva");
+    assert.ok(state().fgServerRoster.every(entry => entry.funcaoExercida), "toda entrada deveria ter a função exercida");
+    assert.ok(app.sync._all("fgServidores").some(doc => doc.funcaoExercida === "Coordenador"), "a função deveria subir para a nuvem");
+
+    // Troca a função direto na tabela (também serve para entradas antigas).
+    functionSelects()[0].value = "Diretor";
+    functionSelects()[0].dispatchEvent(new app.window.Event("change", { bubbles: true }));
+    await app.settle();
+    assert.equal(state().fgServerRoster.find(entry => entry.id === anaId).funcaoExercida, "Diretor", "a troca na tabela deveria ser salva");
+
+    // Busca da lista: por nome, unidade e função exercida.
+    typeIn(app, "server-fg-search", "bruno");
+    await flushSearch();
+    assert.equal(app.$$("#server-fg-body tr").length, 1, "a busca por nome deveria mostrar só o Bruno");
+    assert.match(app.byId("server-fg-body").textContent, /Bruno Lima Fg/);
+
+    typeIn(app, "server-fg-search", "coordenação regional");
+    await flushSearch();
+    assert.match(app.byId("server-fg-body").textContent, /Bruno Lima Fg/, "a busca deveria achar pela unidade");
+    assert.equal(app.$$("#server-fg-body tr").length, 1);
+
+    typeIn(app, "server-fg-search", "diretor");
+    await flushSearch();
+    assert.equal(app.$$("#server-fg-body tr").length, 1, "a busca deveria achar pela função exercida");
+    assert.match(app.byId("server-fg-body").textContent, /Ana Souza Fg/);
+
+    typeIn(app, "server-fg-search", "ninguem com esse nome");
+    await flushSearch();
+    assert.match(app.byId("server-fg-body").textContent, /Nenhum servidor corresponde à busca/);
+
+    typeIn(app, "server-fg-search", "");
+    await flushSearch();
+    assert.equal(app.$$("#server-fg-body tr").length, 2, "sem busca a lista volta completa");
+  });
+});
+
+test("servidores: a busca procura em nome, CPF, e-mail, unidade e função", async () => {
+  await withApp({}, async app => {
+    createServer(app, { name: "Carlos Pereira", cpf: "11122233344", rg: "9998887", phone: "44988887777", email: "carlos.pereira@pp.pr.gov.br", unidadePenal: "CP Umuarama", cargo: "Policial Penal", quadro: "QPPP" });
+    createServer(app, { name: "Daniela Rocha", cpf: "55566677788", rg: "1112223", phone: "44977776666", email: "daniela.rocha@pp.pr.gov.br", unidadePenal: "Coordenação Regional CR-6", cargo: "Agente de Execução", quadro: "QPPE" });
+    await app.settle();
+    app.click('[data-view="server-data"]');
+    await app.settle();
+
+    const rows = () => app.$$("#server-data-body tr");
+    const firstName = () => rows()[0].querySelectorAll("td")[0].textContent.trim();
+    assert.equal(rows().length, 2, "os dois servidores deveriam estar na tabela");
+
+    typeIn(app, "server-data-search", "daniela");
+    await flushSearch();
+    assert.equal(rows().length, 1, "busca por nome");
+    assert.equal(firstName(), "Daniela Rocha");
+
+    typeIn(app, "server-data-search", "11122233344");
+    await flushSearch();
+    assert.equal(rows().length, 1, "busca por CPF");
+    assert.equal(firstName(), "Carlos Pereira");
+
+    typeIn(app, "server-data-search", "daniela.rocha@");
+    await flushSearch();
+    assert.equal(rows().length, 1, "busca por e-mail");
+    assert.equal(firstName(), "Daniela Rocha");
+
+    typeIn(app, "server-data-search", "coordenação regional");
+    await flushSearch();
+    assert.equal(rows().length, 1, "busca por unidade");
+    assert.equal(firstName(), "Daniela Rocha");
+
+    typeIn(app, "server-data-search", "agente de execução");
+    await flushSearch();
+    assert.equal(rows().length, 1, "busca por função");
+    assert.equal(firstName(), "Daniela Rocha");
+
+    typeIn(app, "server-data-search", "");
+    await flushSearch();
+    assert.equal(rows().length, 2, "limpar a busca mostra todos de novo");
   });
 });
 
