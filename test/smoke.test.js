@@ -80,6 +80,7 @@ test("o painel tem a área de backup e o sino com contagem", () => {
 test("o formulário usa as unidades da nuvem e avisa sobre conflitos", () => {
   const html = read("solicitacao-ferias.html");
   assert.ok(html.includes("populateUnidades"), "falta a carga dinâmica de unidades");
+  assert.ok(html.includes("loadUnidadesFromCache"), "falta a reserva local das unidades");
   assert.ok(html.includes("checkScheduleConflict"), "falta o aviso de conflito");
   assert.ok(html.includes('id="conflict-warning"'), "falta o elemento de aviso de conflito");
   assert.ok(html.includes("imc.sidnei@gmail.com"), "a lista de destinatários padrão deve incluir imc.sidnei@gmail.com");

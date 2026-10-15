@@ -1130,8 +1130,44 @@
       const conflictWarning = document.getElementById('conflict-warning');
       let cloudRequests = null; // cache das solicitações da nuvem (para o aviso de conflito)
 
-      // Substitui a lista fixa de unidades pela coleção "unidades" da nuvem.
-      // Se a nuvem não responder, mantém a lista padrão do HTML.
+      // Preenche o campo "Unidade de Lotação" com as unidades cadastradas.
+      //   1) Reserva local: usa o último cadastro salvo neste navegador, então o
+      //      dropdown nunca fica vazio (mesmo sem sessão/nuvem no momento).
+      //   2) Nuvem: quando a leitura funciona, substitui pela coleção "unidades".
+      const unidadesCacheKey = 'brisa-unidades-nomes-v1';
+      const unidadesCadastroKey = 'brisa-unidades-v2';
+
+      function normalizeUnidadesNomes(lista) {
+        const nomes = (Array.isArray(lista) ? lista : [])
+          .map(item => {
+            if (typeof item === 'string') return item;
+            return String((item && (item.name || item.nome)) || '');
+          })
+          .map(nome => nome.trim())
+          .filter(Boolean);
+        return Array.from(new Set(nomes)).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      }
+
+      function loadUnidadesFromCache() {
+        let nomes = [];
+        try {
+          nomes = normalizeUnidadesNomes(JSON.parse(localStorage.getItem(unidadesCacheKey) || '[]'));
+        } catch {}
+        if (!nomes.length) {
+          // Segunda reserva: o cadastro do painel salvo neste navegador.
+          try {
+            nomes = normalizeUnidadesNomes(JSON.parse(localStorage.getItem(unidadesCadastroKey) || '[]'));
+          } catch {}
+        }
+        if (nomes.length) populateUnidades(nomes);
+      }
+
+      function saveUnidadesCache(nomes) {
+        try {
+          localStorage.setItem(unidadesCacheKey, JSON.stringify(nomes));
+        } catch {}
+      }
+
       function populateUnidades(nomes) {
         if (!unidadeSelect || !Array.isArray(nomes) || !nomes.length) return;
         const atual = unidadeSelect.value;
@@ -1153,13 +1189,13 @@
         if (!(window.RH_SYNC && window.RH_SYNC.enabled)) return;
         try {
           const lista = await window.RH_SYNC.loadDocs('unidades');
-          const nomes = (Array.isArray(lista) ? lista : [])
-            .map(item => String((item && (item.name || item.nome)) || '').trim())
-            .filter(Boolean);
-          const unicos = Array.from(new Set(nomes)).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-          populateUnidades(unicos);
+          const unicos = normalizeUnidadesNomes(lista);
+          if (unicos.length) {
+            populateUnidades(unicos);
+            saveUnidadesCache(unicos);
+          }
         } catch (error) {
-          console.warn('Não foi possível carregar as unidades da nuvem; usando a lista padrão.', error);
+          console.warn('Não foi possível carregar as unidades da nuvem; usando a lista local.', error);
         }
       }
 
@@ -1210,6 +1246,7 @@
       if (vacationStartInput) vacationStartInput.addEventListener('change', checkScheduleConflict);
       if (vacationEndInput) vacationEndInput.addEventListener('change', checkScheduleConflict);
 
+      loadUnidadesFromCache();
       loadUnidadesFromCloud();
       loadRequestsForConflictCheck();
     </script>
