@@ -21,7 +21,7 @@ const readSource = file => fs.readFileSync(path.join(root, file), "utf8");
 
 // `let`/`const` de topo do app.js ficam presos ao escopo do eval. Este trecho é
 // anexado só nos testes para conseguirmos ler o estado interno do app.
-const STATE_SHIM = "\n;window.__state = () => ({ unidades, cargos, quadros, serverPersonalData, usuarios, tasks, fgServerRoster, requests, shownMonth, requestFilter });";
+const STATE_SHIM = "\n;window.__state = () => ({ unidades, cargos, quadros, serverPersonalData, usuarios, tasks, fgServerRoster, requests, shownMonth, requestFilter, requestTypeFilter });";
 
 const DEFAULT_ESCALA = { equipes: ["Bravo", "Charlie", "Delta", "Alfa"], dataBase: "2026-10-01", cicloDias: 4 };
 
@@ -626,6 +626,69 @@ test("sino: mostra a quantidade de pendentes e abre a fila", async () => {
     assert.equal(state().requestFilter, "pending");
     assert.ok(app.byId("view-requests").classList.contains("active"), "a tela de solicitações deveria ficar ativa");
     assert.match(app.byId("full-requests").textContent, /Ana Teste/);
+  });
+});
+
+// =========================================================================
+// Filtro por tipo em "Solicitações"
+// =========================================================================
+
+test("solicitações: filtro por tipo mostra todas as situações daquele tipo", async () => {
+  const req = (id, person, type, status) => ({
+    id, person, initials: "TT", color: "#728e70",
+    start: "2026-11-01", end: "2026-11-05", days: 5,
+    status, type, created: "01/11", note: ""
+  });
+  const seed = {
+    requests: [
+      req("r-ferias", "Ana Ferias", "férias", "pending"),
+      req("r-premio", "Bruno Premio", "licença prêmio", "approved"),
+      req("r-premio2", "Caio Premio", "Licença Prêmio", "rejected"),
+      req("r-cap", "Dora Capacitacao", "licença capacitação", "pending"),
+      req("r-med", "Elis Medica", "licença médica", "approved"),
+      req("r-outros", "Fabio Outros", "licença para tratar de interesses particulares", "pending")
+    ]
+  };
+  await withApp({ seed }, async app => {
+    const { state } = app;
+    const list = () => app.byId("full-requests").textContent;
+
+    // Prêmio: todas as situações (aprovada + recusada) e mais nada.
+    app.click('#requests-submenu [data-request-type-filter="premio"]');
+    await app.settle();
+    assert.equal(state().requestTypeFilter, "premio");
+    assert.match(list(), /Bruno Premio/, "deveria listar a licença prêmio aprovada");
+    assert.match(list(), /Caio Premio/, "deveria listar a licença prêmio recusada também");
+    assert.doesNotMatch(list(), /Ana Ferias/, "não deveria listar férias");
+    assert.doesNotMatch(list(), /Elis Medica/, "não deveria listar licença médica");
+
+    // Capacitação
+    app.click('#requests-submenu [data-request-type-filter="capacitacao"]');
+    await app.settle();
+    assert.equal(state().requestTypeFilter, "capacitacao");
+    assert.match(list(), /Dora Capacitacao/);
+    assert.doesNotMatch(list(), /Bruno Premio/);
+
+    // Médica
+    app.click('#requests-submenu [data-request-type-filter="medica"]');
+    await app.settle();
+    assert.match(list(), /Elis Medica/);
+    assert.doesNotMatch(list(), /Dora Capacitacao/);
+
+    // Outros: só o tipo livre (nem férias nem as licenças nomeadas)
+    app.click('#requests-submenu [data-request-type-filter="outros"]');
+    await app.settle();
+    assert.match(list(), /Fabio Outros/);
+    assert.doesNotMatch(list(), /Ana Ferias/);
+    assert.doesNotMatch(list(), /Bruno Premio/);
+
+    // Um item de situação limpa o filtro por tipo
+    app.click('#requests-submenu [data-request-filter="pending"]');
+    await app.settle();
+    assert.equal(state().requestTypeFilter, "", "a situação deveria limpar o filtro por tipo");
+    assert.equal(state().requestFilter, "pending");
+    assert.match(list(), /Ana Ferias/);
+    assert.doesNotMatch(list(), /Bruno Premio/, "aprovada não entra na lista de pendentes");
   });
 });
 

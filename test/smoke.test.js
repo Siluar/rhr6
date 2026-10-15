@@ -119,3 +119,22 @@ test("as regras do Firestore aplicam as melhorias de segurança", () => {
   assert.ok(unidadesBlock.slice(0, 200).includes("allow create, update, delete: if isAdmin();"),
     "a escrita de unidades continua restrita ao admin");
 });
+
+test("o submenu \"Solicitações\" oferece filtro por tipo de licença", () => {
+  const html = read("index.html");
+  const app = read("app.js");
+  // Os quatro itens de tipo no submenu "Solicitações" do painel.
+  const requestsSubmenu = html.slice(html.indexOf('id="requests-submenu"'), html.indexOf("</div>", html.indexOf('id="requests-submenu"')));
+  for (const tipo of ["premio", "capacitacao", "medica", "outros"]) {
+    assert.ok(requestsSubmenu.includes(`data-request-type-filter="${tipo}"`),
+      `o submenu Solicitações deve ter o filtro "${tipo}"`);
+  }
+  // O rótulo visível que o usuário pediu.
+  assert.ok(requestsSubmenu.includes(">Licença prêmio<"), "falta o item Licença prêmio");
+  assert.ok(requestsSubmenu.includes(">Licença capacitação<"), "falta o item Licença capacitação");
+  assert.ok(requestsSubmenu.includes(">Licença médica<"), "falta o item Licença médica");
+  assert.ok(requestsSubmenu.includes(">Outros<"), "falta o item Outros");
+  // A lógica de filtragem vive no app.js.
+  assert.ok(app.includes("matchesRequestTypeFilter"), "app.js deve filtrar por tipo");
+  assert.ok(app.includes("requestTypeFilter"), "app.js deve manter o filtro por tipo");
+});

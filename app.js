@@ -71,6 +71,9 @@ let shownTaskMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1
 let selectedTaskDate = null;
 let selectedDate = null;
 let requestFilter = "pending";
+// Filtro por tipo de solicitação (licença prêmio, capacitação, médica, outros).
+// Quando preenchido, a lista de "Solicitações" mostra TODAS as situações desse tipo.
+let requestTypeFilter = "";
 let selectedReportYear = String(new Date().getFullYear());
 let selectedReportUnit = "";
 let selectedVacationMonth = String(new Date().getMonth());
@@ -2283,6 +2286,41 @@ function getRequestCategoryLabel(requestOrType) {
   return requestCategoryLabels[getRequestCategory(requestOrType)] || "Outros";
 }
 
+// Filtros de tipo do submenu "Solicitações" do painel. "Outros" reúne tudo que
+// não é férias nem uma das licenças nomeadas (o servidor descreve o tipo).
+const requestTypeFilterLabels = {
+  premio: "Licença prêmio",
+  capacitacao: "Licença capacitação",
+  medica: "Licença médica",
+  outros: "Outros"
+};
+
+function matchesRequestTypeFilter(request, filter) {
+  if (!filter) return true;
+  const type = normalizeRequestType(request);
+  if (filter === "premio") return type.includes("premio");
+  if (filter === "capacitacao") return type.includes("capacitacao");
+  if (filter === "medica") return type.includes("medica") || type.includes("medico");
+  if (filter === "outros") {
+    if (!type) return false; // tipo vazio conta como férias
+    return !(type.includes("ferias")
+      || type.includes("premio")
+      || type.includes("capacitacao")
+      || type.includes("medica")
+      || type.includes("medico"));
+  }
+  return true;
+}
+
+// Solicitações exibidas na lista conforme o filtro ativo: por tipo (qualquer
+// situação) ou por situação (pendentes/aprovadas/recusadas).
+function getFilteredRequests() {
+  if (requestTypeFilter) {
+    return requests.filter(request => matchesRequestTypeFilter(request, requestTypeFilter));
+  }
+  return requests.filter(request => request.status === requestFilter);
+}
+
 function renderReportRequests() {
   const body = document.getElementById("report-requests-body");
   const statusSelect = document.getElementById("report-requests-status");
@@ -2571,8 +2609,14 @@ function getShiftTeamForDate(dateString) {
 function renderRequests(elementId, compact) {
   const container = document.getElementById(elementId);
   if (!container) return;
-  const list = compact ? getPendingRequests().slice(0, 3) : requests.filter(request => request.status === requestFilter);
+  const list = compact ? getPendingRequests().slice(0, 3) : getFilteredRequests();
   if (list.length === 0) {
+    if (!compact && requestTypeFilter) {
+      const typeLabel = requestTypeFilterLabels[requestTypeFilter] || "solicitações";
+      container.innerHTML = `<div class="empty-state"><i data-lucide="inbox"></i><strong>Nenhuma solicitação de ${escapeHtml(typeLabel)}</strong><span>As solicitações desse tipo aparecerão aqui, em qualquer situação.</span></div>`;
+      refreshIcons();
+      return;
+    }
     const emptyMessages = {
       pending: ["Tudo em dia por aqui", "Não há solicitações pendentes para revisar."],
       approved: ["Nenhuma solicitação aprovada", "As solicitações aprovadas aparecerão nesta lista."],
@@ -3017,8 +3061,13 @@ function setView(view) {
   document.querySelectorAll(".view-panel").forEach(panel => panel.classList.toggle("active", panel.id === `view-${view}`));
   document.querySelectorAll(".nav-link[data-view], .nav-submenu-link[data-view]").forEach(link => {
     const matchesView = link.dataset.view === view;
-    const matchesRequestFilter = !link.dataset.requestFilter || link.dataset.requestFilter === requestFilter;
-    link.classList.toggle("active", matchesView && matchesRequestFilter);
+    // Situação: só fica ativo quando NÃO há filtro por tipo (o tipo mostra todas
+    // as situações). Tipo: ativo conforme o filtro escolhido.
+    const matchesRequestFilter = !link.dataset.requestFilter
+      || (!requestTypeFilter && link.dataset.requestFilter === requestFilter);
+    const matchesRequestType = !link.dataset.requestTypeFilter
+      || link.dataset.requestTypeFilter === requestTypeFilter;
+    link.classList.toggle("active", matchesView && matchesRequestFilter && matchesRequestType);
   });
   document.querySelectorAll(".nav-menu-item").forEach(menuItem => {
     const toggle = menuItem.querySelector("[data-submenu-toggle]");
@@ -3031,7 +3080,13 @@ function setView(view) {
     submenu.hidden = !hasActiveItem;
   });
   const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Unidades", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Cargos", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "cadastro-quadros": ["Quadros", "Cadastro de Quadros", "Cadastre os quadros usados pelos cargos."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "backup": ["Gestão", "Backup e restauração", "Exporte uma cópia de segurança dos dados ou restaure a partir de um arquivo."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatórios", "Relatório de servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-requests": ["Solicitações", "Relatório de solicitações", "Consulte todas as solicitações agrupadas por situação."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-premio": ["Licença prêmio", "Relatório de licença prêmio", "Consulte as solicitações de licença prêmio aprovadas."], "report-medica": ["Licença médica", "Relatório de licença médica", "Consulte as solicitações de licença médica aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
-  const [breadcrumb, title, subtitle] = titles[view] || (view === "tasks" ? ["Gestão", "Lista de tarefas", "Registre e acompanhe suas tarefas."] : view === "meta4" ? ["Solicitações", "META 4", "Consulte os pedidos de férias enviados pelos usuários."] : view === "protocols-fg" ? ["Solicitações", "Protocolos F.G", "Acompanhe o status e o número dos protocolos de férias com Função Gratificada."] : titles.overview);
+  let [breadcrumb, title, subtitle] = titles[view] || (view === "tasks" ? ["Gestão", "Lista de tarefas", "Registre e acompanhe suas tarefas."] : view === "meta4" ? ["Solicitações", "META 4", "Consulte os pedidos de férias enviados pelos usuários."] : view === "protocols-fg" ? ["Solicitações", "Protocolos F.G", "Acompanhe o status e o número dos protocolos de férias com Função Gratificada."] : titles.overview);
+  // Filtro por tipo em "Solicitações": ajusta o título/subtítulo da página.
+  if (view === "requests" && requestTypeFilter) {
+    const typeLabel = requestTypeFilterLabels[requestTypeFilter] || "Solicitações";
+    title = typeLabel;
+    subtitle = `Todas as solicitações de ${typeLabel.toLocaleLowerCase("pt-BR")}, em qualquer situação.`;
+  }
   document.getElementById("breadcrumb-current").textContent = breadcrumb;
   const pageTitle = document.getElementById("page-title");
   pageTitle.replaceChildren(document.createTextNode(title));
@@ -3056,6 +3111,7 @@ function setView(view) {
   if (view === "report-premio") renderReportPremio();
   if (view === "report-capacitacao") renderReportCapacitacao();
   if (view === "report-medica") renderReportMedica();
+  if (view === "requests") renderRequests("full-requests", false);
   if (view === "usuarios") {
     // Relê a coleção ao abrir a seção para mostrar acessos pendentes novos.
     if (window.RH_SYNC && window.RH_SYNC.enabled) loadUsuariosFromFirestore();
@@ -3605,6 +3661,17 @@ document.addEventListener("click", event => {
     return;
   }
 
+  // Filtros da tela "Solicitações" (situação e tipo): atualizados ANTES do
+  // setView para que os destaques e o subtítulo usem o novo estado.
+  const requestTypeFilterLink = event.target.closest("#requests-submenu [data-request-type-filter]");
+  const statusFilterLink = event.target.closest("#requests-submenu [data-request-filter]");
+  if (requestTypeFilterLink) {
+    requestTypeFilter = requestTypeFilterLink.dataset.requestTypeFilter;
+  } else if (statusFilterLink) {
+    requestFilter = statusFilterLink.dataset.requestFilter;
+    requestTypeFilter = "";
+  }
+
   const navLink = event.target.closest("[data-view]");
   if (navLink) {
     setView(navLink.dataset.view);
@@ -3616,16 +3683,20 @@ document.addEventListener("click", event => {
     document.getElementById("view-report-servers").dataset.countMode = openReportLink.dataset.reportCount || "unit";
     setView(openReportLink.dataset.openReport);
   }
-  const requestFilterLink = event.target.closest("[data-request-filter]");
-  if (requestFilterLink) {
-    requestFilter = requestFilterLink.dataset.requestFilter;
-    document.querySelectorAll("#requests-submenu [data-request-filter]").forEach(link => {
-      link.classList.toggle("active", link === requestFilterLink);
-    });
-    renderRequests("full-requests", false);
-  }
   const goView = event.target.closest("[data-go-view]");
-  if (goView) setView(goView.dataset.goView);
+  if (goView) {
+    // Atalhos que abrem "Solicitações" (sino, "ver todas"): aplica o filtro
+    // indicado e não deixa um filtro por tipo antigo "grudado" na tela.
+    if (goView.dataset.requestFilter) {
+      requestFilter = goView.dataset.requestFilter;
+      requestTypeFilter = "";
+    } else if (goView.dataset.requestTypeFilter) {
+      requestTypeFilter = goView.dataset.requestTypeFilter;
+    } else if (goView.dataset.goView === "requests") {
+      requestTypeFilter = "";
+    }
+    setView(goView.dataset.goView);
+  }
   const monthButton = event.target.closest("[data-month-shift]");
   if (monthButton) {
     const shiftedMonth = new Date(shownMonth.getFullYear(), shownMonth.getMonth() + Number(monthButton.dataset.monthShift), 1);
