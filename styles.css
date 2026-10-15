@@ -99,7 +99,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .icon-button:hover { border-color: #cad8cd; background: #f4f8f2; }
 .icon-button svg { width: 16px; height: 16px; }
 .notification-button { position: relative; border-color: transparent; background: transparent; color: #e1e6e9; }
-.notification-button > span { position: absolute; top: 6px; right: 7px; width: 6px; height: 6px; border: 1px solid #fafaf6; border-radius: 50%; background: #d1795d; }
+.notification-button > span { position: absolute; top: 2px; right: 3px; display: grid; min-width: 15px; height: 15px; padding: 0 4px; place-items: center; border: 1px solid #fafaf6; border-radius: 8px; background: #d1795d; color: #fff; font-size: 9px; font-weight: 700; line-height: 1; }
+.notification-button > span[hidden] { display: none; }
 .topbar .avatar-profile { width: 30px; height: 30px; }
 .page-content { width: min(100%, 1420px); margin: 0 auto; padding: 34px 42px 60px; }
 .page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 25px; }
@@ -568,3 +569,11 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
    de tabela clara usada nos demais relatórios. */
 :is(#view-report-premio, #view-report-medica, #view-report-requests) :is(.detailed-report-table, .current-vacations-table) :is(th, td) { color: #000 !important; font-weight: 700 !important; }
 :is(#view-report-premio, #view-report-medica, #view-report-requests) :is(.detailed-report-table, .current-vacations-table) tbody :is(td, th) { background: #fff; border-bottom-color: #c4cbc3; }
+
+/* ---- Backup e restauração (#view-backup) ---- */
+.backup-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 16px 0 6px; }
+.backup-import-label { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.backup-import-label svg { width: 15px; height: 15px; }
+#backup-message { min-height: 18px; margin: 10px 0 0; color: #2f6b45; font-size: 0.9rem; font-weight: 600; }
+#backup-message.error { color: #a0352b; }
+#view-backup .empty-note { margin-top: 12px; color: #5c665d; font-size: 11px; line-height: 1.5; }

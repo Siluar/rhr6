@@ -313,6 +313,19 @@
 
       .message.error { color: #a0352b; }
 
+      .conflict-warning {
+        margin: 12px 0 0;
+        padding: 10px 12px;
+        border: 1px solid #e7c9a0;
+        border-left: 4px solid #d98b2b;
+        border-radius: 5px;
+        background: #fdf5e8;
+        color: #8a5a12;
+        font-size: 0.85rem;
+        font-weight: 600;
+        line-height: 1.45;
+      }
+
       .submit-fallback {
         margin-top: 8px;
         padding: 14px 16px;
@@ -535,6 +548,8 @@
                   <input id="fim-ferias" name="fimFerias" type="date" />
                 </div>
               </div>
+
+              <p id="conflict-warning" class="conflict-warning hidden" aria-live="polite"></p>
 
               <div class="actions">
                 <button class="button button-secondary" type="button" id="back-to-selection">Voltar</button>
@@ -1123,6 +1138,96 @@
           window.location.href = 'login.html';
         });
       }
+
+      // ---- Unidades dinâmicas e aviso de conflito de escala ----
+
+      const unidadeSelect = document.getElementById('unidade');
+      const equipeSelect = document.getElementById('equipe');
+      const conflictWarning = document.getElementById('conflict-warning');
+      let cloudRequests = null; // cache das solicitações da nuvem (para o aviso de conflito)
+
+      // Substitui a lista fixa de unidades pela coleção "unidades" da nuvem.
+      // Se a nuvem não responder, mantém a lista padrão do HTML.
+      function populateUnidades(nomes) {
+        if (!unidadeSelect || !Array.isArray(nomes) || !nomes.length) return;
+        const atual = unidadeSelect.value;
+        unidadeSelect.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Selecione a unidade penal';
+        unidadeSelect.appendChild(placeholder);
+        nomes.forEach(nome => {
+          const option = document.createElement('option');
+          option.value = nome;
+          option.textContent = nome;
+          unidadeSelect.appendChild(option);
+        });
+        if (atual) unidadeSelect.value = atual;
+      }
+
+      async function loadUnidadesFromCloud() {
+        if (!(window.RH_SYNC && window.RH_SYNC.enabled)) return;
+        try {
+          const lista = await window.RH_SYNC.loadDocs('unidades');
+          const nomes = (Array.isArray(lista) ? lista : [])
+            .map(item => String((item && (item.name || item.nome)) || '').trim())
+            .filter(Boolean);
+          const unicos = Array.from(new Set(nomes)).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+          populateUnidades(unicos);
+        } catch (error) {
+          console.warn('Não foi possível carregar as unidades da nuvem; usando a lista padrão.', error);
+        }
+      }
+
+      async function loadRequestsForConflictCheck() {
+        if (!(window.RH_SYNC && window.RH_SYNC.enabled)) return;
+        try {
+          cloudRequests = await window.RH_SYNC.loadRequests();
+        } catch (error) {
+          console.warn('Não foi possível carregar as solicitações para o aviso de conflito.', error);
+        }
+      }
+
+      // Avisa (sem bloquear) quando outra pessoa da mesma equipe já tem
+      // solicitação no período escolhido.
+      function checkScheduleConflict() {
+        if (!conflictWarning) return;
+        conflictWarning.classList.add('hidden');
+        conflictWarning.textContent = '';
+        if (!Array.isArray(cloudRequests) || !cloudRequests.length) return;
+
+        const config = getOptionConfig(currentOption);
+        const usesPeriod = config.mode === 'vacation' || config.mode === 'period';
+        if (!usesPeriod) return;
+
+        const equipe = equipeSelect ? equipeSelect.value.trim() : '';
+        const inicio = vacationStartInput ? vacationStartInput.value : '';
+        const fim = vacationEndInput ? vacationEndInput.value : '';
+        if (!equipe || !inicio || !fim || fim < inicio) return;
+
+        const overlaps = cloudRequests.filter(item => {
+          if (!item || String(item.equipe || '').trim() !== equipe) return false;
+          const status = String(item.status || '').toLowerCase();
+          if (status === 'rejected' || status === 'recusada') return false;
+          if (String(item.person || '').trim() === autoName) return false; // ignora o próprio solicitante
+          const start = String(item.start || '');
+          const end = String(item.end || '');
+          if (!start || !end) return false;
+          return inicio <= end && start <= fim;
+        });
+
+        if (!overlaps.length) return;
+        const nomes = Array.from(new Set(overlaps.map(item => String(item.person || '').trim()).filter(Boolean)));
+        conflictWarning.textContent = `Atenção: ${nomes.join(', ')} da equipe ${equipe} já ${nomes.length === 1 ? 'tem' : 'têm'} solicitação no mesmo período. O pedido pode ser recusado por conflito de escala.`;
+        conflictWarning.classList.remove('hidden');
+      }
+
+      if (equipeSelect) equipeSelect.addEventListener('change', checkScheduleConflict);
+      if (vacationStartInput) vacationStartInput.addEventListener('change', checkScheduleConflict);
+      if (vacationEndInput) vacationEndInput.addEventListener('change', checkScheduleConflict);
+
+      loadUnidadesFromCloud();
+      loadRequestsForConflictCheck();
     </script>
   </body>
 </html>

@@ -16,6 +16,13 @@ O sistema permite:
 - Relatórios por mês, ano, unidade e servidor.
 - Relatório de solicitações com filtros de categoria (Férias, Licenças e Outros), status, tipo, ano e servidor.
 - Relatórios de licenças concedidas: prêmio, capacitação e médica.
+- **Backup**: exportar/restaurar todos os dados em um arquivo `.json` (menu **Backup**).
+- **Avisos**: sino no topo com a contagem de solicitações pendentes (clique abre a
+  lista).
+- **Calendário**: abre sempre no mês atual e a escala de plantão (equipes e
+  rotação) é configurável em `config.js`, sem mexer no código.
+- **Formulário de solicitação**: lista as unidades cadastradas na nuvem e avisa
+  (sem bloquear) quando outra pessoa da mesma equipe já pediu o mesmo período.
 
 Por padrão, os dados são mantidos no navegador (`localStorage` / `sessionStorage`).
 Com o backend opcional do **Firebase** (seção abaixo), as solicitações são
@@ -43,6 +50,9 @@ Toda a configuração fica em `config.js` (versionado):
 |---|---|
 | `googleClientId` | Client ID do Google OAuth (Web). Usado só no fluxo antigo do Google Identity Services, quando o Firebase não está configurado |
 | `googleAdminEmails` | E-mails do Google com acesso de administrador (proprietários) |
+| `escala` | Escala de plantão: `equipes` (ordem da rotação), `dataBase` (AAAA-MM-DD em que a 1ª equipe está de serviço) e `cicloDias` (ex.: `4` = 24h de serviço + 72h de descanso). Ajuste aqui quando a escala mudar |
+| `notificationEmails` | Destinatários das solicitações (`To`). O solicitante vai em cópia (`CC`) |
+| `emailjs` | Chaves opcionais do EmailJS para envio automático de e-mail (vazio = só abre o rascunho) |
 | `firebase` | Objeto `firebaseConfig`; quando preenchido, liga o backend (Auth + Firestore) |
 
 > `config.local.js` **não é mais carregado automaticamente** pelas páginas: por
@@ -150,17 +160,33 @@ editar e excluir), persistida nas coleções do Firestore:
   podem ser editados, ter o perfil trocado ou ser removidos. A segurança de fundo
   continua firme: os proprietários (`googleAdminEmails`) sempre são tratados
   como administradores pelo login e pelas regras do Firestore.
+- **Backup** — item na barra lateral para **exportar** todos os dados
+  (solicitações, servidores, usuários, unidades, cargos, quadros, função
+  gratificada e tarefas) num único arquivo `.json`, e **restaurar** a partir
+  desse arquivo. A restauração **atualiza/mescla** os registros com o mesmo
+  identificador — ela não apaga o que não estiver no backup. Guarde o arquivo em
+  local seguro (Drive, e-mail, pendrive).
+- **Avisos no topo** — o sino mostra a quantidade de solicitações **pendentes** e,
+  ao ser clicado, abre a lista de pendentes. O número some quando não há nada
+  pendente.
 
 > Regras (`firestore.rules`): a leitura/criação de solicitações é liberada apenas
 > para **usuários aprovados** (`isApproved()` = proprietário **ou** usuário ativo
 > na coleção `usuarios`); apenas `isAdmin()` (proprietários **ou** usuários com
 > perfil `admin` e ativos) pode aprovar, editar, apagar ou gerenciar os
-> cadastros. A autoinscrição é permitida somente para o próprio e-mail e apenas
-> como `ativo: false` / `pendente: true` / perfil `usuario` — ninguém consegue se
-> auto-aprovar. As coleções `servidores`, `unidades`, `cargos`, `quadros`,
-> `usuarios`, `fgServidores`, `tarefas`, `anexos` e `contasLegado` são
-> protegidas. **Publique estas regras no console** para que a autoinscrição de
-> pendentes e o bloqueio por situação funcionem na nuvem.
+> cadastros. A **criação** de solicitações ainda passa por validação
+> (`isValidRequest()`): exige o campo `person` e limita o tamanho dos campos
+> livres, evitando documentos gigantes ou malformados. A coleção `unidades` pode
+> ser **lida por qualquer usuário aprovado** (o formulário de solicitação precisa
+> da lista), mas só o admin escreve. O `get` de `usuarios` é restrito ao **próprio
+> e-mail** (necessário no login) ou a um proprietário — um usuário comum não lê o
+> cadastro alheio. A autoinscrição é permitida somente para o próprio e-mail e
+> apenas como `ativo: false` / `pendente: true` / perfil `usuario` — ninguém
+> consegue se auto-aprovar. As coleções `servidores`, `unidades`, `cargos`,
+> `quadros`, `usuarios`, `fgServidores`, `tarefas`, `anexos` e `contasLegado` são
+> protegidas. **Publique estas regras** (console ou `firebase deploy --only
+> firestore:rules`) para que a validação, a leitura de `unidades` e o bloqueio
+> por situação funcionem na nuvem.
 
 As gravações no Firestore são **imediatas e incrementais**: cada alteração feita
 no painel é enviada na hora (somente os documentos que mudaram, em lotes de até
@@ -189,6 +215,22 @@ renderização, e as buscas usam *debounce*.
 > aviso em vermelho (a solicitação continua registrada no navegador e é enviada
 > para a nuvem na próxima abertura do painel).
 
+### Acesso ao painel (guarda do cliente)
+
+O painel (`index.html`) tem duas barreiras de acesso:
+
+1. Uma verificação rápida em `sessionStorage` (evita um "piscar" da tela).
+2. Com o Firebase ativo, uma **verificação real**: espera a sessão do Google e
+   confere no Firestore se o e-mail tem perfil `admin` (ou é um proprietário).
+   Só então o painel aparece; caso contrário, redireciona para a solicitação ou
+   para o login.
+
+> **Importante:** isso é uma barreira de **conveniência**. Como o app é estático,
+> qualquer verificação no navegador pode ser burlada por quem editar o código.
+> A **proteção real** dos dados está nas **regras do Firestore** (`firestore.rules`),
+> que valem independentemente do que o cliente faz. Não confie na guarda do
+> cliente como controle de segurança.
+
 > As contas antigas de **CPF/senha** (`contasLegado`) e a senha administrativa
 > local seguem sendo dados legados: as contas ficam na nuvem apenas como cópia de
 > segurança (a cópia local tem prioridade, porque é nela que a senha é alterada) e
@@ -211,37 +253,57 @@ O site pode ser publicado diretamente do repositório via **GitHub Pages**
 
 | Arquivo | Descrição |
 |---|---|
-| `login.html`, `login.css`, `login.js` | Tela e lógica de autenticação |
+| `login.html`, `login.css`, `login.js` | Tela e lógica de autenticação (somente Google) |
 | `index.html`, `styles.css`, `app.js` | Aplicação principal (painel/gestão) |
 | `solicitacao-ferias.html` | Fluxo de solicitação de férias |
 | `recusada.html` | Tela de solicitação recusada |
-| `intranet.html` | Página da intranet (legado) |
+| `logic.js` | Funções puras (datas, escala de plantão, sobreposição) usadas pelo painel e testáveis |
 | `brasao_ok.png` | Brasão institucional |
-| `config.js` | Configuração pública (Client ID do Google, e-mails admin, Firebase) |
+| `config.js` | Configuração pública (Google, e-mails, escala, Firebase) |
 | `config.local.js` | Configuração local/secreta, **não carregada** pelas páginas (não versionada) |
 | `config.local.example.js` | Modelo da configuração local (referência) |
 | `firebase-sync.js` | Camada de sincronização com o Firestore (backend opcional) |
 | `firestore.rules` | Regras de segurança do Firestore |
+| `package.json` | Scripts de teste (sem dependências) |
+| `test/` | Testes automatizados (`node --test`) |
+| `.github/workflows/test.yml` | CI: roda os testes a cada push/PR |
 | `run-site.bat` | Atalho para iniciar o site no Windows |
 | `VS- CODE.code-workspace` | Workspace do VS Code |
 
+## Testes
+
+Não há dependências para instalar. Com o **Node.js 18+**:
+
+```bash
+npm test        # ou: node --test test/logic.test.js test/smoke.test.js
+```
+
+- `test/logic.test.js` — funções puras (formatação de datas, escala de plantão e
+  detecção de sobreposição de períodos).
+- `test/smoke.test.js` — verifica a sintaxe dos scripts e invariantes do projeto
+  (ex.: o calendário abre no mês atual; o login legado foi removido; as regras do
+  Firestore aplicam as melhorias).
+
+O workflow em `.github/workflows/test.yml` roda os testes automaticamente no
+GitHub a cada `push`/`pull request` para a branch `main`.
+
 ## Legado
 
-Com o acesso **exclusivamente pelo Google**, alguns trechos antigos são mantidos
-apenas por compatibilidade e **não** fazem parte do fluxo atual:
+Com o acesso **exclusivamente pelo Google**:
 
-- `intranet.html` (órfã, nenhuma página aponta para ela) usa o login por
-  CPF/senha de `login.js` (`submitCredentials` + `serverAccounts`). Com o
-  Firebase ativo esse caminho é bloqueado.
-- O botão/diálogo **Alterar senha** no painel é legado: compara a senha atual com
-  `window.RH_CONFIG.initialAdminPassword` (hoje vazio) ou com um hash salvo no
-  navegador.
+- O **login por CPF/senha** (`submitCredentials` + `serverAccounts`) foi
+  **removido** de `login.js`, e o arquivo `intranet.html` (órfão) foi **excluído**.
+  Restou apenas o fluxo do Google.
+- O botão/diálogo **Alterar senha** no painel é o último vestígio do fluxo antigo:
+  compara a senha atual com `window.RH_CONFIG.initialAdminPassword` (hoje vazio)
+  ou com um hash salvo no navegador. Não afeta o login por Google e pode ser
+  removido numa limpeza futura.
 - A visão **Equipe** é montada a partir dos servidores cadastrados (não há mais
   nomes fictícios); como não há item no menu, ela é acessível pela busca global.
 
 ## Aviso
 
-Projeto de uso interno/institucional. A autenticação é **local e de
-demonstração** e não deve ser usada como controle de segurança em produção.
-O login com Google confirma o e-mail, mas o perfil (admin/usuário) é decidido
-no navegador, portanto não é um controle de acesso seguro.
+Projeto de uso interno/institucional. A autenticação é feita pelo **Google**, mas
+o perfil (admin/usuário) é decidido no cliente (com apoio das regras do
+Firestore, que são o controle efetivo). A guarda do painel é uma barreira de
+conveniência, não um controle de segurança absoluto.

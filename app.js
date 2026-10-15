@@ -65,7 +65,8 @@ let editingUnidadeId = null;
 let editingCargoId = null;
 let editingQuadroId = null;
 let editingRequestId = null;
-let shownMonth = new Date(2026, 9, 1);
+// Abre o calendário no mês atual (antes ficava fixo em outubro/2026).
+let shownMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let shownTaskMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let selectedTaskDate = null;
 let selectedDate = null;
@@ -2521,7 +2522,10 @@ function renderCalendar(elementId, compact) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const weekdaysMarkup = weekdays.map(day => `<span class="calendar-weekday">${day}</span>`).join("");
   // Alinha o primeiro dia do mês na coluna do dia da semana correto (D=0).
-  const emptyDaysMarkup = Array.from({ length: new Date(year, month, 1).getDay() }, () => `<span class="calendar-empty" aria-hidden="true"></span>`).join("");
+  const leadingEmptyCells = (window.RH_LOGIC && window.RH_LOGIC.calendarLeadingEmptyCells)
+    ? window.RH_LOGIC.calendarLeadingEmptyCells(year, month)
+    : new Date(year, month, 1).getDay();
+  const emptyDaysMarkup = Array.from({ length: leadingEmptyCells }, () => `<span class="calendar-empty" aria-hidden="true"></span>`).join("");
   const daysMarkup = Array.from({ length: daysInMonth }, (_, index) => {
     const day = new Date(year, month, index + 1);
     const key = dateKey(day);
@@ -2544,9 +2548,15 @@ function renderCalendar(elementId, compact) {
   grid.innerHTML = weekdaysMarkup + emptyDaysMarkup + daysMarkup;
 }
 function dateKey(date) {
+  if (window.RH_LOGIC && window.RH_LOGIC.dateKey) return window.RH_LOGIC.dateKey(date);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 function getShiftTeamForDate(dateString) {
+  // A rotação vem de config.js (window.RH_CONFIG.escala); mantém um padrão
+  // seguro caso a configuração não esteja disponível.
+  if (window.RH_LOGIC && window.RH_LOGIC.getShiftTeamForDate) {
+    return window.RH_LOGIC.getShiftTeamForDate(dateString, window.RH_CONFIG && window.RH_CONFIG.escala);
+  }
   const teams = ["Bravo", "Charlie", "Delta", "Alfa"];
   const startDate = new Date("2026-10-01T12:00:00");
   const targetDate = new Date(`${dateString}T12:00:00`);
@@ -2977,6 +2987,17 @@ function updateCounts() {
   document.getElementById("pending-stat").textContent = pendingCount;
   document.getElementById("request-heading-count").textContent = String(pendingCount).padStart(2, "0");
   document.getElementById("pending-foot").textContent = pendingCount ? "Solicitações aguardando sua revisão" : "Todas as solicitações foram revisadas";
+  // Sino do topo: mostra quantas solicitações estão pendentes e some quando zero.
+  const notificationBadge = document.getElementById("notification-badge");
+  if (notificationBadge) {
+    if (pendingCount > 0) {
+      notificationBadge.textContent = pendingCount > 9 ? "9+" : String(pendingCount);
+      notificationBadge.hidden = false;
+    } else {
+      notificationBadge.textContent = "";
+      notificationBadge.hidden = true;
+    }
+  }
 }
 function updateSelectedDay() {
   const heading = document.getElementById("selected-day-heading");
@@ -3009,7 +3030,7 @@ function setView(view) {
     toggle.setAttribute("aria-expanded", String(hasActiveItem));
     submenu.hidden = !hasActiveItem;
   });
-  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Unidades", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Cargos", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "cadastro-quadros": ["Quadros", "Cadastro de Quadros", "Cadastre os quadros usados pelos cargos."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatórios", "Relatório de servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-requests": ["Solicitações", "Relatório de solicitações", "Consulte todas as solicitações agrupadas por situação."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-premio": ["Licença prêmio", "Relatório de licença prêmio", "Consulte as solicitações de licença prêmio aprovadas."], "report-medica": ["Licença médica", "Relatório de licença médica", "Consulte as solicitações de licença médica aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
+  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Unidades", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Cargos", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "cadastro-quadros": ["Quadros", "Cadastro de Quadros", "Cadastre os quadros usados pelos cargos."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "backup": ["Gestão", "Backup e restauração", "Exporte uma cópia de segurança dos dados ou restaure a partir de um arquivo."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatórios", "Relatório de servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-requests": ["Solicitações", "Relatório de solicitações", "Consulte todas as solicitações agrupadas por situação."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-premio": ["Licença prêmio", "Relatório de licença prêmio", "Consulte as solicitações de licença prêmio aprovadas."], "report-medica": ["Licença médica", "Relatório de licença médica", "Consulte as solicitações de licença médica aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
   const [breadcrumb, title, subtitle] = titles[view] || (view === "tasks" ? ["Gestão", "Lista de tarefas", "Registre e acompanhe suas tarefas."] : view === "meta4" ? ["Solicitações", "META 4", "Consulte os pedidos de férias enviados pelos usuários."] : view === "protocols-fg" ? ["Solicitações", "Protocolos F.G", "Acompanhe o status e o número dos protocolos de férias com Função Gratificada."] : titles.overview);
   document.getElementById("breadcrumb-current").textContent = breadcrumb;
   const pageTitle = document.getElementById("page-title");
@@ -4277,6 +4298,108 @@ function applyRoleBasedNavigation() {
   try { role = sessionStorage.getItem("brisa-demo-user") || ""; } catch {}
   const isAdmin = role === "admin";
   document.querySelectorAll("[data-admin-only]").forEach(element => { element.hidden = !isAdmin; });
+}
+
+// ---- Backup e restauração (exportar/importar todos os dados) ----
+const backupCollections = ["requests", "usuarios", "servidores", "unidades", "cargos", "quadros", "fgServidores", "tarefas", "contasLegado"];
+
+function localCollectionSnapshot(collection) {
+  const source = collectionSyncSources[collection];
+  if (!source) return [];
+  try { return JSON.parse(JSON.stringify(source())); } catch { return []; }
+}
+
+async function collectBackupData() {
+  const dados = {};
+  for (const collection of backupCollections) {
+    if (window.RH_SYNC && window.RH_SYNC.enabled) {
+      try {
+        dados[collection] = await window.RH_SYNC.loadDocs(collection);
+      } catch (error) {
+        console.warn(`Backup: não foi possível ler ${collection} da nuvem.`, error);
+        dados[collection] = localCollectionSnapshot(collection);
+      }
+    } else {
+      dados[collection] = localCollectionSnapshot(collection);
+    }
+  }
+  return dados;
+}
+
+function setBackupMessage(message, isError) {
+  const element = document.getElementById("backup-message");
+  if (!element) return;
+  element.textContent = message || "";
+  element.classList.toggle("error", Boolean(isError));
+}
+
+async function exportBackup() {
+  setBackupMessage("Preparando o backup...");
+  try {
+    const dados = await collectBackupData();
+    const payload = { aplicativo: "Central de RH Umuarama", versao: 1, geradoEm: new Date().toISOString(), dados };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `backup-rh-${dateKey(new Date())}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    const total = Object.values(dados).reduce((sum, list) => sum + (Array.isArray(list) ? list.length : 0), 0);
+    setBackupMessage(`Backup gerado com ${total} registros. Guarde o arquivo em local seguro.`);
+  } catch (error) {
+    console.warn("Falha ao gerar o backup:", error);
+    setBackupMessage("Não foi possível gerar o backup. Tente novamente.", true);
+  }
+}
+
+async function importBackup(file) {
+  setBackupMessage("Lendo o arquivo...");
+  let dados;
+  try {
+    const text = await file.text();
+    const payload = JSON.parse(text);
+    dados = payload && payload.dados ? payload.dados : payload;
+  } catch (error) {
+    setBackupMessage("Arquivo inválido. Selecione um backup (.json) gerado por este sistema.", true);
+    return;
+  }
+  const collectionsFound = backupCollections.filter(name => Array.isArray(dados[name]));
+  if (collectionsFound.length === 0) {
+    setBackupMessage("O arquivo não contém dados reconhecidos deste sistema.", true);
+    return;
+  }
+  const total = collectionsFound.reduce((sum, name) => sum + dados[name].length, 0);
+  const confirmMessage = `Restaurar ${total} registros (${collectionsFound.join(", ")})? Os dados existentes com o mesmo identificador serão atualizados.`;
+  if (!window.confirm(confirmMessage)) {
+    setBackupMessage("Restauração cancelada.");
+    return;
+  }
+  if (!(window.RH_SYNC && window.RH_SYNC.enabled)) {
+    setBackupMessage("Sem conexão com a nuvem: a restauração exige o Firebase ativo.", true);
+    return;
+  }
+  try {
+    for (const name of collectionsFound) {
+      await window.RH_SYNC.saveDocs(name, dados[name]);
+    }
+    setBackupMessage(`Restauração concluída: ${total} registros enviados para a nuvem. Recarregue a página para ver tudo.`);
+  } catch (error) {
+    console.warn("Falha ao restaurar o backup:", error);
+    setBackupMessage("Não foi possível concluir a restauração. Verifique a conexão e tente novamente.", true);
+  }
+}
+
+on("export-backup", "click", exportBackup);
+const importBackupInput = document.getElementById("import-backup");
+if (importBackupInput) {
+  importBackupInput.addEventListener("change", event => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = "";
+    if (file) importBackup(file);
+  });
 }
 
 async function initializeApp() {

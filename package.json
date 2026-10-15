@@ -1,0 +1,9 @@
+{
+  "name": "rhr6",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Central de Recursos Humanos Umuarama — gestão de férias (aplicação estática).",
+  "scripts": {
+    "test": "node --test test/logic.test.js test/smoke.test.js"
+  }
+}

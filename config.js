@@ -19,6 +19,17 @@ window.RH_CONFIG = Object.assign({}, window.RH_CONFIG, {
     "sidnei@policiapenal.pr.gov.br"
   ],
 
+  // Escala de trabalho (24h de serviço por 72h de descanso).
+  // - equipes: ordem das equipes na rotação.
+  // - dataBase: data (AAAA-MM-DD) em que a primeira equipe da lista está de serviço.
+  // - cicloDias: de quantos em quantos dias a equipe muda (4 = 24h trabalhadas + 72h de descanso).
+  // Ajuste estes valores quando a escala real mudar — não é mais necessário mexer no código.
+  escala: {
+    equipes: ["Bravo", "Charlie", "Delta", "Alfa"],
+    dataBase: "2026-10-01",
+    cicloDias: 4
+  },
+
   // Destinatários das solicitações feitas no formulário público
   // (solicitacao-ferias.html). O e-mail informado pelo próprio solicitante
   // entra automaticamente em cópia (CC).

@@ -1,55 +1,10 @@
-const loginForm = document.getElementById("login-form");
-const emailInput = document.getElementById("email");
-const passwordInput = document.getElementById("password");
-const formMessage = document.getElementById("form-message");
-const passwordToggle = document.querySelector(".password-toggle");
-const rememberEmail = document.querySelector('input[name="remember"]');
-const isIntranetPage = window.location.pathname.toLowerCase().endsWith("intranet.html");
-const serverAccountsStorageKey = "brisa-server-accounts-v1";
-const adminPasswordStorageKey = "brisa-admin-password-v1";
-const initialAdminPassword = (window.RH_CONFIG && window.RH_CONFIG.initialAdminPassword) || "";
-
-function toHex(bytes) {
-  return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function hashServerPassword(password, saltHex) {
-  if (!crypto.subtle) throw new Error("Criptografia segura indisponível neste navegador.");
-  const salt = new Uint8Array(saltHex.match(/.{2}/g).map(value => Number.parseInt(value, 16)));
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const digest = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: 120000, hash: "SHA-256" }, key, 256);
-  return toHex(new Uint8Array(digest));
-}
-
-function readStoredArray(key, failureMessage) {
-  const saved = localStorage.getItem(key);
-  if (!saved) return [];
-  const parsed = JSON.parse(saved);
-  if (!Array.isArray(parsed)) throw new Error(failureMessage);
-  return parsed.filter(item => item && typeof item === "object");
-}
+// Observação: o login por CPF/senha (fluxo legado) foi removido. O acesso ao
+// sistema agora é feito exclusivamente com a conta Google (Firebase Auth).
 
 function setFormMessage(element, message, isError = false) {
   element.textContent = message;
   element.classList.toggle("error", isError);
 }
-
-function digitsOnly(value) {
-  return value.replace(/\D/g, "");
-}
-
-function getAccountRole(account) {
-  if (account?.role === "both") return "both";
-  return account?.role === "admin" ? "admin" : "usuario";
-}
-
-try {
-  const savedCpf = localStorage.getItem("brisa-demo-email");
-  if (savedCpf && emailInput && rememberEmail) {
-    emailInput.value = savedCpf;
-    rememberEmail.checked = true;
-  }
-} catch {}
 
 // Se o Firebase já tem uma sessão válida, redireciona automaticamente.
 if (window.RH_SYNC && window.RH_SYNC.enabled) {
@@ -69,120 +24,6 @@ if (window.RH_SYNC && window.RH_SYNC.enabled) {
     }
   }).catch(error => {
     console.warn("Não foi possível restaurar a sessão do Firebase:", error);
-  });
-}
-
-if (passwordToggle) {
-  passwordToggle.addEventListener("click", () => {
-    const shouldShow = passwordInput.type === "password";
-    passwordInput.type = shouldShow ? "text" : "password";
-    passwordToggle.setAttribute("aria-label", shouldShow ? "Ocultar senha" : "Mostrar senha");
-    passwordToggle.setAttribute("aria-pressed", String(shouldShow));
-    passwordToggle.innerHTML = `<i data-lucide="${shouldShow ? "eye-off" : "eye"}"></i>`;
-    if (window.lucide) window.lucide.createIcons();
-  });
-}
-
-async function submitCredentials(username, password) {
-  setFormMessage(formMessage, "Autenticando...");
-  const normalizedUsername = username.toLowerCase();
-  const cpfDigits = digitsOnly(username);
-  let isAdmin = false;
-  if (normalizedUsername === "centralrh") {
-    // Com o backend (Firebase) ativo, o acesso administrativo é exclusivamente
-    // pelo login com Google (os e-mails definidos em googleAdminEmails).
-    if (window.RH_SYNC && window.RH_SYNC.enabled) {
-      setFormMessage(formMessage, 'O acesso administrativo agora é feito pelo botão "Entrar com Google".', true);
-      return null;
-    }
-    try {
-      const savedCredential = localStorage.getItem(adminPasswordStorageKey);
-      if (savedCredential) {
-        const credential = JSON.parse(savedCredential);
-        isAdmin = Boolean(credential?.salt && credential?.passwordHash)
-          && await hashServerPassword(password, credential.salt) === credential.passwordHash;
-      } else {
-        isAdmin = password === initialAdminPassword;
-      }
-    } catch {
-      setFormMessage(formMessage, "Não foi possível validar a senha administrativa neste navegador.", true);
-      return null;
-    }
-  }
-  let serverAccount = null;
-
-  if (!isAdmin && !isIntranetPage) {
-    let accounts;
-    try {
-      accounts = readStoredArray(serverAccountsStorageKey, "O cadastro de usuários está inválido.");
-      serverAccount = accounts.find(account => digitsOnly(String(account.cpf || "")) === cpfDigits) || null;
-    } catch {
-      setFormMessage(formMessage, "Não foi possível carregar o cadastro de usuários neste navegador.", true);
-      return null;
-    }
-
-    if (!/^\d{11}$/.test(cpfDigits) || !serverAccount || !serverAccount.passwordHash || !serverAccount.salt) {
-      serverAccount = null;
-    } else {
-      try {
-        if (await hashServerPassword(password, serverAccount.salt) !== serverAccount.passwordHash) serverAccount = null;
-      } catch {
-        setFormMessage(formMessage, "Não foi possível validar a senha neste navegador.", true);
-        return null;
-      }
-    }
-  }
-
-  if ((isIntranetPage && !isAdmin) || (!isAdmin && !serverAccount)) {
-    setFormMessage(formMessage, "Credenciais inválidas.", true);
-    return null;
-  }
-
-  const userRole = isAdmin ? "admin" : getAccountRole(serverAccount);
-
-  try {
-    sessionStorage.setItem("brisa-demo-user", userRole);
-    if (serverAccount) {
-      sessionStorage.setItem("brisa-demo-username", serverAccount.username);
-      sessionStorage.setItem("brisa-demo-profile", JSON.stringify({ name: serverAccount.name, cpf: serverAccount.cpf, role: userRole }));
-    } else if (isAdmin) {
-      sessionStorage.setItem("brisa-demo-username", "centralrh");
-      sessionStorage.removeItem("brisa-demo-profile");
-    } else {
-      sessionStorage.removeItem("brisa-demo-username");
-      sessionStorage.removeItem("brisa-demo-profile");
-    }
-    if (rememberEmail.checked) localStorage.setItem("brisa-demo-email", username);
-    else localStorage.removeItem("brisa-demo-email");
-  } catch {
-    setFormMessage(formMessage, "Não foi possível iniciar a sessão neste navegador.", true);
-    return null;
-  }
-
-  return userRole;
-}
-
-if (loginForm) {
-  loginForm.addEventListener("submit", async event => {
-    event.preventDefault();
-    const username = emailInput.value.trim();
-    const password = passwordInput.value;
-
-    if (!username || !password) {
-      setFormMessage(formMessage, "Informe CPF e senha.", true);
-      return;
-    }
-
-    const loggedUser = await submitCredentials(username, password);
-    if (!loggedUser) return;
-    if (loggedUser === "both") {
-      setFormMessage(formMessage, "Escolha como deseja acessar o sistema.");
-      document.getElementById("access-choice-dialog")?.showModal();
-      return;
-    }
-
-    setFormMessage(formMessage, loggedUser === "admin" ? "Acessando o painel administrativo..." : "Acessando o sistema...");
-    window.location.href = loggedUser === "admin" ? "index.html" : "solicitacao-ferias.html";
   });
 }
 

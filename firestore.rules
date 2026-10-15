@@ -44,10 +44,42 @@ service cloud.firestore {
       return isOwner() || (isActiveUser() && userDoc().data.get('perfil', null) == 'admin');
     }
 
+    // Um campo textual opcional, mas limitado a `max` caracteres. Evita que um
+    // usuario aprovado grave documentos gigantes ("payload bomb") em requests.
+    function isBoundedString(value, max) {
+      return value is string && value.size() <= max;
+    }
+
+    function optionalBoundedString(data, key, max) {
+      return !(key in data) || isBoundedString(data.get(key, null), max);
+    }
+
+    // Validacao minima de uma nova solicitacao criada por usuario aprovado.
+    // Exigimos que "person" exista e limitamos o tamanho dos campos livres.
+    function isValidRequest() {
+      let data = request.resource.data;
+      return data.person is string
+        && data.person.size() > 0
+        && data.person.size() <= 120
+        && optionalBoundedString(data, 'note', 400)
+        && optionalBoundedString(data, 'email', 160)
+        && optionalBoundedString(data, 'cpf', 20)
+        && optionalBoundedString(data, 'unidade', 160)
+        && optionalBoundedString(data, 'funcaoExercida', 160)
+        && optionalBoundedString(data, 'substituto', 160)
+        && optionalBoundedString(data, 'start', 20)
+        && optionalBoundedString(data, 'end', 20)
+        && optionalBoundedString(data, 'month', 40)
+        && optionalBoundedString(data, 'status', 20)
+        && optionalBoundedString(data, 'type', 40)
+        && optionalBoundedString(data, 'id', 80);
+    }
+
     // Solicitacoes de ferias/licencas: somente usuario aprovado le/cria;
-    // somente admin aprova, edita ou apaga.
+    // somente admin aprova, edita ou apaga. A criacao passa por validacao.
     match /requests/{requestId} {
-      allow read, create: if isApproved();
+      allow read: if isApproved();
+      allow create: if isApproved() && isValidRequest();
       allow update, delete: if isAdmin();
     }
 
@@ -57,9 +89,11 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
-    // Cadastro basico de unidades, cargos e quadros: somente admin.
+    // Cadastro basico de unidades, cargos e quadros.
+    // Leitura liberada para usuarios aprovados (a pagina de solicitacao precisa
+    // listar as unidades); a escrita continua restrita ao admin.
     match /unidades/{id} {
-      allow read, list: if isAdmin();
+      allow read, list: if isApproved();
       allow create, update, delete: if isAdmin();
     }
 
@@ -98,13 +132,14 @@ service cloud.firestore {
     }
 
     // Usuarios/contas do Google.
-    //  - get: qualquer logado pode ler o proprio/login (necessario para decidir
-    //    o perfil no login).
+    //  - get: apenas o proprio usuario (necessario para decidir o perfil no
+    //    login) OU um dono. Evita que um usuario comum leia o cadastro alheio.
     //  - list: apenas aprovados (painel administrativo).
     //  - create: admin OU auto-registro do proprio e-mail como pendente, sem
     //    perfil de admin. Nao pode se auto-aprovar (update e so admin).
     match /usuarios/{email} {
-      allow get: if isSignedIn();
+      allow get: if isSignedIn()
+        && (email == request.auth.token.email || isOwner());
       allow list: if isApproved();
       allow create: if isAdmin()
         || (isSignedIn()
