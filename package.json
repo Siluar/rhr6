@@ -4,7 +4,7 @@
   "private": true,
   "description": "Central de Recursos Humanos Umuarama — gestão de férias (aplicação estática).",
   "scripts": {
-    "test": "node --test test/logic.test.js test/smoke.test.js test/crud.test.js",
+    "test": "node --test test/logic.test.js test/smoke.test.js test/crud.test.js test/form.test.js",
     "test:crud": "node --test test/crud.test.js"
   },
   "devDependencies": {

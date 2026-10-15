@@ -658,6 +658,12 @@
       const monthLabel = document.getElementById('data-ferias-label');
       const periodStartLabel = document.getElementById('inicio-ferias-label');
       const periodEndLabel = document.getElementById('fim-ferias-label');
+      // Campos da Função Gratificada (FG). Precisam ser declarados aqui: antes o
+      // script referenciava estas variáveis sem as declarar, o que lançava
+      // ReferenceError em nível de topo e interrompia TODO o restante do script
+      // (cliques, ?tipo= e o carregamento das unidades).
+      const fgFlagField = document.getElementById('fg-flag-field');
+      const fgFlagCheckbox = document.getElementById('possui-fg');
 
       const passwordChangeDialog = document.getElementById('password-change-dialog');
       const passwordChangeForm = document.getElementById('password-change-form');
