@@ -3529,6 +3529,271 @@ on("server-data-export-pdf", "click", () => {
   const reportHtml = buildPrintReportHtml("Cadastro de Dados dos Servidores", records.length, "servidor(es)", tableMarkup);
   openPrintReport(reportHtml, "Relatório de servidores para impressão");
 });
+
+// ---- Importação do cadastro de servidores a partir de uma planilha do Excel ----
+// Títulos de coluna aceitos (texto sem acento, minúsculo) -> campo do cadastro.
+// A ordem importa: "Função Gratificada" precisa ser reconhecida antes de "Função".
+const serverImportColumns = [
+  ["fg", /gratificada|^fg$|^possui fg$/],
+  ["birthDate", /nascimento|^nasc$|^dtnasc$/],
+  ["cpf", /^cpf$/],
+  ["rg", /^rg$/],
+  ["email", /e mail|email/],
+  ["phone", /telefone|celular|^fone$|^tel$/],
+  ["quadro", /^quadro$|^qpp[pe]$/],
+  ["unidade", /unidade|lotacao/],
+  ["name", /servidor|^nome/],
+  ["cargo", /funcao|^cargo$/]
+];
+
+// Ordem assumida quando a planilha não tem cabeçalho reconhecível.
+const serverImportFallbackOrder = ["name", "email", "cpf", "rg", "phone", "quadro", "cargo", "unidade"];
+
+function normalizeImportText(value) {
+  return String(value == null ? "" : value).trim().toLocaleLowerCase("pt-BR")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+// Converte a planilha (matriz de células) em uma lista de objetos do cadastro.
+function mapServerImportRows(rows) {
+  const list = (Array.isArray(rows) ? rows : []).filter(row => Array.isArray(row) && row.some(cell => String(cell == null ? "" : cell).trim()));
+  if (list.length === 0) return [];
+  const header = list[0].map(normalizeImportText);
+  const fieldsByColumn = header.map(text => {
+    const hit = serverImportColumns.find(([, pattern]) => pattern.test(text));
+    return hit ? hit[0] : "";
+  });
+  const hasHeader = fieldsByColumn.filter(Boolean).length >= 3;
+  const dataRows = hasHeader ? list.slice(1) : list;
+  return dataRows.map(row => {
+    const entry = {};
+    row.forEach((cell, index) => {
+      const field = hasHeader ? fieldsByColumn[index] : serverImportFallbackOrder[index];
+      if (!field || entry[field] !== undefined) return;
+      entry[field] = String(cell == null ? "" : cell).trim();
+    });
+    return entry;
+  });
+}
+
+// Aceita 1990-05-10, 10/05/1990, 10-05-1990. Devolve "" quando não dá para ler.
+function parseImportDate(value) {
+  const raw = String(value == null ? "" : value).trim();
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const match = raw.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/);
+  if (!match) return "";
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return "";
+  return `${match[3]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+// Planeja a importação sem alterar nada: devolve o que será criado e o que foi
+// ignorado (já cadastrado) ou recusado (com o motivo), linha por linha.
+function planServerImport(rows) {
+  const plan = { records: [], skipped: [], errors: [], newUnidades: [], newCargos: [], newQuadros: [], fgAdds: [] };
+  const entries = mapServerImportRows(rows);
+  if (entries.length === 0) {
+    plan.errors.push("Não encontrei nenhuma linha de dados na planilha.");
+    return plan;
+  }
+
+  const pendingUnidades = [];
+  const pendingCargos = [];
+  const pendingQuadros = [];
+  const findRegistered = (list, pending, value) => {
+    const key = normalizeImportText(value);
+    if (!key) return null;
+    return [...list, ...pending].find(item => normalizeImportText(item.name) === key) || null;
+  };
+
+  const takenCpfs = new Set(serverPersonalData.map(record => String(record.cpf || "").replace(/\D/g, "")).filter(Boolean));
+  const takenEmails = new Set(serverPersonalData.map(record => String(record.email || "").trim().toLocaleLowerCase("pt-BR")).filter(Boolean));
+  const fgKeys = new Set(fgServerRoster.map(entry => String(getFgRosterCpf(entry)).replace(/\D/g, "")).filter(Boolean));
+
+  entries.forEach((entry, index) => {
+    const line = index + 2; // na planilha, a linha 1 é o cabeçalho
+    const name = String(entry.name || "").trim();
+    const email = String(entry.email || "").trim();
+    const cpfDigits = String(entry.cpf || "").replace(/\D/g, "");
+    const rg = String(entry.rg || "").trim();
+    const phoneDigits = String(entry.phone || "").replace(/\D/g, "");
+    const unidadeName = String(entry.unidade || "").trim();
+    const cargoName = String(entry.cargo || "").trim();
+    const quadroName = String(entry.quadro || "").trim();
+    const label = name || email || `linha ${line}`;
+
+    if (!name || !email || !cpfDigits || !rg || !phoneDigits || !unidadeName || !cargoName) {
+      plan.errors.push(`${label}: faltam dados obrigatórios (Servidor, E-mail, CPF, RG, Telefone, Função e Unidade).`);
+      return;
+    }
+    if (!/^\d{11}$/.test(cpfDigits)) {
+      plan.errors.push(`${label}: CPF inválido (${cpfDigits.length} dígito(s)).`);
+      return;
+    }
+    if (!/^\d{10,11}$/.test(phoneDigits)) {
+      plan.errors.push(`${label}: telefone inválido (precisa de DDD).`);
+      return;
+    }
+    if (takenCpfs.has(cpfDigits)) {
+      plan.skipped.push(`${label}: CPF já cadastrado.`);
+      return;
+    }
+    const emailKey = email.toLocaleLowerCase("pt-BR");
+    if (takenEmails.has(emailKey)) {
+      plan.skipped.push(`${label}: e-mail já cadastrado.`);
+      return;
+    }
+
+    // Unidade: usa a do cadastro ou cria uma nova.
+    let unidade = findRegistered(unidades, pendingUnidades, unidadeName);
+    if (!unidade) {
+      unidade = { id: crypto.randomUUID(), name: unidadeName };
+      pendingUnidades.push(unidade);
+      plan.newUnidades.push(unidade);
+    }
+
+    // Quadro: o do cargo já cadastrado manda; senão o da planilha; senão o padrão do cargo.
+    const registeredCargo = findRegistered(cargos, pendingCargos, cargoName);
+    const quadroWanted = (registeredCargo && registeredCargo.quadro) || quadroName || getServerDataQuadroForCargo(cargoName);
+    let quadro = findRegistered(quadros, pendingQuadros, quadroWanted);
+    if (!quadro && quadroWanted) {
+      quadro = { id: crypto.randomUUID(), name: quadroWanted };
+      pendingQuadros.push(quadro);
+      plan.newQuadros.push(quadro);
+    }
+    if (!quadro) {
+      plan.errors.push(`${label}: não consegui definir o quadro (inclua a coluna Quadro).`);
+      return;
+    }
+
+    // Função (cargo): usa a do cadastro ou cria uma nova com o quadro resolvido.
+    let cargo = registeredCargo;
+    if (!cargo) {
+      cargo = { id: crypto.randomUUID(), name: cargoName, quadro: quadro.name, observacoes: "" };
+      pendingCargos.push(cargo);
+      plan.newCargos.push(cargo);
+    }
+
+    const record = {
+      id: crypto.randomUUID(),
+      name, cpf: cpfDigits, rg,
+      birthDate: parseImportDate(entry.birthDate),
+      phone: phoneDigits,
+      email,
+      unidadePenal: unidade.name,
+      cargo: cargo.name,
+      quadro: quadro.name
+    };
+    plan.records.push(record);
+    takenCpfs.add(cpfDigits);
+    takenEmails.add(emailKey);
+
+    // Função Gratificada: quando a planilha indica Sim, entra no cadastro de FG.
+    if (/^(sim|s|x|1|true|verdadeiro)$/.test(normalizeImportText(entry.fg)) && !fgKeys.has(cpfDigits)) {
+      fgKeys.add(cpfDigits);
+      plan.fgAdds.push({ id: record.id, name: record.name, cpf: record.cpf });
+    }
+  });
+
+  return plan;
+}
+
+// Lê o arquivo escolhido e devolve a matriz de células da primeira aba.
+async function readSpreadsheetRows(file) {
+  const fileName = String(file.name || "").toLocaleLowerCase("pt-BR");
+  if (fileName.endsWith(".csv")) {
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).filter(line => line.trim());
+    const delimiter = (lines[0] || "").includes("\t") ? "\t" : (lines[0] || "").includes(";") ? ";" : (lines[0] || "").includes(",") ? "," : ";";
+    return lines.map(line => line.split(delimiter).map(cell => cell.replace(/^"|"$/g, "").trim()));
+  }
+  if (typeof XLSX === "undefined") {
+    throw new Error("Biblioteca de planilhas indisponível");
+  }
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  if (!sheet) throw new Error("Planilha vazia");
+  return XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "", blankrows: false });
+}
+
+function setServerDataImportMessage(message, isError) {
+  const element = document.getElementById("server-data-import-message");
+  if (!element) return;
+  element.textContent = message || "";
+  element.classList.toggle("error", Boolean(isError));
+}
+
+on("server-data-import", "click", () => {
+  const dialog = document.getElementById("server-data-import-dialog");
+  if (!dialog) return;
+  const form = document.getElementById("server-data-import-form");
+  if (form) form.reset();
+  setServerDataImportMessage("");
+  dialog.showModal();
+});
+on("server-data-import-cancel", "click", () => {
+  const dialog = document.getElementById("server-data-import-dialog");
+  if (dialog) dialog.close();
+});
+on("server-data-import-form", "submit", async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const input = form.elements.arquivo;
+  const file = input && input.files && input.files[0];
+  if (!file) {
+    setServerDataImportMessage("Selecione o arquivo da planilha.", true);
+    return;
+  }
+  setServerDataImportMessage("Lendo a planilha...");
+  let rows;
+  try {
+    rows = await readSpreadsheetRows(file);
+  } catch (error) {
+    const detail = error instanceof Error ? ` (${error.message})` : "";
+    setServerDataImportMessage(`Não consegui ler o arquivo${detail}. Use um .xlsx, .xls ou .csv salvo pelo Excel.`, true);
+    return;
+  }
+
+  const plan = planServerImport(rows);
+  plan.newUnidades.forEach(item => unidades.push(item));
+  plan.newQuadros.forEach(item => quadros.push(item));
+  plan.newCargos.forEach(item => cargos.push(item));
+  plan.records.forEach(record => serverPersonalData.push(record));
+  plan.fgAdds.forEach(entry => fgServerRoster.push(entry));
+
+  if (plan.newUnidades.length) { saveUnidades(); renderUnidades(); }
+  if (plan.newQuadros.length) { saveQuadros(); renderQuadros(); }
+  if (plan.newCargos.length) { saveCargos(); renderCargos(); }
+  if (plan.records.length) saveServerPersonalData();
+  if (plan.fgAdds.length) { saveFgServerRoster(); renderFgServerRoster(); }
+
+  fillServerDataReferenceSelects();
+  renderServerPersonalData();
+
+  const parts = [`${plan.records.length} servidor${plan.records.length === 1 ? "" : "es"} importado${plan.records.length === 1 ? "" : "s"}`];
+  if (plan.skipped.length) parts.push(`${plan.skipped.length} ignorado${plan.skipped.length === 1 ? "" : "s"} (já cadastrado${plan.skipped.length === 1 ? "" : "s"})`);
+  if (plan.errors.length) parts.push(`${plan.errors.length} com problema`);
+  if (plan.newUnidades.length) parts.push(`${plan.newUnidades.length} unidade${plan.newUnidades.length === 1 ? "" : "s"} criada${plan.newUnidades.length === 1 ? "" : "s"}`);
+  if (plan.newCargos.length) parts.push(`${plan.newCargos.length} função${plan.newCargos.length === 1 ? "" : "ões"} criada${plan.newCargos.length === 1 ? "" : "s"}`);
+  if (plan.newQuadros.length) parts.push(`${plan.newQuadros.length} quadro${plan.newQuadros.length === 1 ? "" : "s"} criado${plan.newQuadros.length === 1 ? "" : "s"}`);
+  if (plan.fgAdds.length) parts.push(`${plan.fgAdds.length} com Função Gratificada`);
+  const created = [...plan.newUnidades, ...plan.newCargos, ...plan.newQuadros].map(item => item.name);
+  const details = [...plan.errors, ...plan.skipped].slice(0, 6);
+  const createdNote = created.length ? ` Novos no cadastro: ${created.join(", ")}.` : "";
+  const nothingImported = plan.records.length === 0;
+  setServerDataImportMessage(`${parts.join("; ")}.${createdNote}${details.length ? ` ${details.join(" ")}` : ""}`, plan.errors.length > 0);
+  if (plan.errors.length) {
+    console.warn("Importação de servidores — linhas com problema:", plan.errors);
+  }
+  showToast(nothingImported
+    ? "Nenhum servidor novo foi importado."
+    : `Importação concluída: ${plan.records.length} servidor${plan.records.length === 1 ? "" : "es"} cadastrado${plan.records.length === 1 ? "" : "s"}.`);
+  // Mantém o diálogo aberto quando nada entrou, para a pessoa ver o motivo.
+  if (!nothingImported) form.closest("dialog").close();
+});
+
 const serverDataForm = document.getElementById("server-data-form");
 const serverDataFormToggle = document.getElementById("server-data-form-toggle");
 const serverDataSubmit = document.getElementById("server-data-submit");

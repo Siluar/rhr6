@@ -159,3 +159,18 @@ test("cadastro de servidores: colunas na ordem pedida, com Função Gratificada 
   assert.ok(app.includes('["Função Gratificada", record => (isServerInFgRoster(record) ? "Sim" : "Não")]'),
     "a exportação deve trazer a Função Gratificada");
 });
+
+test("cadastro de servidores: importação de planilha do Excel está disponível", () => {
+  const html = read("index.html");
+  assert.ok(html.includes('id="server-data-import"'), "deve haver o botão de importar planilha");
+  assert.ok(html.includes('id="server-data-import-dialog"'), "deve haver o diálogo de importação");
+  assert.ok(html.includes('accept=".xlsx,.xls,.csv'), "deve aceitar arquivos do Excel");
+  assert.ok(/cdnjs\.cloudflare\.com\/ajax\/libs\/xlsx\/[^"]+xlsx\.full\.min\.js/.test(html),
+    "a biblioteca de leitura de .xlsx deve ser carregada");
+  // A biblioteca precisa ser carregada antes do app.js.
+  assert.ok(html.indexOf("xlsx.full.min.js") < html.indexOf("app.js"),
+    "a biblioteca do Excel deve ser carregada antes do app.js");
+  const app = read("app.js");
+  assert.ok(app.includes("function readSpreadsheetRows("), "deve ler o arquivo escolhido");
+  assert.ok(app.includes("function planServerImport("), "deve validar as linhas antes de gravar");
+});

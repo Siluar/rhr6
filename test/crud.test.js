@@ -21,7 +21,7 @@ const readSource = file => fs.readFileSync(path.join(root, file), "utf8");
 
 // `let`/`const` de topo do app.js ficam presos ao escopo do eval. Este trecho é
 // anexado só nos testes para conseguirmos ler o estado interno do app.
-const STATE_SHIM = "\n;window.__state = () => ({ unidades, cargos, quadros, serverPersonalData, usuarios, tasks, fgServerRoster, requests, shownMonth, requestFilter, requestTypeFilter });";
+const STATE_SHIM = "\n;window.__state = () => ({ unidades, cargos, quadros, serverPersonalData, usuarios, tasks, fgServerRoster, requests, shownMonth, requestFilter, requestTypeFilter });\nwindow.__planServerImport = rows => planServerImport(rows);";
 
 const DEFAULT_ESCALA = { equipes: ["Bravo", "Charlie", "Delta", "Alfa"], dataBase: "2026-10-01", cicloDias: 4 };
 
@@ -420,6 +420,86 @@ test("servidores: colunas na ordem pedida e Função Gratificada na última colu
 
     const semFg = cellsOf("Servidor Sem Fg");
     assert.equal(semFg[8], "Não", "quem não tem Função Gratificada deve mostrar Não");
+  });
+});
+
+test("importação: valida as linhas, pula quem já existe e cria o que falta", async () => {
+  await withApp({}, async app => {
+    // Já existe um servidor com este CPF.
+    createServer(app, { name: "Já Existe", cpf: "11122233344", email: "ja.existe@pp.pr.gov.br" });
+    await app.settle();
+
+    const rows = [
+      ["Servidor", "E-mail", "CPF", "RG", "Telefone", "Quadro", "Função", "Unidade", "Função Gratificada"],
+      ["Novo Servidor", "novo@pp.pr.gov.br", "123.456.789-09", "9988776", "(44) 98888-7777", "QPPP", "Policial Penal", "CP Umuarama", "Sim"],
+      ["Já Existe", "outro@pp.pr.gov.br", "11122233344", "111", "44999990000", "QPPP", "Policial Penal", "CP Umuarama", "Não"],
+      ["Sem CPF", "semcpf@pp.pr.gov.br", "123", "222", "44999990000", "QPPP", "Policial Penal", "CP Umuarama", ""],
+      ["Novo Lugar", "lugar@pp.pr.gov.br", "98765432100", "333", "44999991111", "QPPE", "Agente de Execução", "Unidade Inédita", "Não"],
+      ["Sem E-mail", "", "55566677788", "444", "44999992222", "QPPP", "Policial Penal", "CP Umuarama", ""]
+    ];
+    const plan = app.window.__planServerImport(rows);
+
+    assert.equal(plan.records.length, 2, "só as duas linhas válidas");
+    assert.equal(plan.skipped.length, 1, "uma linha com CPF repetido");
+    assert.equal(plan.errors.length, 2, "CPF inválido e e-mail faltando");
+    assert.equal(plan.newUnidades.map(item => item.name).join("|"), "Unidade Inédita", "cria a unidade inédita");
+    assert.equal(plan.newCargos.length, 0, "a função já existe no cadastro");
+    assert.equal(plan.newQuadros.length, 0, "o quadro já existe no cadastro");
+    assert.equal(plan.fgAdds.length, 1, "só quem diz Sim entra no cadastro de Função Gratificada");
+    assert.equal(plan.fgAdds[0].name, "Novo Servidor");
+
+    const novo = plan.records.find(record => record.email === "novo@pp.pr.gov.br");
+    assert.ok(novo, "a linha válida deveria virar registro");
+    assert.equal(novo.cpf, "12345678909", "CPF guardado só com dígitos");
+    assert.equal(novo.phone, "44988887777", "telefone guardado só com dígitos");
+    assert.equal(novo.birthDate, "", "sem data de nascimento na planilha, fica em branco");
+    assert.equal(novo.quadro, "QPPP");
+    assert.equal(novo.unidadePenal, "CP Umuarama");
+
+    assert.ok(plan.skipped[0].startsWith("Já Existe"), "mensagem aponta a linha repetida");
+    assert.ok(plan.errors.some(item => item.startsWith("Sem CPF")), "aponta o CPF inválido");
+    assert.ok(plan.errors.some(item => item.startsWith("Sem E-mail")), "aponta o e-mail faltando");
+  });
+});
+
+test("importação: lê um arquivo .csv, cadastra e mostra na tabela", async () => {
+  await withApp({}, async app => {
+    const { window } = app;
+    const csv = [
+      "Servidor;E-mail;CPF;RG;Telefone;Quadro;Função;Unidade",
+      "Importado Um;importado.um@pp.pr.gov.br;123.456.789-09;1234567;(44) 99999-0000;QPPP;Policial Penal;CP Umuarama",
+      "Importado Dois;importado.dois@pp.pr.gov.br;987.654.321-00;7654321;(44) 98888-1111;QPPE;Agente de Execução;Unidade Inédita"
+    ].join("\r\n");
+    const file = new window.File([csv], "servidores.csv", { type: "text/csv" });
+    const input = app.byId("server-data-import-file");
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+
+    app.submit(app.byId("server-data-import-form"));
+    await app.settle();
+
+    const state = app.state();
+    const um = state.serverPersonalData.find(item => item.email === "importado.um@pp.pr.gov.br");
+    const dois = state.serverPersonalData.find(item => item.email === "importado.dois@pp.pr.gov.br");
+    assert.ok(um, "o primeiro importado deveria estar no cadastro");
+    assert.ok(dois, "o segundo importado deveria estar no cadastro");
+    assert.equal(um.cpf, "12345678909");
+    assert.equal(um.birthDate, "", "data de nascimento em branco");
+    assert.equal(dois.unidadePenal, "Unidade Inédita");
+
+    // A unidade inédita foi criada no cadastro de unidades.
+    assert.ok(state.unidades.some(item => item.name === "Unidade Inédita"), "unidade inédita criada");
+    // E os dois aparecem na tabela.
+    const body = app.byId("server-data-body").textContent;
+    assert.ok(body.includes("Importado Um") && body.includes("Importado Dois"), "importados aparecem na tabela");
+    // Também foram gravados na nuvem.
+    assert.equal(app.sync._all("servidores").length >= 2, true, "gravou na coleção de servidores");
+
+    // Importar o mesmo arquivo de novo não duplica: tudo é ignorado como já cadastrado.
+    app.submit(app.byId("server-data-import-form"));
+    await app.settle();
+    const secondMessage = app.byId("server-data-import-message").textContent;
+    assert.equal(app.state().serverPersonalData.length, 2, "nenhum duplicado no segundo envio");
+    assert.ok(secondMessage.includes("ignorado"), `a mensagem deve explicar: ${secondMessage}`);
   });
 });
 
