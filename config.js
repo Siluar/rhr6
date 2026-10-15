@@ -42,6 +42,16 @@ window.RH_CONFIG = Object.assign({}, window.RH_CONFIG, {
     "imc.sidnei@gmail.com"
   ],
 
+  // Funções gratificadas disponíveis no cadastro de Função Gratificada do
+  // painel e no formulário de solicitações. Para incluir outra função, basta
+  // acrescentar aqui.
+  fgFunctions: [
+    "Coordenador",
+    "Diretor",
+    "Chefe Administrativo",
+    "Chefe de Segurança"
+  ],
+
   // Envio AUTOMÁTICO de e-mail (opcional). Enquanto os campos abaixo estiverem
   // vazios, o formulário apenas abre o rascunho no aplicativo de e-mail do
   // usuário (mailto:) e mostra as opções alternativas na tela.

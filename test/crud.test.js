@@ -1058,10 +1058,77 @@ test("solicitações: filtro por tipo mostra todas as situações daquele tipo",
   });
 });
 
+test("relatórios: a função exercida aparece nos protocolos F.G e nos relatórios de licença", async () => {
+  const req = (id, person, type, extra = {}) => Object.assign({
+    id, person, initials: "TT", color: "#728e70",
+    start: "2026-11-01", end: "2026-11-05", days: 5,
+    status: "approved", type, created: "01/11", note: "", month: "novembro", year: "2026"
+  }, extra);
+  const seed = {
+    requests: [
+      // Férias de um servidor do cadastro de FG, sem a função no próprio pedido
+      // (a função deve vir do cadastro).
+      req("r-ferias-fg", "Ana Souza Fg", "férias", { cpf: "11111111111" }),
+      // Licenças com a função registrada na solicitação.
+      req("r-premio", "Bruno Premio", "licença prêmio", { funcaoExercida: "Diretor", ciclo: "A" }),
+      req("r-cap", "Dora Capacitacao", "licença capacitação", { funcaoExercida: "Chefe de Segurança", ciclo: "B" }),
+      req("r-med", "Elis Medica", "licença médica", { funcaoExercida: "Chefe Administrativo" }),
+      // Sem função gratificada em lugar nenhum.
+      req("r-outros", "Fabio Outros", "licença para tratar de interesses particulares", {})
+    ],
+    fgServidores: [
+      { id: "fg-ana", name: "Ana Souza Fg", cpf: "11111111111", funcaoExercida: "Coordenador" }
+    ]
+  };
+
+  await withApp({ seed }, async app => {
+    // Protocolos F.G: a função da Ana vem do cadastro de Função Gratificada.
+    app.click('[data-view="protocols-fg"]');
+    await app.settle();
+    // O filtro de período começa no mês atual: limpa para ver o pedido semeado.
+    for (const id of ["protocols-fg-month-filter", "protocols-fg-year-filter"]) {
+      const select = app.byId(id);
+      select.value = "";
+      select.dispatchEvent(new app.window.Event("change", { bubbles: true }));
+    }
+    await app.settle();
+    const protocolRows = app.$$("#protocols-fg-body tr");
+    assert.equal(protocolRows.length, 1, "deveria haver o protocolo da Ana");
+    const protocolCells = [...protocolRows[0].children].map(cell => cell.textContent.trim());
+    assert.equal(protocolCells[0], "Ana Souza Fg");
+    assert.equal(protocolCells[2], "Coordenador", "a coluna Função exercida deveria vir do cadastro de FG");
+
+    // Relatório de licença prêmio: função registrada na própria solicitação.
+    app.click('[data-view="report-premio"]');
+    await app.settle();
+    assert.match(app.byId("report-premio-body").textContent, /Bruno Premio[\s\S]*Diretor/,
+      "o relatório de prêmio deveria mostrar a função exercida");
+
+    // Relatório de licença capacitação.
+    app.click('[data-view="report-capacitacao"]');
+    await app.settle();
+    assert.match(app.byId("report-capacitacao-body").textContent, /Dora Capacitacao[\s\S]*Chefe de Segurança/,
+      "o relatório de capacitação deveria mostrar a função exercida");
+
+    // Relatório de licença médica.
+    app.click('[data-view="report-medica"]');
+    await app.settle();
+    assert.match(app.byId("report-medica-body").textContent, /Elis Medica[\s\S]*Chefe Administrativo/,
+      "o relatório de licença médica deveria mostrar a função exercida");
+
+    // Relatório de solicitações (todos os tipos) também traz a função.
+    app.click('[data-view="report-requests"]');
+    await app.settle();
+    const requestsTable = app.byId("report-requests-body").textContent;
+    assert.match(requestsTable, /Diretor/, "o relatório de solicitações deveria mostrar a função exercida");
+    assert.match(requestsTable, /Fabio OutrosCPF não informadoNão informado/,
+      "quem não tem função gratificada deveria aparecer como Não informado");
+  });
+});
+
 // =========================================================================
 // Calendário
 // =========================================================================
-
 test("calendário: abre no mês atual, alinha o 1º dia e navega entre meses", async () => {
   await withApp({}, async app => {
     const { state } = app;

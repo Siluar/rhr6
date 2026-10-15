@@ -23,6 +23,10 @@ O sistema permite:
   rotação) é configurável em `config.js`, sem mexer no código.
 - **Formulário de solicitação**: lista as unidades cadastradas na nuvem e avisa
   (sem bloquear) quando outra pessoa da mesma equipe já pediu o mesmo período.
+  A pergunta **"Possui Função Gratificada?"** (Sim/Não) aparece em **todos os
+  tipos** de solicitação — férias, licença prêmio, capacitação, médica e outras —
+  e, com "Sim", pede a **Função exercida** (lista com as funções de `config.js`)
+  e o **Substituto**.
 
 Por padrão, os dados são mantidos no navegador (`localStorage` / `sessionStorage`).
 Com o backend opcional do **Firebase** (seção abaixo), as solicitações são
@@ -52,6 +56,7 @@ Toda a configuração fica em `config.js` (versionado):
 | `googleAdminEmails` | E-mails do Google com acesso de administrador (proprietários) |
 | `escala` | Escala de plantão: `equipes` (ordem da rotação), `dataBase` (AAAA-MM-DD em que a 1ª equipe está de serviço) e `cicloDias` (ex.: `4` = 24h de serviço + 72h de descanso). Ajuste aqui quando a escala mudar |
 | `notificationEmails` | Destinatários das solicitações (`To`). O solicitante vai em cópia (`CC`) |
+| `fgFunctions` | Funções gratificadas disponíveis (Coordenador, Diretor, Chefe Administrativo, Chefe de Segurança). É a mesma lista usada no painel, no **Lançar período de férias** e no formulário de solicitações |
 | `emailjs` | Chaves opcionais do EmailJS para envio automático de e-mail (vazio = só abre o rascunho) |
 | `firebase` | Objeto `firebaseConfig`; quando preenchido, liga o backend (Auth + Firestore) |
 
@@ -141,7 +146,16 @@ editar e excluir), persistida nas coleções do Firestore:
   No **Cadastro de Servidores com Função Gratificada** cada entrada guarda a
   **Função exercida** (Coordenador, Diretor, Chefe Administrativo, Chefe de
   Segurança), que pode ser trocada direto na tabela; o painel tem busca na
-  lista (nome, CPF, unidade ou função) e busca no seletor de servidores.
+  lista (nome, CPF, unidade ou função) e busca no seletor de servidores. A lista
+  de funções fica em `config.js` (`fgFunctions`) e é a mesma usada pelo
+  formulário de solicitações e pelo painel **Lançar período de férias**.
+
+  A **Função exercida** aparece em todos os relatórios do painel — Protocolos
+  F.G, licença prêmio, licença capacitação, licença médica e o Relatório de
+  solicitações (todos os tipos) — inclusive nas exportações CSV/PDF, que saem
+  da própria tabela. Quando a solicitação não traz a função, ela é buscada no
+  cadastro de Função Gratificada (pelo CPF ou pelo nome), de modo que os pedidos
+  antigos também aparecem classificados.
 - **Cadastro de Unidades** — item **Unidades** próprio na barra lateral para
   criar, editar e excluir as unidades penais (coleção `unidades`). As unidades
   cadastradas alimentam o select "Unidade Penal" do formulário de dados dos

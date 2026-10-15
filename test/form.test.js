@@ -158,3 +158,57 @@ test("escolher 'Sim' na FG revela função exercida e substituto", () => {
   assert.ok(substituteField.classList.contains("hidden"), "voltar para Não deve ocultar de novo");
   assert.equal(functionInput.required, false);
 });
+
+test("a função exercida é uma lista suspensa com as funções gratificadas", () => {
+  const { window, thrown } = loadForm({ sync: baseSync() });
+  assert.equal(thrown, null);
+  const select = window.document.getElementById("funcao-exercida");
+  assert.ok(select, "o campo #funcao-exercida precisa existir");
+  assert.equal(select.tagName, "SELECT", "'Função exercida' deve ser uma lista, não texto livre");
+  assert.deepEqual([...select.options].map(option => option.value),
+    ["", "Coordenador", "Diretor", "Chefe Administrativo", "Chefe de Segurança"]);
+});
+
+test("o bloco de Função Gratificada aparece em todos os tipos de solicitação", () => {
+  const { window, thrown } = loadForm({ sync: baseSync() });
+  assert.equal(thrown, null);
+  const doc = window.document;
+  for (const option of ["premio", "capacitacao", "medica", "outros"]) {
+    doc.querySelector(`[data-option="${option}"]`).click();
+    assert.ok(!doc.getElementById("fg-flag-field").classList.contains("hidden"),
+      `a pergunta de FG deve aparecer no tipo "${option}"`);
+  }
+
+  // Com "Sim", a função exercida e o substituto aparecem mesmo fora das férias.
+  const fg = doc.getElementById("possui-fg");
+  fg.value = "sim";
+  fg.dispatchEvent(new window.Event("change", { bubbles: true }));
+  assert.ok(!doc.getElementById("function-field").classList.contains("hidden"));
+  assert.ok(!doc.getElementById("substitute-field").classList.contains("hidden"));
+  assert.equal(doc.getElementById("funcao-exercida").required, true);
+});
+
+test("solicitação de licença prêmio de quem tem FG grava a função exercida", () => {
+  const added = [];
+  const { window, thrown } = loadForm({
+    sync: baseSync({ addRequest: request => { added.push(request); return Promise.resolve(request); } })
+  });
+  assert.equal(thrown, null);
+  const doc = window.document;
+  doc.querySelector('[data-option="premio"]').click();
+  doc.getElementById("ciclo").value = "A";
+  const fg = doc.getElementById("possui-fg");
+  fg.value = "sim";
+  fg.dispatchEvent(new window.Event("change", { bubbles: true }));
+  doc.getElementById("funcao-exercida").value = "Diretor";
+  doc.getElementById("substituto").value = "Maria Substituta";
+  doc.getElementById("vacation-form").dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+
+  const saved = JSON.parse(window.localStorage.getItem("brisa-vacation-requests-v1") || "[]");
+  assert.equal(saved.length, 1, "a solicitação deveria ser registrada");
+  assert.equal(saved[0].funcaoExercida, "Diretor", "a função exercida deveria ir na solicitação");
+  assert.equal(saved[0].substituto, "Maria Substituta");
+  assert.equal(saved[0].temFG, true);
+  assert.match(saved[0].type, /prêmio|premio/, "o tipo deveria ser a licença prêmio");
+  assert.equal(saved[0].ciclo, "A");
+});

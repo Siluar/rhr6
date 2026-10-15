@@ -171,16 +171,60 @@ test("cadastro de função gratificada: busca na lista, seletor de função e co
   // Busca da lista e busca do seletor de servidores.
   assert.ok(html.includes('id="server-fg-search"'), "deve haver busca na lista de Função Gratificada");
   assert.ok(html.includes('id="server-fg-server-search"'), "deve haver busca no seletor de servidores");
-  // O formulário tem o campo "Função exercida" com as funções pedidas.
+  // As funções ficam no config.js — a mesma lista é usada pelo painel e pelo
+  // formulário de solicitações.
   assert.ok(html.includes('id="server-fg-function"'), "deve haver o seletor de função exercida");
-  const app = read("app.js");
-  const options = app.slice(app.indexOf("const fgFunctionOptions"), app.indexOf("];", app.indexOf("const fgFunctionOptions")));
+  const config = read("config.js");
+  const configFunctions = config.slice(config.indexOf("fgFunctions"), config.indexOf("]", config.indexOf("fgFunctions")));
   for (const funcao of ["Coordenador", "Diretor", "Chefe Administrativo", "Chefe de Segurança"]) {
-    assert.ok(options.includes(funcao), `a função "${funcao}" deveria estar disponível`);
+    assert.ok(configFunctions.includes(funcao), `a função "${funcao}" deveria estar no config.js`);
   }
+  const app = read("app.js");
+  assert.ok(app.includes("RH_CONFIG.fgFunctions"), "o painel deve ler a lista de funções do config.js");
+  assert.ok(app.includes("fillFgFunctionSelect"), "os seletores de função devem ser montados a partir de uma única lista");
   // A busca da lista usa o mesmo componente dos outros cadastros.
   assert.ok(html.includes('class="table-search server-registry-search"><i data-lucide="search"></i><input id="server-fg-search"'),
     "a busca deve seguir o padrão dos outros cadastros");
+});
+
+test("formulário de solicitações: Função exercida é lista com as funções e vale em todos os tipos", () => {
+  const html = read("solicitacao-ferias.html");
+  const selectStart = html.indexOf('<select id="funcao-exercida"');
+  assert.ok(selectStart > -1, "'Função exercida' deve ser uma lista suspensa, não texto livre");
+  const selectMarkup = html.slice(selectStart, html.indexOf("</select>", selectStart));
+  for (const funcao of ["Coordenador", "Diretor", "Chefe Administrativo", "Chefe de Segurança"]) {
+    assert.ok(selectMarkup.includes(funcao), `a função "${funcao}" deveria aparecer no formulário`);
+  }
+  // Mesma lista do painel, vinda do config.js.
+  assert.ok(html.includes("RH_CONFIG.fgFunctions"), "o formulário deve usar a mesma lista do painel");
+  // O bloco de Função Gratificada não é mais escondido fora das férias e a
+  // função/substituto são recolhidos em qualquer tipo de solicitação.
+  assert.ok(!html.includes("fgFlagField.classList.toggle('hidden'"), "a pergunta de FG deve aparecer em todos os tipos");
+  assert.ok(!html.includes("usesPeriod ? functionInput.value.trim()"), "a função exercida deve ser recolhida em todos os tipos");
+  // O painel "Lançar férias" usa a mesma lista.
+  assert.ok(read("index.html").includes('<select id="vacation-launch-function"'), "o painel de lançamento também deve usar a lista");
+});
+
+test("relatórios e protocolos: coluna Função exercida em todos os tipos de solicitação", () => {
+  const html = read("index.html");
+  const tables = [
+    ["protocols-fg-body", ["Servidor solicitante", "CPF do solicitante", "Função exercida", "Substituto", "CPF do substituto", "Mês", "Ano", "Início", "Fim", "Dias de fruição", "Status do protocolo", "Número do protocolo", "Conferido"]],
+    ["report-premio-body", ["Servidor", "Função exercida", "Mês", "Unidade", "Período"]],
+    ["report-capacitacao-body", ["Servidor", "Função exercida", "Mês", "Unidade", "Período"]],
+    ["report-medica-body", ["Servidor", "Função exercida", "Mês", "Unidade", "Período"]],
+    ["report-requests-body", ["Servidor", "CPF", "Função exercida", "Categoria", "Tipo", "Unidade", "Período", "Justificativa"]]
+  ];
+  for (const [bodyId, expected] of tables) {
+    const bodyIndex = html.indexOf(`id="${bodyId}"`);
+    assert.ok(bodyIndex > -1, `a tabela ${bodyId} deve existir`);
+    const thead = html.slice(html.lastIndexOf("<thead>", bodyIndex), bodyIndex);
+    const headers = [...thead.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(match => match[1].trim());
+    assert.deepEqual(headers, expected, `colunas de ${bodyId}`);
+  }
+  const app = read("app.js");
+  assert.ok(app.includes("getRequestFuncaoExercida"), "os relatórios devem mostrar a função exercida do pedido");
+  // As exportações (CSV/PDF) leem a própria tabela, então seguem as colunas novas.
+  assert.ok(app.includes("getReportTableData"), "as exportações devem sair da tabela exibida");
 });
 
 test("cadastro de servidores: importação de planilha do Excel está disponível", () => {

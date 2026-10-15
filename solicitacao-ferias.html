@@ -488,7 +488,13 @@
                 </div>
                 <div class="field hidden" id="function-field">
                   <label for="funcao-exercida">Função exercida</label>
-                  <input id="funcao-exercida" name="funcaoExercida" type="text" placeholder="Informe a função gratificada" />
+                  <select id="funcao-exercida" name="funcaoExercida">
+                    <option value="">Selecione a função exercida</option>
+                    <option value="Coordenador">Coordenador</option>
+                    <option value="Diretor">Diretor</option>
+                    <option value="Chefe Administrativo">Chefe Administrativo</option>
+                    <option value="Chefe de Segurança">Chefe de Segurança</option>
+                  </select>
                 </div>
                 <div class="field hidden" id="substitute-field">
                   <label for="substituto">Substituto</label>
@@ -664,10 +670,23 @@
       // script referenciava estas variáveis sem as declarar, o que lançava
       // ReferenceError em nível de topo e interrompia TODO o restante do script
       // (cliques, ?tipo= e o carregamento das unidades).
-      const fgFlagField = document.getElementById('fg-flag-field');
+      // A pergunta "Possui Função Gratificada?" (fg-flag-field / #possui-fg)
+      // aparece em todos os tipos de solicitação.
       const fgFlagSelect = document.getElementById('possui-fg');
       // O campo de Função Gratificada é uma lista suspensa Sim/Não; valor vazio = Não.
       const fgFlagSelected = () => Boolean(fgFlagSelect && fgFlagSelect.value === 'sim');
+      // Lista de funções gratificadas compartilhada com o painel (config.js).
+      // Se o config não trouxer a lista, mantém as opções que já estão no HTML.
+      const fgFunctionSelect = document.getElementById('funcao-exercida');
+      if (fgFunctionSelect) {
+        const configuredFunctions = (window.RH_CONFIG && Array.isArray(window.RH_CONFIG.fgFunctions))
+          ? window.RH_CONFIG.fgFunctions.map(value => String(value || '').trim()).filter(Boolean)
+          : [];
+        if (configuredFunctions.length) {
+          fgFunctionSelect.innerHTML = '<option value="">Selecione a função exercida</option>'
+            + configuredFunctions.map(value => `<option value="${value}">${value}</option>`).join('');
+        }
+      }
 
       const passwordChangeDialog = document.getElementById('password-change-dialog');
       const passwordChangeForm = document.getElementById('password-change-form');
@@ -762,12 +781,14 @@
 
         formTitle.textContent = config.title;
 
-        if (fgFlagField) fgFlagField.classList.toggle('hidden', !isVacation);
+        // O bloco de Função Gratificada vale para TODOS os tipos de solicitação
+        // (férias, licença prêmio, capacitação, médica e outras): quem exerce
+        // função gratificada também precisa informar a função e o substituto.
         if (fgFlagSelect) {
           fgFlagSelect.value = isFgServer ? 'sim' : '';
         }
 
-        const showFgFieldsInitial = isVacation && (isFgServer || fgFlagSelected());
+        const showFgFieldsInitial = isFgServer || fgFlagSelected();
         formSubtitle.textContent = showFgFieldsInitial
           ? `${config.subtitle} Como servidor com Função Gratificada, informe também a função exercida e o substituto.`
           : config.subtitle;
@@ -786,7 +807,7 @@
         otherTypeInput.required = Boolean(config.specify);
         if (!config.specify) otherTypeInput.value = '';
         // Recalcula caso o usuário marque/desmarque a caixa
-        let finalShowFgFields = isVacation && (isFgServer || fgFlagSelected());
+        let finalShowFgFields = isFgServer || fgFlagSelected();
         functionField.classList.toggle('hidden', !finalShowFgFields);
         functionInput.required = finalShowFgFields;
         if (!finalShowFgFields) functionInput.value = '';
@@ -808,9 +829,7 @@
       // Atualiza campos de FG ao alternar o checkbox manual
       if (fgFlagSelect) {
         fgFlagSelect.addEventListener('change', () => {
-          const config = getOptionConfig(currentOption || 'ferias');
-          const isVacationMode = (config && config.mode === 'vacation');
-          const finalShow = isVacationMode && (isFgServer || fgFlagSelected());
+          const finalShow = isFgServer || fgFlagSelected();
           functionField.classList.toggle('hidden', !finalShow);
           functionInput.required = finalShow;
           substituteField.classList.toggle('hidden', !finalShow);
@@ -934,8 +953,10 @@
         const cpf = cpfInput.value.trim();
         const unidade = document.getElementById('unidade').value.trim();
         const equipe = document.getElementById('equipe').value.trim();
-        const funcaoExercida = usesPeriod ? functionInput.value.trim() : '';
-        const substituto = usesPeriod ? substituteInput.value.trim() : '';
+        // Função exercida e substituto são recolhidos em qualquer tipo de
+        // solicitação (o bloco de FG aparece em todas as abas).
+        const funcaoExercida = functionInput.value.trim();
+        const substituto = substituteInput.value.trim();
         const dataSolicitacao = usesPeriod ? monthSelect.value : '';
         const inicioFerias = usesPeriod ? vacationStartInput.value : '';
         const fimFerias = usesPeriod ? vacationEndInput.value : '';

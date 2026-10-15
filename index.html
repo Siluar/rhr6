@@ -211,7 +211,7 @@
           <section class="view-panel" id="view-protocols-fg" aria-label="Protocolos de Função Gratificada">
             <section class="panel detailed-reports-panel" aria-labelledby="protocols-fg-title">
               <div class="panel-heading"><div><p class="section-kicker">FÉRIAS COM FUNÇÃO GRATIFICADA</p><h2 id="protocols-fg-title">Protocolos F.G</h2></div><div class="name-filter-toolbar"><label class="table-search name-filter"><i data-lucide="search"></i><input id="protocols-fg-search" type="search" placeholder="Filtrar por nome" aria-label="Filtrar Protocolos F.G por nome do solicitante ou substituto" /></label><label class="report-period-field meta-period-filter" for="protocols-fg-month-filter">Mês<select id="protocols-fg-month-filter"><option value="">Todos os meses</option></select></label><label class="report-period-field meta-period-filter" for="protocols-fg-year-filter">Ano<select id="protocols-fg-year-filter"><option value="">Todos os anos</option></select></label><label class="report-period-field meta-period-filter" for="protocols-fg-status-filter">Status<select id="protocols-fg-status-filter"><option value="">Todos</option><option value="fazer">Fazer protocolo</option><option value="feito">Protocolo feito</option></select></label><span class="task-count" id="protocols-fg-count">0 protocolos</span></div></div>
-              <div class="detailed-report-table-wrap"><table class="detailed-report-table protocols-fg-table"><thead><tr><th scope="col">Servidor solicitante</th><th scope="col">CPF do solicitante</th><th scope="col">Substituto</th><th scope="col">CPF do substituto</th><th scope="col">Mês</th><th scope="col">Ano</th><th scope="col">Início</th><th scope="col">Fim</th><th scope="col">Dias de fruição</th><th scope="col">Status do protocolo</th><th scope="col">Número do protocolo</th><th scope="col">Conferido</th></tr></thead><tbody id="protocols-fg-body"></tbody></table></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table protocols-fg-table"><thead><tr><th scope="col">Servidor solicitante</th><th scope="col">CPF do solicitante</th><th scope="col">Função exercida</th><th scope="col">Substituto</th><th scope="col">CPF do substituto</th><th scope="col">Mês</th><th scope="col">Ano</th><th scope="col">Início</th><th scope="col">Fim</th><th scope="col">Dias de fruição</th><th scope="col">Status do protocolo</th><th scope="col">Número do protocolo</th><th scope="col">Conferido</th></tr></thead><tbody id="protocols-fg-body"></tbody></table></div>
             </section>
           </section>
 
@@ -267,7 +267,7 @@
                 <label for="vacation-launch-end">Término<input id="vacation-launch-end" type="date" required /></label>
                 <label class="vacation-launch-note" for="vacation-launch-note">Observação (opcional)<input id="vacation-launch-note" type="text" maxlength="160" placeholder="Ex.: férias lançadas conforme escala" /></label>
                 <label class="vacation-launch-fg-toggle" for="vacation-launch-fg"><input type="checkbox" id="vacation-launch-fg" /> <span>Servidor com Função Gratificada</span></label>
-                <label class="vacation-launch-fg-field" for="vacation-launch-function" hidden>Função exercida<input id="vacation-launch-function" type="text" maxlength="80" placeholder="Informe a função gratificada" /></label>
+                <label class="vacation-launch-fg-field" for="vacation-launch-function" hidden>Função exercida<select id="vacation-launch-function"><option value="">Selecione a função exercida</option></select></label>
                 <label class="vacation-launch-fg-field" for="vacation-launch-substitute" hidden>Substituto<input id="vacation-launch-substitute" type="text" maxlength="80" placeholder="Informe o nome do substituto" /></label>
                 <button class="button button-primary" type="submit"><i data-lucide="calendar-plus"></i><span>Lançar férias</span></button>
               </form>
@@ -405,7 +405,7 @@
                 <label class="report-unit-filter" for="report-requests-year">Ano<select id="report-requests-year"><option value="">Todos os anos</option></select></label>
               </div>
               <div class="report-month-toolbar"><span class="task-count" id="report-requests-count">0 solicitações</span><div class="report-export-actions" data-report-export-table="report-requests-table" data-report-export-title="Relatório de solicitações"></div></div>
-              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-requests-table"><thead><tr><th scope="col">Servidor</th><th scope="col">CPF</th><th scope="col">Categoria</th><th scope="col">Tipo</th><th scope="col">Unidade</th><th scope="col">Período</th><th scope="col">Justificativa</th></tr></thead><tbody id="report-requests-body"></tbody></table></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-requests-table"><thead><tr><th scope="col">Servidor</th><th scope="col">CPF</th><th scope="col">Função exercida</th><th scope="col">Categoria</th><th scope="col">Tipo</th><th scope="col">Unidade</th><th scope="col">Período</th><th scope="col">Justificativa</th></tr></thead><tbody id="report-requests-body"></tbody></table></div>
             </section>
           </section>
           <section class="view-panel" id="view-report-capacitacao" aria-label="Relatório de licença-capacitação">
@@ -416,7 +416,7 @@
                 <label class="report-unit-filter" for="report-capacitacao-month">Ciclo<select id="report-capacitacao-month"><option value="">Todos os ciclos</option></select></label>
               </div>
               <div class="report-export-actions" data-report-export-table="report-capacitacao-table" data-report-export-title="Relatório de licença-capacitação"></div>
-              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-capacitacao-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Mês</th><th scope="col">Unidade</th><th scope="col">Período</th></tr></thead><tbody id="report-capacitacao-body"></tbody></table></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-capacitacao-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Função exercida</th><th scope="col">Mês</th><th scope="col">Unidade</th><th scope="col">Período</th></tr></thead><tbody id="report-capacitacao-body"></tbody></table></div>
             </section>
           </section>
           <section class="view-panel" id="view-report-premio" aria-label="Relatório de licença prêmio">
@@ -427,7 +427,7 @@
                 <label class="report-unit-filter" for="report-premio-month">Ciclo<select id="report-premio-month"><option value="">Todos os ciclos</option></select></label>
               </div>
               <div class="report-export-actions" data-report-export-table="report-premio-table" data-report-export-title="Relatório de licença prêmio"></div>
-              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-premio-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Mês</th><th scope="col">Unidade</th><th scope="col">Período</th></tr></thead><tbody id="report-premio-body"></tbody></table></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-premio-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Função exercida</th><th scope="col">Mês</th><th scope="col">Unidade</th><th scope="col">Período</th></tr></thead><tbody id="report-premio-body"></tbody></table></div>
             </section>
           </section>
           <section class="view-panel" id="view-report-medica" aria-label="Relatório de licença médica">
@@ -438,7 +438,7 @@
                 <label class="report-unit-filter" for="report-medica-month">Mês<select id="report-medica-month"><option value="">Todos os meses</option></select></label>
               </div>
               <div class="report-export-actions" data-report-export-table="report-medica-table" data-report-export-title="Relatório de licença médica"></div>
-              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-medica-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Mês</th><th scope="col">Unidade</th><th scope="col">Período</th></tr></thead><tbody id="report-medica-body"></tbody></table></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-medica-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Função exercida</th><th scope="col">Mês</th><th scope="col">Unidade</th><th scope="col">Período</th></tr></thead><tbody id="report-medica-body"></tbody></table></div>
             </section>
           </section>
           <section class="view-panel" id="view-report-servers" aria-label="Relatório - Servidores">

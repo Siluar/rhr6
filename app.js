@@ -1699,9 +1699,21 @@ function getApprovedVacationRequests() {
   });
 }
 
-// Funções gratificadas que podem ser registradas no cadastro de Função
-// Gratificada. Para incluir outra, basta acrescentar aqui.
-const fgFunctionOptions = ["Coordenador", "Diretor", "Chefe Administrativo", "Chefe de Segurança"];
+// Funções gratificadas que podem ser registradas (lista em config.js, para o
+// painel e o formulário de solicitações usarem a mesma).
+const fgFunctionOptions = (() => {
+  const configured = typeof window !== "undefined" && window.RH_CONFIG && window.RH_CONFIG.fgFunctions;
+  const list = Array.isArray(configured) ? configured.map(value => String(value || "").trim()).filter(Boolean) : [];
+  return list.length ? list : ["Coordenador", "Diretor", "Chefe Administrativo", "Chefe de Segurança"];
+})();
+
+// Monta (uma única vez) as opções de "Função exercida" em um <select>.
+function fillFgFunctionSelect(select, placeholder = "Selecione a função exercida") {
+  if (!select || select.options.length > 1) return;
+  select.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>${fgFunctionOptions
+    .map(option => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`)
+    .join("")}`;
+}
 
 // Identificador estável de uma entrada da lista de Função Gratificada. É usado
 // como id do documento na nuvem (CPF quando existir, senão o nome).
@@ -1825,9 +1837,7 @@ function renderFgServerRoster() {
   // Monta as opções de "Função exercida" uma única vez (não mexe na escolha
   // atual do usuário nas próximas renderizações).
   const functionSelect = document.getElementById("server-fg-function");
-  if (functionSelect && functionSelect.options.length <= 1) {
-    functionSelect.innerHTML = `<option value="">Selecione a função exercida</option>${fgFunctionOptions.map(option => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join("")}`;
-  }
+  fillFgFunctionSelect(functionSelect);
 
   const enrolledCpfs = new Set(fgServerRoster.map(entry => getFgRosterCpf(entry).replace(/\D/g, "")).filter(Boolean));
   const enrolledNames = new Set(fgServerRoster.map(entry => getFgRosterName(entry).toLocaleLowerCase("pt-BR")));
@@ -1905,12 +1915,25 @@ function syncVacationLaunchFg() {
   const checkbox = document.getElementById("vacation-launch-fg");
   const server = serverPersonalData.find(record => record.id === document.getElementById("vacation-launch-server").value);
   const alreadyFg = isServerInFgRoster(server);
+  const functionSelect = document.getElementById("vacation-launch-function");
+  fillFgFunctionSelect(functionSelect);
   if (alreadyFg) checkbox.checked = true;
   checkbox.disabled = alreadyFg;
   checkbox.title = alreadyFg ? "Servidor já cadastrado com Função Gratificada" : "";
   const show = checkbox.checked;
   document.querySelectorAll(".vacation-launch-fg-field").forEach(field => { field.hidden = !show; });
-  document.getElementById("vacation-launch-function").required = show;
+  // Servidor já cadastrado: aproveita a função que está no cadastro de FG.
+  if (alreadyFg && functionSelect && server) {
+    const entry = fgServerRoster.find(item =>
+      (String(server.cpf || "").replace(/\D/g, "") && getFgRosterCpf(item).replace(/\D/g, "") === String(server.cpf || "").replace(/\D/g, "")) ||
+      (String(server.name || "").trim() && getFgRosterName(item).trim().toLocaleLowerCase("pt-BR") === String(server.name || "").trim().toLocaleLowerCase("pt-BR")));
+    if (entry && entry.funcaoExercida && functionSelect.value !== entry.funcaoExercida) {
+      const hasOption = [...functionSelect.options].some(option => option.value === entry.funcaoExercida);
+      if (!hasOption) functionSelect.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(entry.funcaoExercida)}">${escapeHtml(entry.funcaoExercida)}</option>`);
+      functionSelect.value = entry.funcaoExercida;
+    }
+  }
+  functionSelect.required = show;
   document.getElementById("vacation-launch-substitute").required = show;
 }
 
@@ -2114,7 +2137,7 @@ function renderReportFg() {
 
   reportBody.innerHTML = matchingRequests.length
     ? matchingRequests.map(request => {
-      const functionName = request.funcaoExercida || request.functionExercised || request.funcao || request.function || request.cargo || "Não informado";
+      const functionName = getRequestFuncaoExercida(request) || request.cargo || "Não informado";
       const person = String(request.person || "Não identificado");
       const substitute = String(request.substituto || request.substitute || "Não informado");
       const personCpf = request.cpf || findServerCpfByName(person);
@@ -2123,6 +2146,23 @@ function renderReportFg() {
       return `<tr><td>${escapeHtml(formatCpfLabel(personCpf))} — ${escapeHtml(person)}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(month)}</td><td>${escapeHtml(functionName)}</td><td>${escapeHtml(formatCpfLabel(substituteCpf))} — ${escapeHtml(substitute)}</td><td>${escapeHtml(formatReportPeriod(request, selectedVacationYear, selectedVacationMonth))}</td></tr>`;
     }).join("")
     : `<tr><td class="current-vacations-empty" colspan="6">Nenhum servidor com Função Gratificada com férias aprovadas neste mês.</td></tr>`;
+}
+
+// Função exercida de uma solicitação: usa o que veio no pedido e, se não
+// houver, procura no cadastro de Servidores com Função Gratificada (CPF ou
+// nome). Assim os pedidos antigos também aparecem classificados.
+function getRequestFuncaoExercida(request) {
+  const fromRequest = String(request?.funcaoExercida || request?.functionExercised || request?.funcao || request?.function || "").trim();
+  if (fromRequest) return fromRequest;
+  const cpfDigits = String(request?.cpf || "").replace(/\D/g, "");
+  const name = normalizeSearchText(request?.person);
+  if (!cpfDigits && !name) return "";
+  const entry = fgServerRoster.find(item => {
+    const itemCpf = getFgRosterCpf(item).replace(/\D/g, "");
+    if (cpfDigits && itemCpf === cpfDigits) return true;
+    return Boolean(name) && normalizeSearchText(getFgRosterName(item)) === name;
+  });
+  return String(entry?.funcaoExercida || "").trim();
 }
 
 function findServerCpfByName(name) {
@@ -2188,9 +2228,10 @@ function renderCycleLicenseReport({ type, bodyId, cycleSelectId, searchInputId, 
         ? months.map(month => `${month.charAt(0).toLocaleUpperCase("pt-BR")}${month.slice(1)}`).join(", ")
         : "Não informado";
       const period = licenseCycleMonths[cycle] ? `Ciclo ${cycle}` : "Não informado";
-      return `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(monthLabels)}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(period)}</td></tr>`;
+      const funcaoExercida = getRequestFuncaoExercida(request) || "Não informado";
+      return `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(funcaoExercida)}</td><td>${escapeHtml(monthLabels)}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(period)}</td></tr>`;
     }).join("")
-    : `<tr><td class="detailed-report-empty" colspan="4">${escapeHtml(emptyMessage)}</td></tr>`;
+    : `<tr><td class="detailed-report-empty" colspan="5">${escapeHtml(emptyMessage)}</td></tr>`;
 }
 
 function renderReportPremio() {
@@ -2240,8 +2281,8 @@ function renderReportMedica() {
   });
 
   reportBody.innerHTML = filteredRequests.length
-    ? filteredRequests.map(request => `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(getRequestMonthDisplay(request))}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(getRequestPeriodDisplay(request))}</td></tr>`).join("")
-    : `<tr><td class="detailed-report-empty" colspan="4">Nenhuma licença médica concedida.</td></tr>`;
+    ? filteredRequests.map(request => `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(getRequestFuncaoExercida(request) || "Não informado")}</td><td>${escapeHtml(getRequestMonthDisplay(request))}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(getRequestPeriodDisplay(request))}</td></tr>`).join("")
+    : `<tr><td class="detailed-report-empty" colspan="5">Nenhuma licença médica concedida.</td></tr>`;
 }
 
 function getAvailableReportYears(approvedRequests, currentYear) {
@@ -2476,7 +2517,7 @@ function renderReportRequests() {
   if (countElement) countElement.textContent = `${filtered.length} ${filtered.length === 1 ? "solicitação" : "solicitações"}`;
 
   if (!filtered.length) {
-    body.innerHTML = `<tr><td class="detailed-report-empty" colspan="7">Nenhuma solicitação encontrada com esses filtros.</td></tr>`;
+    body.innerHTML = `<tr><td class="detailed-report-empty" colspan="8">Nenhuma solicitação encontrada com esses filtros.</td></tr>`;
     return;
   }
 
@@ -2490,7 +2531,7 @@ function renderReportRequests() {
     const period = getRequestPeriodDisplay(request);
     const displayPeriod = period && period !== "Não informado" ? period : getRequestMonthCycleDisplay(request);
     const justification = getRequestJustification(request) || "—";
-    return `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(formatCpfLabel(request.cpf))}</td><td>${escapeHtml(getRequestCategoryLabel(request))}</td><td>${escapeHtml(getRequestTypeLabel(request))}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(displayPeriod)}</td><td>${escapeHtml(justification)}</td></tr>`;
+    return `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(formatCpfLabel(request.cpf))}</td><td>${escapeHtml(getRequestFuncaoExercida(request) || "Não informado")}</td><td>${escapeHtml(getRequestCategoryLabel(request))}</td><td>${escapeHtml(getRequestTypeLabel(request))}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(displayPeriod)}</td><td>${escapeHtml(justification)}</td></tr>`;
   };
 
   body.innerHTML = groupedStatuses
@@ -2500,7 +2541,7 @@ function renderReportRequests() {
         .filter(request => String(request.status || "") === status)
         .sort((left, right) => String(left.person || "").localeCompare(String(right.person || ""), "pt-BR") || String(left.start || left.month || "").localeCompare(String(right.start || right.month || "")));
       if (!items.length) return "";
-      return `<tr class="report-requests-group"><th scope="colgroup" colspan="7">${escapeHtml(requestStatusLabels[status] || status)} (${items.length})</th></tr>${items.map(renderRow).join("")}`;
+      return `<tr class="report-requests-group"><th scope="colgroup" colspan="8">${escapeHtml(requestStatusLabels[status] || status)} (${items.length})</th></tr>${items.map(renderRow).join("")}`;
     })
     .join("");
 }
@@ -2872,9 +2913,10 @@ function renderFgProtocols() {
         ? Math.round((new Date(`${request.end}T12:00:00`) - new Date(`${request.start}T12:00:00`)) / 86400000) + 1
         : 0);
       const daysLabel = durationDays > 0 ? String(durationDays) : "Não informado";
-      return `<tr class="${isChecked ? "fg-protocol-checked" : ""}"><td>${escapeHtml(person)}</td><td>${escapeHtml(formatCpfLabel(personCpf))}</td><td>${escapeHtml(substitute)}</td><td>${escapeHtml(formatCpfLabel(substituteCpf))}</td><td>${escapeHtml(month)}</td><td>${escapeHtml(year)}</td><td>${escapeHtml(start)}</td><td>${escapeHtml(end)}</td><td>${escapeHtml(daysLabel)}</td><td><select data-fg-protocol-status data-request-id="${escapeHtml(request.id)}" aria-label="Status do protocolo de ${escapeHtml(person)}"><option value="fazer"${protocolDone ? "" : " selected"}>Fazer protocolo</option><option value="feito"${protocolDone ? " selected" : ""}>Protocolo feito</option></select></td><td><input data-fg-protocol-number data-request-id="${escapeHtml(request.id)}" type="text" maxlength="60" value="${escapeHtml(request.fgProtocolNumber || "")}"${protocolDone ? "" : " disabled"} aria-label="Número do protocolo de ${escapeHtml(person)}" placeholder="Número"></td><td><input data-fg-protocol-checked data-request-id="${escapeHtml(request.id)}" type="checkbox"${isChecked ? " checked" : ""} aria-label="Marcar protocolo de ${escapeHtml(person)} como conferido"></td></tr>`;
+      const funcaoExercida = getRequestFuncaoExercida(request) || "Não informado";
+      return `<tr class="${isChecked ? "fg-protocol-checked" : ""}"><td>${escapeHtml(person)}</td><td>${escapeHtml(formatCpfLabel(personCpf))}</td><td>${escapeHtml(funcaoExercida)}</td><td>${escapeHtml(substitute)}</td><td>${escapeHtml(formatCpfLabel(substituteCpf))}</td><td>${escapeHtml(month)}</td><td>${escapeHtml(year)}</td><td>${escapeHtml(start)}</td><td>${escapeHtml(end)}</td><td>${escapeHtml(daysLabel)}</td><td><select data-fg-protocol-status data-request-id="${escapeHtml(request.id)}" aria-label="Status do protocolo de ${escapeHtml(person)}"><option value="fazer"${protocolDone ? "" : " selected"}>Fazer protocolo</option><option value="feito"${protocolDone ? " selected" : ""}>Protocolo feito</option></select></td><td><input data-fg-protocol-number data-request-id="${escapeHtml(request.id)}" type="text" maxlength="60" value="${escapeHtml(request.fgProtocolNumber || "")}"${protocolDone ? "" : " disabled"} aria-label="Número do protocolo de ${escapeHtml(person)}" placeholder="Número"></td><td><input data-fg-protocol-checked data-request-id="${escapeHtml(request.id)}" type="checkbox"${isChecked ? " checked" : ""} aria-label="Marcar protocolo de ${escapeHtml(person)} como conferido"></td></tr>`;
     }).join("")
-    : `<tr><td class="detailed-report-empty" colspan="12">Nenhum pedido de férias de servidores com Função Gratificada.</td></tr>`;
+    : `<tr><td class="detailed-report-empty" colspan="13">Nenhum pedido de férias de servidores com Função Gratificada.</td></tr>`;
 }
 
 function openRequestDetails(requestId) {

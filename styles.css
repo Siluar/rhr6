@@ -293,6 +293,12 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 #view-report-unit .detailed-report-table th:first-child, #view-report-unit .detailed-report-table td:first-child { width: 30%; }
 #view-report-unit .detailed-report-table th:nth-child(2), #view-report-unit .detailed-report-table td:nth-child(2) { width: 32%; }
 #view-report-unit .detailed-report-table th:last-child, #view-report-unit .detailed-report-table td:last-child { width: 38%; }
+/* "Função exercida" fica ao lado do nome nos relatórios de licença (prêmio,
+   capacitação e médica) e por isso é alinhada à esquerda, e não à direita como
+   a coluna 2 padrão dos relatórios detalhados. */
+#view-report-premio .detailed-report-table th:nth-child(2), #view-report-premio .detailed-report-table td:nth-child(2),
+#view-report-capacitacao .detailed-report-table th:nth-child(2), #view-report-capacitacao .detailed-report-table td:nth-child(2),
+#view-report-medica .detailed-report-table th:nth-child(2), #view-report-medica .detailed-report-table td:nth-child(2) { text-align: left; width: 20%; }
 .detailed-report-person { display: grid; gap: 4px; min-width: 0; }
 .detailed-report-person strong { color: #000; }
 .detailed-report-person span { color: #4f5951; font-size: 11px; }
