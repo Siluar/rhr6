@@ -92,11 +92,30 @@ test("as regras do Firestore aplicam as melhorias de segurança", () => {
   assert.ok(rules.includes("optionalBoundedString"), "falta o limitador de tamanho de campos");
   assert.ok(rules.includes("email == request.auth.token.email || isOwner()"),
     "o get de usuarios deve ser restrito ao próprio usuário ou dono");
-  // A leitura de unidades e publica: o formulario de solicitacao precisa listar
-  // as unidades independente da sessao. A escrita continua so para admin.
+  // E-mail institucional: qualquer conta @policiapenal.pr.gov.br entra no
+  // formulário de solicitações sem aprovação manual.
+  assert.ok(rules.includes("function isDomainUser()"),
+    "falta reconhecer o e-mail institucional");
+  assert.ok(rules.includes("@policiapenal"),
+    "falta o domínio institucional nas regras");
+  assert.ok(rules.includes("canUseRequests"),
+    "requests devem aceitar o e-mail institucional sem aprovação");
+  assert.ok(rules.includes("isOwner() || isDomainUser() || isActiveUser()"),
+    "o acesso a requests deve ser: dono, institucional ou aprovado");
+  const requestsBlock = rules.slice(rules.indexOf("match /requests/"));
+  assert.ok(requestsBlock.slice(0, 400).includes("allow create: if canUseRequests() && isValidRequest();"),
+    "a criação de solicitações continua passando por validação");
+  // Um e-mail institucional não pode se autoprovar administrador.
+  assert.ok(rules.includes("request.resource.data.get('perfil', 'usuario') != 'admin'"),
+    "o self-registration não pode virar admin");
+  // A configuração do domínio institucional vive no config.js.
+  assert.ok(read("config.js").includes("accessDomain"),
+    "config.js deve expor o domínio institucional");
+  // A leitura de unidades é pública: o formulário precisa listar as unidades
+  // independente da sessão. A escrita continua só para admin.
   const unidadesBlock = rules.slice(rules.indexOf("match /unidades/"));
   assert.ok(unidadesBlock.slice(0, 120).includes("allow read, list: if true;"),
-    "unidades deve ter leitura publica");
+    "unidades deve ter leitura pública");
   assert.ok(unidadesBlock.slice(0, 200).includes("allow create, update, delete: if isAdmin();"),
     "a escrita de unidades continua restrita ao admin");
 });

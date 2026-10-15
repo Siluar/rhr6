@@ -19,6 +19,10 @@ window.RH_CONFIG = Object.assign({}, window.RH_CONFIG, {
     "sidnei@policiapenal.pr.gov.br"
   ],
 
+  // Domínio institucional. Qualquer conta Google com este domínio entra no
+  // formulário de solicitações SEM precisar de aprovação manual.
+  accessDomain: "policiapenal.pr.gov.br",
+
   // Escala de trabalho (24h de serviço por 72h de descanso).
   // - equipes: ordem das equipes na rotação.
   // - dataBase: data (AAAA-MM-DD) em que a primeira equipe da lista está de serviço.

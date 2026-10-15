@@ -6,6 +6,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Conta com e-mail institucional (ex.: @policiapenal.pr.gov.br). Entra
+    // SEM aprovacao manual: qualquer servidor com esse dominio tem acesso.
+    function isDomainUser() {
+      return isSignedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email.lower().matches('.*@policiapenal[.]pr[.]gov[.]br');
+    }
+
     // Donos do sistema (sempre administradores, mesmo se a colecao usuarios
     // ainda nao tiver documentos).
     function isOwner() {
@@ -36,6 +44,12 @@ service cloud.firestore {
     // Usuario aprovado: pode ler/criar solicitacoes.
     function isApproved() {
       return isOwner() || isActiveUser();
+    }
+
+    // Quem pode ler/criar solicitacoes: donos, e-mails institucionais (sem
+    // aprovacao) e usuarios aprovados manualmente.
+    function canUseRequests() {
+      return isOwner() || isDomainUser() || isActiveUser();
     }
 
     // Administrador: dono OU usuario marcado como admin e ativo na colecao
@@ -75,11 +89,12 @@ service cloud.firestore {
         && optionalBoundedString(data, 'id', 80);
     }
 
-    // Solicitacoes de ferias/licencas: somente usuario aprovado le/cria;
-    // somente admin aprova, edita ou apaga. A criacao passa por validacao.
+    // Solicitacoes de ferias/licencas: qualquer e-mail institucional (sem
+    // aprovacao) ou usuario aprovado le/cria; somente admin aprova, edita ou
+    // apaga. A criacao passa por validacao.
     match /requests/{requestId} {
-      allow read: if isApproved();
-      allow create: if isApproved() && isValidRequest();
+      allow read: if canUseRequests();
+      allow create: if canUseRequests() && isValidRequest();
       allow update, delete: if isAdmin();
     }
 
@@ -136,19 +151,36 @@ service cloud.firestore {
     //  - get: apenas o proprio usuario (necessario para decidir o perfil no
     //    login) OU um dono. Evita que um usuario comum leia o cadastro alheio.
     //  - list: apenas aprovados (painel administrativo).
-    //  - create: admin OU auto-registro do proprio e-mail como pendente, sem
-    //    perfil de admin. Nao pode se auto-aprovar (update e so admin).
+    //  - create: admin OU auto-registro do proprio e-mail — PENDENTE para
+    //    contas de fora do dominio, ja ATIVO para e-mail institucional — nunca
+    //    com perfil de admin.
+    //  - update: admin OU o proprio e-mail institucional atualizando os seus
+    //    dados, sem nunca conseguir virar admin.
     match /usuarios/{email} {
       allow get: if isSignedIn()
         && (email == request.auth.token.email || isOwner());
       allow list: if isApproved();
+      // create: admin; auto-registro PENDENTE (usuario comum aguardando
+      // aprovacao); OU e-mail institucional entrando ja ATIVO e sem aprovacao.
+      // Em nenhum caso o proprio usuario pode se criar como admin.
       allow create: if isAdmin()
         || (isSignedIn()
             && email == request.auth.token.email
-            && request.resource.data.get('perfil', null) == 'usuario'
-            && request.resource.data.get('ativo', null) == false
-            && request.resource.data.get('pendente', null) == true);
-      allow update, delete: if isAdmin();
+            && request.resource.data.get('perfil', 'usuario') != 'admin'
+            && (
+                 (request.resource.data.get('ativo', null) == false
+                  && request.resource.data.get('pendente', null) == true)
+                 || (isDomainUser()
+                     && request.resource.data.get('ativo', null) == true)
+               ));
+      // update: admin; OU o proprio usuario institucional atualizando os
+      // proprios dados, sem nunca virar admin.
+      allow update: if isAdmin()
+        || (isSignedIn()
+            && email == request.auth.token.email
+            && isDomainUser()
+            && request.resource.data.get('perfil', 'usuario') != 'admin');
+      allow delete: if isAdmin();
     }
   }
 }

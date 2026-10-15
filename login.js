@@ -1,6 +1,17 @@
 // Observação: o login por CPF/senha (fluxo legado) foi removido. O acesso ao
 // sistema agora é feito exclusivamente com a conta Google (Firebase Auth).
 
+// Domínio institucional (configurável em config.js). Contas deste domínio
+// entram no formulário de solicitações SEM aprovação manual.
+const INSTITUTIONAL_DOMAIN = String(
+  (window.RH_CONFIG && window.RH_CONFIG.accessDomain) || "policiapenal.pr.gov.br"
+).trim().toLowerCase();
+
+function isInstitutionalEmail(email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  return normalized.endsWith("@" + INSTITUTIONAL_DOMAIN);
+}
+
 function setFormMessage(element, message, isError = false) {
   element.textContent = message;
   element.classList.toggle("error", isError);
@@ -60,28 +71,65 @@ async function registerPendingUser(email, name) {
   }
 }
 
+// E-mail institucional: registra/atualiza o cadastro já como ATIVO (sem
+// aprovação), apenas para o painel conseguir listar quem tem acesso.
+async function registerDomainUser(email, name) {
+  if (!window.RH_SYNC || !window.RH_SYNC.enabled) return false;
+  try {
+    await window.RH_SYNC.saveDocs("usuarios", [{
+      id: email,
+      name: name || email,
+      email,
+      perfil: "usuario",
+      ativo: true,
+      pendente: false,
+      criadoEm: new Date().toISOString().slice(0, 10)
+    }]);
+    return true;
+  } catch (error) {
+    console.warn("Não foi possível registrar o usuário institucional:", error);
+    return false;
+  }
+}
+
 async function resolveGoogleRole(email, name) {
   const config = window.RH_CONFIG || {};
   const adminEmails = (config.googleAdminEmails || []).map(item => String(item).toLowerCase());
   if (adminEmails.includes(email)) return { role: "admin", allowed: true };
+
+  const institutional = isInstitutionalEmail(email);
   if (!window.RH_SYNC || !window.RH_SYNC.enabled) return { role: "usuario", allowed: true };
   try {
     await window.RH_SYNC.waitForAuth();
     const match = window.RH_SYNC.getDoc
       ? await window.RH_SYNC.getDoc("usuarios", email)
       : (await window.RH_SYNC.loadDocs("usuarios")).find(user => String(user.email || user.id || "").toLowerCase() === email);
+
+    // Perfil administrador cadastrado no painel vale para qualquer domínio.
+    if (match && match.perfil === "admin") return { role: "admin", allowed: true };
+
+    // E-mail institucional: entra SEM aprovação manual. Mantém o cadastro como
+    // ativo apenas para o painel conseguir listar quem tem acesso.
+    if (institutional) {
+      if (!match || match.ativo !== true || match.pendente === true) {
+        await registerDomainUser(email, name);
+      }
+      return { role: "usuario", allowed: true };
+    }
+
     if (match) {
       if (match.ativo === false) {
         return { role: "usuario", allowed: false, pending: match.pendente === true };
       }
-      if (match.perfil === "admin") return { role: "admin", allowed: true };
       return { role: "usuario", allowed: true };
     }
-    // E-mail novo: registra como pendente e bloqueia ate o administrador decidir.
+    // E-mail novo fora do domínio: registra como pendente e aguarda aprovação.
     const registered = await registerPendingUser(email, name);
     return { role: "usuario", allowed: false, pending: true, registered };
   } catch (error) {
     console.warn("Falha ao consultar usuários no login:", error);
+    // Uma falha de rede não deve barrar um e-mail institucional.
+    if (institutional) return { role: "usuario", allowed: true };
     return { role: "usuario", allowed: false, error: true };
   }
 }
