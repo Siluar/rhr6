@@ -118,3 +118,43 @@ test("o campo de unidade existe e nunca fica preso a uma lista fixa", () => {
   // A lista fixa de unidades foi removida: sem nuvem nem cache, começa vazio.
   assert.deepEqual([...select.options].map(o => o.value).filter(Boolean), []);
 });
+
+test("a pergunta de Função Gratificada é uma lista suspensa Sim/Não", () => {
+  const { window, thrown } = loadForm({ sync: baseSync() });
+  assert.equal(thrown, null);
+  const select = window.document.getElementById("possui-fg");
+  assert.ok(select, "o campo #possui-fg precisa existir");
+  assert.equal(select.tagName, "SELECT", "#possui-fg deve ser um <select>, não um checkbox");
+  assert.deepEqual([...select.options].map(option => option.value), ["", "sim"],
+    "as opções devem ser Não (valor vazio) e Sim");
+  assert.equal(select.options[0].textContent, "Não");
+  assert.equal(select.options[1].textContent, "Sim");
+  // Por padrão vem como "Não".
+  assert.equal(select.value, "");
+});
+
+test("escolher 'Sim' na FG revela função exercida e substituto", () => {
+  const { window, thrown } = loadForm({ sync: baseSync() });
+  assert.equal(thrown, null);
+  const select = window.document.getElementById("possui-fg");
+  const functionField = window.document.getElementById("function-field");
+  const substituteField = window.document.getElementById("substitute-field");
+  const functionInput = window.document.getElementById("funcao-exercida");
+
+  // Com "Não", os campos ficam ocultos e não obrigatórios.
+  assert.ok(functionField.classList.contains("hidden"), "'Função exercida' deve começar oculta");
+  assert.ok(substituteField.classList.contains("hidden"), "'Substituto' deve começar oculto");
+  assert.equal(functionInput.required, false);
+
+  select.value = "sim";
+  select.dispatchEvent(new window.Event("change", { bubbles: true }));
+  assert.ok(!functionField.classList.contains("hidden"), "ao escolher Sim, 'Função exercida' deve aparecer");
+  assert.ok(!substituteField.classList.contains("hidden"), "ao escolher Sim, 'Substituto' deve aparecer");
+  assert.equal(functionInput.required, true, "'Função exercida' deve ficar obrigatória");
+
+  select.value = "";
+  select.dispatchEvent(new window.Event("change", { bubbles: true }));
+  assert.ok(functionField.classList.contains("hidden"), "voltar para Não deve ocultar de novo");
+  assert.ok(substituteField.classList.contains("hidden"), "voltar para Não deve ocultar de novo");
+  assert.equal(functionInput.required, false);
+});
