@@ -465,6 +465,7 @@
                   <select id="unidade" name="unidade" required>
                     <option value="">Selecione a unidade penal</option>
                   </select>
+                  <small id="unidade-aviso" class="hidden" style="color: #b00020;"></small>
                 </div>
                 <div class="field">
                   <label for="equipe">Equipe</label>
@@ -477,12 +478,13 @@
                     <option value="Expediente">Expediente</option>
                   </select>
                 </div>
-                <div class="field checkbox-field" id="fg-flag-field" style="grid-column: 1 / -1;">
-                  <label class="checkbox">
-                    <input type="checkbox" id="possui-fg" />
-                    <span>Possui Função Gratificada</span>
-                  </label>
-                  <small>Marque caso exerça função gratificada neste período.</small>
+                <div class="field" id="fg-flag-field" style="grid-column: 1 / -1;">
+                  <label for="possui-fg">Possui Função Gratificada?</label>
+                  <select id="possui-fg" name="possuiFg">
+                    <option value="">Não</option>
+                    <option value="sim">Sim</option>
+                  </select>
+                  <small>Selecione "Sim" caso exerça função gratificada neste período.</small>
                 </div>
                 <div class="field hidden" id="function-field">
                   <label for="funcao-exercida">Função exercida</label>
@@ -663,7 +665,9 @@
       // ReferenceError em nível de topo e interrompia TODO o restante do script
       // (cliques, ?tipo= e o carregamento das unidades).
       const fgFlagField = document.getElementById('fg-flag-field');
-      const fgFlagCheckbox = document.getElementById('possui-fg');
+      const fgFlagSelect = document.getElementById('possui-fg');
+      // O campo de Função Gratificada é uma lista suspensa Sim/Não; valor vazio = Não.
+      const fgFlagSelected = () => Boolean(fgFlagSelect && fgFlagSelect.value === 'sim');
 
       const passwordChangeDialog = document.getElementById('password-change-dialog');
       const passwordChangeForm = document.getElementById('password-change-form');
@@ -759,12 +763,11 @@
         formTitle.textContent = config.title;
 
         if (fgFlagField) fgFlagField.classList.toggle('hidden', !isVacation);
-        if (fgFlagCheckbox) {
-          fgFlagCheckbox.checked = isFgServer;
-          fgFlagCheckbox.indeterminate = false;
+        if (fgFlagSelect) {
+          fgFlagSelect.value = isFgServer ? 'sim' : '';
         }
 
-        const showFgFieldsInitial = isVacation && (isFgServer || fgFlagCheckbox.checked);
+        const showFgFieldsInitial = isVacation && (isFgServer || fgFlagSelected());
         formSubtitle.textContent = showFgFieldsInitial
           ? `${config.subtitle} Como servidor com Função Gratificada, informe também a função exercida e o substituto.`
           : config.subtitle;
@@ -783,7 +786,7 @@
         otherTypeInput.required = Boolean(config.specify);
         if (!config.specify) otherTypeInput.value = '';
         // Recalcula caso o usuário marque/desmarque a caixa
-        let finalShowFgFields = isVacation && (isFgServer || fgFlagCheckbox.checked);
+        let finalShowFgFields = isVacation && (isFgServer || fgFlagSelected());
         functionField.classList.toggle('hidden', !finalShowFgFields);
         functionInput.required = finalShowFgFields;
         if (!finalShowFgFields) functionInput.value = '';
@@ -803,11 +806,11 @@
       });
 
       // Atualiza campos de FG ao alternar o checkbox manual
-      if (fgFlagCheckbox) {
-        fgFlagCheckbox.addEventListener('change', () => {
+      if (fgFlagSelect) {
+        fgFlagSelect.addEventListener('change', () => {
           const config = getOptionConfig(currentOption || 'ferias');
           const isVacationMode = (config && config.mode === 'vacation');
-          const finalShow = isVacationMode && (isFgServer || fgFlagCheckbox.checked);
+          const finalShow = isVacationMode && (isFgServer || fgFlagSelected());
           functionField.classList.toggle('hidden', !finalShow);
           functionInput.required = finalShow;
           substituteField.classList.toggle('hidden', !finalShow);
@@ -983,7 +986,7 @@
         };
         if (funcaoExercida) request.funcaoExercida = funcaoExercida;
         if (substituto) request.substituto = substituto;
-        request.temFG = !!(fgFlagCheckbox.checked || funcaoExercida || substituto || isFgServer);
+        request.temFG = !!(fgFlagSelected() || funcaoExercida || substituto || isFgServer);
 
         try {
           const existing = JSON.parse(localStorage.getItem(storageKey) || '[]');
@@ -1010,7 +1013,7 @@
         // Enriquecimento automático dos cadastros com base na solicitação
         try {
           const cpfDigits = String(cpf).replace(/\D/g, '');
-          const temFGAtual = !!(fgFlagCheckbox.checked || funcaoExercida || substituto || isFgServer);
+          const temFGAtual = !!(fgFlagSelected() || funcaoExercida || substituto || isFgServer);
           const normalizarTexto = text => String(text || '').trim();
 
           // Cadastro de Dados dos Servidores
@@ -1280,6 +1283,19 @@
       loadUnidadesFromCache();
       loadUnidadesFromCloud();
       loadRequestsForConflictCheck();
+
+      // Rede de segurança: se depois de alguns segundos a lista continuar vazia,
+      // avisa o usuário (em vez de deixar o campo mudo e sem explicação).
+      const unidadeAviso = document.getElementById('unidade-aviso');
+      setTimeout(() => {
+        if (!unidadeAviso || !unidadeSelect) return;
+        if (unidadeSelect.options.length > 1) {
+          unidadeAviso.classList.add('hidden');
+          return;
+        }
+        unidadeAviso.textContent = 'Não foi possível carregar a lista de unidades. Verifique sua conexão e recarregue a página.';
+        unidadeAviso.classList.remove('hidden');
+      }, 4000);
     </script>
   </body>
 </html>
