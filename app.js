@@ -1488,11 +1488,7 @@ function renderServerPersonalData() {
   const filteredRecords = getFilteredServerPersonalData();
   body.innerHTML = filteredRecords.length
     ? filteredRecords.map(record => {
-      const birthDate = new Date(`${record.birthDate}T12:00:00`);
-      const formattedBirthDate = Number.isNaN(birthDate.getTime())
-        ? "Data inválida"
-        : new Intl.DateTimeFormat("pt-BR").format(birthDate);
-      return `<tr><td>${escapeHtml(record.name)}</td><td>${escapeHtml(record.cpf)}</td><td>${escapeHtml(record.rg)}</td><td>${escapeHtml(formattedBirthDate)}</td><td>${escapeHtml(record.phone)}</td><td>${escapeHtml(record.email)}</td><td>${escapeHtml(record.unidadePenal || "Não informado")}</td><td>${escapeHtml(record.cargo || "Não informado")}</td><td>${escapeHtml(record.quadro || "Não informado")}</td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-server-data="${escapeHtml(record.id)}" aria-label="Editar dados de ${escapeHtml(record.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-server-data="${escapeHtml(record.id)}" aria-label="Remover dados de ${escapeHtml(record.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+      return `<tr><td>${escapeHtml(record.name)}</td><td>${escapeHtml(record.email)}</td><td>${escapeHtml(record.cpf)}</td><td>${escapeHtml(record.rg)}</td><td>${escapeHtml(record.phone)}</td><td>${escapeHtml(record.quadro || "Não informado")}</td><td>${escapeHtml(record.cargo || "Não informado")}</td><td>${escapeHtml(record.unidadePenal || "Não informado")}</td><td>${escapeHtml(isServerInFgRoster(record) ? "Sim" : "Não")}</td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-server-data="${escapeHtml(record.id)}" aria-label="Editar dados de ${escapeHtml(record.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-server-data="${escapeHtml(record.id)}" aria-label="Remover dados de ${escapeHtml(record.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
     }).join("")
     : `<tr><td class="detailed-report-empty" colspan="10">${serverPersonalData.length ? "Nenhum servidor corresponde ao filtro informado." : "Nenhum dado de servidor cadastrado."}</td></tr>`;
   if (document.getElementById("view-report-servers")?.classList.contains("active")) renderServerDirectoryReport();
@@ -3484,30 +3480,33 @@ on("server-fg-body", "click", event => {
   if (removeButton) removeFgServer(removeButton.dataset.removeFgServer);
 });
 on("server-data-search", "input", debounce(renderServerPersonalData));
+// Colunas do cadastro de servidores nas exportações (mesma ordem exibida na tela).
+const serverDataExportColumns = [
+  ["Servidor", record => record.name],
+  ["E-mail", record => record.email],
+  ["CPF", record => record.cpf],
+  ["RG", record => record.rg],
+  ["Telefone", record => record.phone],
+  ["Quadro", record => record.quadro],
+  ["Função", record => record.cargo],
+  ["Unidade", record => record.unidadePenal],
+  ["Função Gratificada", record => (isServerInFgRoster(record) ? "Sim" : "Não")]
+];
+
 on("server-data-export-csv", "click", () => {
   const records = getFilteredServerPersonalData();
   if (!records.length) {
     showToast("Não há servidores para exportar com o filtro atual.");
     return;
   }
-  const columns = [
-    ["Nome", "name"],
-    ["CPF", "cpf"],
-    ["RG", "rg"],
-    ["Data de nascimento", "birthDate"],
-    ["Telefone celular", "phone"],
-    ["E-mail institucional", "email"],
-    ["Unidade Penal", "unidadePenal"],
-    ["Cargo", "cargo"],
-    ["Quadro", "quadro"]
-  ];
+  const columns = serverDataExportColumns;
   const csvCell = value => {
     const safeValue = /^[=+\-@]/.test(String(value)) ? `'${value}` : String(value);
     return `"${safeValue.replace(/"/g, '""')}"`;
   };
   const csv = [
     columns.map(([title]) => csvCell(title)).join(";"),
-    ...records.map(record => columns.map(([, field]) => csvCell(record[field] || "")).join(";"))
+    ...records.map(record => columns.map(([, valueOf]) => csvCell(valueOf(record) || "")).join(";"))
   ].join("\r\n");
   const downloadUrl = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
   const downloadLink = document.createElement("a");
@@ -3524,18 +3523,8 @@ on("server-data-export-pdf", "click", () => {
     showToast("Não há servidores para gerar o relatório com o filtro atual.");
     return;
   }
-  const columns = [
-    ["Nome", "name"],
-    ["CPF", "cpf"],
-    ["RG", "rg"],
-    ["Data de nascimento", "birthDate"],
-    ["Telefone celular", "phone"],
-    ["E-mail institucional", "email"],
-    ["Unidade Penal", "unidadePenal"],
-    ["Cargo", "cargo"],
-    ["Quadro", "quadro"]
-  ];
-  const tableRows = records.map(record => `<tr>${columns.map(([, field]) => `<td>${escapeHtml(record[field] || "")}</td>`).join("")}</tr>`).join("");
+  const columns = serverDataExportColumns;
+  const tableRows = records.map(record => `<tr>${columns.map(([, valueOf]) => `<td>${escapeHtml(valueOf(record) || "")}</td>`).join("")}</tr>`).join("");
   const tableMarkup = `<table><thead><tr>${columns.map(([title]) => `<th>${escapeHtml(title)}</th>`).join("")}</tr></thead><tbody>${tableRows}</tbody></table>`;
   const reportHtml = buildPrintReportHtml("Cadastro de Dados dos Servidores", records.length, "servidor(es)", tableMarkup);
   openPrintReport(reportHtml, "Relatório de servidores para impressão");

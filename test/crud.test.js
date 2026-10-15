@@ -377,6 +377,52 @@ test("servidores: recusa CPF repetido e quadro incompatível com o cargo", async
   });
 });
 
+test("servidores: colunas na ordem pedida e Função Gratificada na última coluna", async () => {
+  await withApp({}, async app => {
+    createServer(app, { name: "Servidor Sem Fg", cpf: "11122233344", email: "sem.fg@pp.pr.gov.br" });
+    createServer(app, { name: "Servidor Com Fg", cpf: "22233344455", email: "com.fg@pp.pr.gov.br" });
+    await app.settle();
+
+    // Abre o cadastro de Função Gratificada (recarrega o seletor) e inclui um deles.
+    app.click('[data-view="server-fg"]');
+    await app.settle();
+    const fgSelect = app.byId("server-fg-select");
+    const option = [...fgSelect.options].find(item => item.textContent.includes("Servidor Com Fg"));
+    assert.ok(option, "o servidor deveria aparecer no seletor de Função Gratificada");
+    fgSelect.value = option.value;
+    app.submit(app.byId("server-fg-form"));
+    await app.settle();
+
+    // Volta para a tabela de servidores.
+    app.click('[data-view="server-data"]');
+    await app.settle();
+
+    // Cabeçalhos, na ordem pedida, com "Função Gratificada" no fim.
+    const headers = app.$$("#view-server-data thead th").map(th => th.textContent.trim());
+    assert.deepEqual(headers, [
+      "Servidor", "E-mail", "CPF", "RG", "Telefone", "Quadro", "Função", "Unidade", "Função Gratificada", "Ação"
+    ]);
+
+    const cellsOf = name => {
+      const row = app.$$("#server-data-body tr").find(item => item.textContent.includes(name));
+      assert.ok(row, `deveria existir uma linha para ${name}`);
+      return [...row.querySelectorAll("td")].map(td => td.textContent.trim());
+    };
+
+    const comFg = cellsOf("Servidor Com Fg");
+    assert.equal(comFg[0], "Servidor Com Fg", "1ª coluna: servidor");
+    assert.equal(comFg[1], "com.fg@pp.pr.gov.br", "2ª coluna: e-mail");
+    assert.equal(comFg[2], "22233344455", "3ª coluna: CPF");
+    assert.equal(comFg[5], "QPPP", "6ª coluna: quadro");
+    assert.equal(comFg[6], "Policial Penal", "7ª coluna: função");
+    assert.equal(comFg[7], "CP Umuarama", "8ª coluna: unidade");
+    assert.equal(comFg[8], "Sim", "9ª coluna: possui Função Gratificada");
+
+    const semFg = cellsOf("Servidor Sem Fg");
+    assert.equal(semFg[8], "Não", "quem não tem Função Gratificada deve mostrar Não");
+  });
+});
+
 // =========================================================================
 // Usuários & acessos
 // =========================================================================

@@ -138,3 +138,24 @@ test("o submenu \"Solicitações\" oferece filtro por tipo de licença", () => {
   assert.ok(app.includes("matchesRequestTypeFilter"), "app.js deve filtrar por tipo");
   assert.ok(app.includes("requestTypeFilter"), "app.js deve manter o filtro por tipo");
 });
+
+test("cadastro de servidores: colunas na ordem pedida, com Função Gratificada no fim", () => {
+  const html = read("index.html");
+  const bodyIndex = html.indexOf('id="server-data-body"');
+  assert.ok(bodyIndex > -1, "a tabela de servidores deve existir");
+  const thead = html.slice(html.lastIndexOf("<thead>", bodyIndex), bodyIndex);
+  const headers = [...thead.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(match => match[1].trim());
+  assert.deepEqual(headers, [
+    "Servidor", "E-mail", "CPF", "RG", "Telefone", "Quadro", "Função", "Unidade", "Função Gratificada", "Ação"
+  ]);
+  // A data de nascimento saiu da tabela.
+  assert.ok(!headers.includes("Nascimento"), "a coluna Nascimento não deve mais estar na tabela");
+  // O app preenche a última coluna a partir do cadastro de Função Gratificada.
+  assert.ok(read("app.js").includes("isServerInFgRoster(record)"),
+    "a tabela deve indicar quem possui Função Gratificada");
+  // As exportações seguem a mesma ordem e incluem a Função Gratificada.
+  const app = read("app.js");
+  assert.ok(app.includes("serverDataExportColumns"), "as exportações devem compartilhar as colunas da tabela");
+  assert.ok(app.includes('["Função Gratificada", record => (isServerInFgRoster(record) ? "Sim" : "Não")]'),
+    "a exportação deve trazer a Função Gratificada");
+});
