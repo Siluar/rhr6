@@ -1586,14 +1586,13 @@ test("cadastro de servidores: equipe fica no cadastro e alimenta o relatório po
   });
 });
 
-test("cadastro de servidores: Equipe inclui Expediente sem afetar a rotação da escala", async () => {
+test("cadastro de servidores: Equipe mostra Expediente no topo e o resto em ordem alfabética", async () => {
   await withApp({}, async app => {
     const select = app.byId("server-data-form").elements.namedItem("equipe");
     assert.ok(select, "o campo Equipe deveria existir no cadastro");
-    const opcoes = [...select.options].map(option => option.value);
-    ["Alfa", "Bravo", "Charlie", "Delta", "Expediente"].forEach(team => {
-      assert.ok(opcoes.includes(team), `deveria haver a opção ${team}`);
-    });
+    const opcoes = [...select.options].map(option => option.value).filter(Boolean);
+    assert.equal(opcoes.join(","), "Expediente,Alfa,Bravo,Charlie,Delta",
+      "Expediente deveria vir no topo e as equipes em ordem alfabética");
 
     // "Expediente" é só opção de cadastro: a rotação 24/72 continua começando
     // por Bravo e não inclui Expediente.

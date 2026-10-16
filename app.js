@@ -2471,20 +2471,27 @@ function formatIsoBr(iso) {
   return isIsoDate(String(iso || "")) ? formatDate(iso, { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
 }
 
-// Equipes usadas nos selects de cadastro e nos relatórios: as equipes da
-// rotação 24/72 (config.js → escala.equipes) mais as equipes que NÃO entram na
-// rotação (config.js → equipesExtras, ex.: "Expediente" = quem trabalha de
-// segunda a sexta). A rotação do calendário continua usando apenas a escala.
+// Equipes usadas nos selects de cadastro e nos relatórios: as equipes extras
+// (config.js → equipesExtras, ex.: "Expediente" = quem trabalha de segunda a
+// sexta) vêm no topo e as equipes da rotação 24/72 (config.js →
+// escala.equipes) depois, em ordem alfabética. A rotação do calendário
+// continua usando escala.equipes na ordem original.
 function getEquipeOptions() {
   const escala = (window.RH_CONFIG && window.RH_CONFIG.escala) || {};
   const rotation = Array.isArray(escala.equipes) ? escala.equipes : [];
   const extras = window.RH_CONFIG && Array.isArray(window.RH_CONFIG.equipesExtras)
     ? window.RH_CONFIG.equipesExtras
     : [];
-  const merged = [...rotation, ...extras].map(value => String(value || "").trim()).filter(Boolean);
-  const candidates = merged.length ? merged : ["Alfa", "Bravo", "Charlie", "Delta", "Expediente"];
+  const clean = list => list.map(value => String(value || "").trim()).filter(Boolean);
+  let rotationNames = clean(rotation);
+  let extraNames = clean(extras);
+  if (!rotationNames.length && !extraNames.length) {
+    rotationNames = ["Alfa", "Bravo", "Charlie", "Delta"];
+    extraNames = ["Expediente"];
+  }
+  const byName = (left, right) => left.localeCompare(right, "pt-BR", { sensitivity: "base" });
   const seen = new Set();
-  return candidates.filter(team => {
+  return [...extraNames.sort(byName), ...rotationNames.sort(byName)].filter(team => {
     const key = team.toLocaleLowerCase("pt-BR");
     if (seen.has(key)) return false;
     seen.add(key);
