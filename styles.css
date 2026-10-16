@@ -576,6 +576,11 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 .vacation-launch-form .vacation-launch-fg-field[hidden] { display: none; }
 .vacation-launch-form .vacation-launch-cycle-field { grid-column: 1 / 3; }
 .vacation-launch-form .vacation-launch-cycle-field[hidden] { display: none; }
+/* Botão de importação em massa: fica no cabeçalho do painel de lançamento e
+   só aparece quando o tipo é férias (some nas telas de licença). */
+.vacation-launch-panel .panel-heading { flex-wrap: wrap; }
+.vacation-launch-import { flex-shrink: 0; }
+.vacation-launch-import[hidden] { display: none; }
 
 
 .report-month-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 12px 0; }

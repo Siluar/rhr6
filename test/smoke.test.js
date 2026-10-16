@@ -337,6 +337,31 @@ test("cadastro de servidores: importação de planilha do Excel está disponíve
   assert.ok(app.includes("function planServerImport("), "deve validar as linhas antes de gravar");
 });
 
+test("importação de férias aprovadas: botão, diálogo e colunas reconhecidas", () => {
+  const html = read("index.html");
+  const app = read("app.js");
+  const styles = read("styles.css");
+
+  assert.ok(html.includes('id="vacation-import-open"'), "deve haver o botão de importar no painel de lançamento");
+  assert.ok(html.includes('id="vacation-import-dialog"'), "deve haver o diálogo de importação de férias");
+  assert.ok(html.includes('id="vacation-import-paste"'), "deve dar para colar a lista, além de anexar o arquivo");
+  assert.ok(html.includes('accept=".xlsx,.xls,.csv'), "deve aceitar arquivos do Excel");
+  // O botão fica no cabeçalho do painel de lançamento e some fora de férias.
+  assert.ok(/vacation-launch-import\[hidden\]/.test(styles), "o botão deve poder ser ocultado");
+  assert.ok(app.includes('importButton.hidden = normalizeTypeText(config.type) !== "ferias"'), "o botão só aparece quando o tipo é férias");
+
+  // As colunas que a importação reconhece são as do relatório de férias.
+  const columns = /const vacationImportColumns = \[([\s\S]*?)\];/.exec(app);
+  assert.ok(columns, "deve existir a lista de colunas reconhecidas");
+  for (const nome of ["gratificada", "^mes$", "equipe", "unidade", "^funcao$", "substituto", "inicio", "fim", "^ano$", "servidor"]) {
+    assert.ok(columns[1].includes(nome), `a coluna ${nome} deve ser reconhecida`);
+  }
+  // Planeja antes de gravar e cada férias importada entra aprovada.
+  assert.ok(app.includes("function planVacationImport("), "deve validar as linhas antes de gravar");
+  assert.ok(app.includes('type: "férias"'), "as importadas entram como férias");
+  assert.ok(app.includes('status: "approved"'), "as importadas entram já aprovadas");
+});
+
 test("relatórios: exportação em Excel (.xlsx) está disponível", () => {
   const html = read("index.html");
   const app = read("app.js");

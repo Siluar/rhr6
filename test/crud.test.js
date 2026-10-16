@@ -21,7 +21,7 @@ const readSource = file => fs.readFileSync(path.join(root, file), "utf8");
 
 // `let`/`const` de topo do app.js ficam presos ao escopo do eval. Este trecho é
 // anexado só nos testes para conseguirmos ler o estado interno do app.
-const STATE_SHIM = "\n;window.__state = () => ({ unidades, cargos, quadros, funcoesGratificadas, fgFunctionOptions, serverPersonalData, usuarios, tasks, fgServerRoster, requests, shownMonth, requestFilter, requestTypeFilter });\nwindow.__planServerImport = rows => planServerImport(rows);\nwindow.__exportXlsx = (title, headers, rows, extra) => downloadReportXlsx(title, headers, rows, extra);";
+const STATE_SHIM = "\n;window.__state = () => ({ unidades, cargos, quadros, funcoesGratificadas, fgFunctionOptions, serverPersonalData, usuarios, tasks, fgServerRoster, requests, shownMonth, requestFilter, requestTypeFilter });\nwindow.__planServerImport = rows => planServerImport(rows);\nwindow.__planVacationImport = rows => planVacationImport(rows);\nwindow.__parsePastedImportRows = text => parsePastedImportRows(text);\nwindow.__exportXlsx = (title, headers, rows, extra) => downloadReportXlsx(title, headers, rows, extra);";
 
 const DEFAULT_ESCALA = { equipes: ["Bravo", "Charlie", "Delta", "Alfa"], dataBase: "2026-10-01", cicloDias: 4 };
 
@@ -715,6 +715,123 @@ test("importação: acha a linha de títulos mesmo com um título antes dela", a
     assert.equal(record.quadro, "QPPP");
     assert.equal(record.cargo, "Policial Penal");
     assert.equal(record.unidadePenal, "CP Umuarama");
+  });
+});
+
+// =========================================================================
+// Importação de férias aprovadas
+// =========================================================================
+
+test("importação de férias: reconhece os títulos e monta lançamentos aprovados", async () => {
+  await withApp({}, async app => {
+    const rows = [
+      ["SERVIDOR", "MÊS", "EQUIPE", "UNIDADE", "F.GRATIFICADA", "FUNÇÃO", "SUBSTITUTO", "INÍCIO", "FIM", "ANO"],
+      ["Fernando Campra", "janeiro", "DELTA", "SOT - UMUARAMA", "NÃO", "", "", "03/01/2027", "01/02/2027", "2027"],
+      ["Edilson Aparecido", "dezembro", "EXP.", "RA-R6", "SIM", "Coordenador Regional", "", "02/12/2026", "31/12/2026", "2026"],
+      ["Sem Fim", "março", "ALFA", "PAM", "NÃO", "", "", "03/03/2027", "", "2027"],
+      ["Derivado Das Datas", "", "BRAVO", "PAM", "NÃO", "", "", "15/06/2026", "29/06/2026", ""],
+      ["Sem Período", "", "", "PAM", "NÃO", "", "", "", "", ""],
+      ["", "janeiro", "BRAVO", "PAM", "NÃO", "", "", "01/01/2027", "30/01/2027", "2027"],
+      ["Fernando Campra", "janeiro", "DELTA", "SOT - UMUARAMA", "NÃO", "", "", "03/01/2027", "01/02/2027", "2027"]
+    ];
+    const plan = app.window.__planVacationImport(rows);
+
+    assert.equal(plan.headerFound, true, "reconheci a linha de títulos");
+    assert.equal(plan.total, 7, "contei as sete linhas de dados");
+    assert.equal(plan.requests.length, 4, "entram as quatro linhas que têm período");
+    assert.equal(plan.errors.length, 2, "sem nome e sem período são recusadas");
+    assert.equal(plan.skipped.length, 1, "a repetição do mesmo período foi ignorada");
+    assert.equal(plan.incomplete.length, 2, "linhas com campo em branco entram, mas ficam marcadas");
+
+    const fernando = plan.requests.find(request => request.person === "Fernando Campra");
+    assert.ok(fernando, "a linha completa deveria virar lançamento");
+    assert.equal(fernando.type, "férias");
+    assert.equal(fernando.status, "approved", "entra já aprovado");
+    assert.equal(fernando.launchedByAdmin, true);
+    assert.equal(fernando.month, "janeiro");
+    assert.equal(fernando.year, "2027");
+    assert.equal(fernando.start, "2027-01-03", "a data chega em formato AAAA-MM-DD");
+    assert.equal(fernando.end, "2027-02-01");
+    assert.equal(fernando.days, 30, "o período tem 30 dias");
+    assert.equal(fernando.equipe, "DELTA");
+    assert.equal(fernando.unidade, "SOT - UMUARAMA");
+    assert.equal(fernando.funcaoExercida, undefined, "quem não tem FG não ganha função exercida");
+
+    // Sem Mês e sem Ano, os dois saem da data de início.
+    const derivado = plan.requests.find(request => request.person === "Derivado Das Datas");
+    assert.ok(derivado, "a linha sem Mês/Ano deveria entrar");
+    assert.equal(derivado.month, "junho");
+    assert.equal(derivado.year, "2026");
+
+    const edilson = plan.requests.find(request => request.person === "Edilson Aparecido");
+    assert.equal(edilson.funcaoExercida, "Coordenador Regional");
+    assert.equal(edilson.substituto, undefined, "sem substituto, o campo não é gravado");
+    assert.equal(plan.fgAdds.length, 1, "só quem é Sim entra no cadastro de Função Gratificada");
+    assert.equal(plan.fgAdds[0].name, "Edilson Aparecido");
+    assert.equal(plan.fgAdds[0].funcaoExercida, "Coordenador Regional");
+    assert.ok(plan.fgAdds[0].id, "a entrada de FG precisa de id para virar documento na nuvem");
+
+    assert.equal(plan.newUnidades.map(item => item.name).join("|"), "SOT - UMUARAMA|RA-R6|PAM", "cria as unidades que ainda não existem");
+    assert.ok(plan.errors.some(item => item.includes("sem período")), plan.errors.join(" | "));
+    assert.ok(plan.errors.some(item => item.includes("sem o nome")), plan.errors.join(" | "));
+    assert.ok(plan.skipped[0].startsWith("Fernando Campra"), plan.skipped[0]);
+    assert.ok(plan.incomplete.some(item => item.includes("fim")), plan.incomplete.join(" | "));
+    assert.ok(plan.incomplete.some(item => item.includes("substituto")), plan.incomplete.join(" | "));
+  });
+});
+
+test("importação de férias: cola a lista, grava e não duplica no segundo envio", async () => {
+  await withApp({}, async app => {
+    const lines = [
+      ["SERVIDOR", "MÊS", "EQUIPE", "UNIDADE", "F.GRATIFICADA", "FUNÇÃO", "SUBSTITUTO", "INÍCIO", "FIM", "ANO"],
+      ["Fernando Campra", "janeiro", "DELTA", "SOT - UMUARAMA", "NÃO", "", "", "03/01/2027", "01/02/2027", "2027"],
+      ["Edilson Aparecido", "dezembro", "EXP.", "RA-R6", "SIM", "Coordenador Regional", "Weslley de Carvalho", "02/12/2026", "31/12/2026", "2026"]
+    ].map(cells => cells.join("\t"));
+    const textarea = app.byId("vacation-import-paste");
+    textarea.value = lines.join("\r\n");
+    assert.equal(app.window.__parsePastedImportRows(textarea.value).length, 3, "a lista colada vira três linhas");
+
+    const imported = () => app.state().requests.filter(request => request.created === "Importação da lista");
+    app.submit(app.byId("vacation-import-form"));
+    await app.settle();
+
+    assert.equal(imported().length, 2, "as duas férias foram registradas");
+    const fernando = imported().find(request => request.person === "Fernando Campra");
+    assert.equal(fernando.status, "approved");
+    assert.equal(fernando.type, "férias");
+
+    const state = app.state();
+    assert.ok(state.unidades.some(item => item.name === "SOT - UMUARAMA"), "a unidade entrou no cadastro");
+    const fg = state.fgServerRoster.find(entry => entry.name === "Edilson Aparecido");
+    assert.ok(fg, "quem é Sim entrou no cadastro de Função Gratificada");
+    assert.equal(fg.funcaoExercida, "Coordenador Regional");
+
+    const message = app.byId("vacation-import-message").textContent;
+    assert.ok(message.includes("2 períodos de férias importados"), message);
+    assert.ok(message.includes("lista colada"), message);
+    assert.equal(app.byId("vacation-import-problems").hidden, true, "sem nada para ler, o bloco de pendências fica escondido");
+
+    // Reenviar a mesma lista não duplica: tudo cai como já lançado.
+    app.submit(app.byId("vacation-import-form"));
+    await app.settle();
+    const secondMessage = app.byId("vacation-import-message").textContent;
+    assert.equal(imported().length, 2, "nenhum período duplicado no segundo envio");
+    assert.ok(secondMessage.includes("ignorado"), `a mensagem deve explicar: ${secondMessage}`);
+  });
+});
+
+test("importação de férias: o botão some nas telas de licença", async () => {
+  await withApp({}, async app => {
+    app.click('[data-view="vacation-launch"]');
+    const button = app.byId("vacation-import-open");
+    assert.ok(button, "o botão de importar existe no painel de lançamento");
+    assert.equal(button.hidden, false, "aparece quando o tipo é férias");
+
+    app.click('[data-view="vacation-launch-premio"]');
+    assert.equal(button.hidden, true, "some quando o tipo é licença prêmio");
+
+    app.click('[data-view="vacation-launch"]');
+    assert.equal(button.hidden, false, "volta quando o tipo é férias de novo");
   });
 });
 

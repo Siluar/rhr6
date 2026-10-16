@@ -137,6 +137,22 @@ editar e excluir), persistida nas coleções do Firestore:
   formulário pede também o **ciclo** (A, B ou C), que passa a identificar o
   lançamento nos relatórios. Os lançamentos vêm seguidos dos filtros que listam
   as solicitações de cada tipo em qualquer situação.
+  O painel de **Lançar férias** tem também o botão **"Importar férias
+  aprovadas"** (ele só aparece quando o tipo é férias; nas telas de licença ele
+  some). O diálogo lê um arquivo `.xlsx`, `.xls` ou `.csv` **ou** aceita a lista
+  **colada** direto (uma linha por servidor, copiada do Excel, com ou sem
+  cabeçalho). As colunas são reconhecidas **pelo título, em qualquer ordem**:
+  Servidor, Mês, Equipe, Unidade, F.Gratificada, Função, Substituto, Início, Fim
+  e Ano — sem títulos, usa essa mesma ordem. Cada linha vira um lançamento **já
+  aprovado** (tipo `férias`, lançado pelo administrador); unidades que ainda não
+  existirem são criadas no cadastro e quem está como **Sim** em F.Gratificada
+  entra também no **Cadastro de Servidores com Função Gratificada**, com a
+  função exercida. **Só o servidor e um período (Início, Fim ou Mês) são
+  obrigatórios:** o resto pode vir em branco e as linhas entram mesmo assim,
+  com o que faltar listado em *"Ver as linhas que precisam de atenção"*
+  (mês e ano saem das datas quando as colunas estiverem vazias). Servidor que já
+  tem férias lançadas no mesmo período é **ignorado**; linha sem período é
+  **recusada**.
 - **Servidores** — o cadastro de dados dos servidores é sincronizado com a
   coleção `servidores`; o **Cadastro de Servidores com Função Gratificada** usa
   a coleção `fgServidores` (a guia "Cadastro de Login", obsoleta com o acesso

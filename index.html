@@ -265,7 +265,7 @@
           </section>
           <section class="view-panel" id="view-vacation-launch" aria-label="Lançar período de férias">
             <section class="panel detailed-reports-panel vacation-launch-panel" aria-labelledby="vacation-launch-title">
-              <div class="panel-heading"><div><p class="section-kicker">LANÇAMENTO</p><h2 id="vacation-launch-title">Lançar período de férias</h2><p class="server-registry-description" id="vacation-launch-panel-description">Registre diretamente um período de férias para um servidor cadastrado. O lançamento já entra como aprovado nos relatórios.</p></div></div>
+              <div class="panel-heading"><div><p class="section-kicker">LANÇAMENTO</p><h2 id="vacation-launch-title">Lançar período de férias</h2><p class="server-registry-description" id="vacation-launch-panel-description">Registre diretamente um período de férias para um servidor cadastrado. O lançamento já entra como aprovado nos relatórios.</p></div><button class="button button-secondary vacation-launch-import" type="button" id="vacation-import-open"><i data-lucide="upload"></i><span>Importar férias aprovadas</span></button></div>
               <form class="vacation-launch-form" id="vacation-launch-form">
                 <div class="vacation-launch-server-field"><label for="vacation-launch-server-search">Servidor</label><input id="vacation-launch-server-search" type="text" autocomplete="off" placeholder="Digite o nome do servidor" role="combobox" aria-autocomplete="list" aria-controls="vacation-launch-suggestions" aria-expanded="false" required /><input id="vacation-launch-server" type="hidden" /><ul class="vacation-launch-suggestions" id="vacation-launch-suggestions" role="listbox" hidden></ul></div>
                 <label for="vacation-launch-start">Início<input id="vacation-launch-start" type="date" required /></label>
@@ -606,6 +606,21 @@
           <ul id="server-data-import-problems-list"></ul>
         </details>
         <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="server-data-import-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="upload"></i><span>Importar servidores</span></button></div>
+      </form>
+    </dialog>
+    <dialog class="account-password-dialog crud-dialog" id="vacation-import-dialog" aria-labelledby="vacation-import-title">
+      <div class="request-details-dialog-heading"><div><p class="section-kicker">IMPORTAR</p><h2 id="vacation-import-title">Importar férias aprovadas</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
+      <form id="vacation-import-form">
+        <label for="vacation-import-file">Arquivo do Excel (.xlsx, .xls ou .csv)<input id="vacation-import-file" name="arquivo" type="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" /></label>
+        <p class="empty-note">Também dá para colar a lista copiada do Excel, uma linha por servidor. Procuro a linha de títulos no começo (pode haver um título antes dela). São reconhecidas, em qualquer ordem: <strong>Servidor</strong>, <strong>Mês</strong>, <strong>Equipe</strong>, <strong>Unidade</strong>, <strong>F. Gratificada</strong> (Sim/Não), <strong>Função</strong>, <strong>Substituto</strong>, <strong>Início</strong>, <strong>Fim</strong> e <strong>Ano</strong>. Se não houver títulos, uso essa mesma ordem de colunas.</p>
+        <label for="vacation-import-paste">Ou cole a lista<textarea id="vacation-import-paste" name="colar" rows="6" spellcheck="false" placeholder="Cole aqui as linhas copiadas do Excel, com o cabeçalho no topo"></textarea></label>
+        <p class="empty-note">Só o <strong>servidor</strong> e um período (<strong>Início</strong>, <strong>Fim</strong> ou <strong>Mês</strong>) são obrigatórios: as linhas com outros campos em branco entram mesmo assim (fico listando o que falta para você completar depois). Servidor que já tem férias lançadas no mesmo período é ignorado, e unidades que ainda não existirem no cadastro são criadas.</p>
+        <p id="vacation-import-message" role="status" aria-live="polite"></p>
+        <details class="server-import-problems" id="vacation-import-problems" hidden>
+          <summary id="vacation-import-problems-summary">Ver as linhas que não entraram</summary>
+          <ul id="vacation-import-problems-list"></ul>
+        </details>
+        <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="vacation-import-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="upload"></i><span>Importar férias</span></button></div>
       </form>
     </dialog>
         <dialog class="account-password-dialog crud-dialog" id="fg-function-dialog" aria-labelledby="fg-function-dialog-title">

@@ -2629,6 +2629,9 @@ function applyVacationLaunchConfig(config) {
     cycleSelect.required = Boolean(config.cycle);
     if (!config.cycle) cycleSelect.value = "";
   }
+  // A importação em massa é só de férias: some nas telas de licença.
+  const importButton = document.getElementById("vacation-import-open");
+  if (importButton) importButton.hidden = normalizeTypeText(config.type) !== "ferias";
 }
 
 function matchesRequestTypeFilter(request, filter) {
@@ -4176,6 +4179,355 @@ on("server-data-import-form", "submit", async event => {
     ? "Nenhum servidor novo foi importado."
     : `Importação concluída: ${plan.records.length} servidor${plan.records.length === 1 ? "" : "es"} cadastrado${plan.records.length === 1 ? "" : "s"}${plan.incomplete.length ? ` (${plan.incomplete.length} com dados a preencher)` : ""}.`);
   // Só fecha sozinho quando não há nada para a pessoa ler (nem faltando, nem ignorado, nem recusado).
+  if (observations === 0) form.closest("dialog").close();
+});
+
+// ---------------------------------------------------------------------------
+// Importação de férias aprovadas (planilha .xlsx/.csv ou lista colada).
+// Reconhece os títulos SERVIDOR, MÊS, EQUIPE, UNIDADE, F.GRATIFICADA, FUNÇÃO,
+// SUBSTITUTO, INÍCIO, FIM e ANO — em qualquer ordem — e monta lançamentos já
+// aprovados, do mesmo jeito que a tela "Lançar férias".
+// ---------------------------------------------------------------------------
+
+const vacationImportColumns = [
+  ["fg", /gratificada|^fg$/],
+  ["month", /^mes$|^mes /],
+  ["equipe", /equipe/],
+  ["funcaoExercida", /^funcao$|funcao exercida/],
+  ["substituto", /substituto/],
+  ["start", /inicio|data inicial/],
+  ["end", /fim|termino|data final/],
+  ["year", /^ano$/],
+  ["unidade", /unidade|lotacao/],
+  ["person", /servidor|^nome/]
+];
+
+// Ordem assumida quando a lista não tem linha de títulos reconhecível.
+const vacationImportFallbackOrder = ["person", "month", "equipe", "unidade", "fg", "funcaoExercida", "substituto", "start", "end", "year"];
+
+// Converte a lista (matriz de células) em uma lista de férias candidatas.
+function mapVacationImportRows(rows) {
+  const list = (Array.isArray(rows) ? rows : []).filter(row => Array.isArray(row) && row.some(cell => String(cell == null ? "" : cell).trim()));
+  if (list.length === 0) return { entries: [], hasHeader: false, listedRows: 0 };
+  const fieldsOf = row => row.map(text => {
+    const hit = vacationImportColumns.find(([, pattern]) => pattern.test(String(text == null ? "" : text)));
+    return hit ? hit[0] : "";
+  });
+  // Pode haver um título antes do cabeçalho (ou colunas fora de ordem): procuro,
+  // nas primeiras linhas, a que reconhece mais títulos.
+  let headerIndex = -1;
+  let bestScore = 2; // precisa reconhecer pelo menos 3 colunas para valer como cabeçalho
+  const scanLimit = Math.min(list.length, 15);
+  for (let index = 0; index < scanLimit; index += 1) {
+    const score = fieldsOf(list[index].map(normalizeImportText)).filter(Boolean).length;
+    if (score > bestScore) {
+      bestScore = score;
+      headerIndex = index;
+    }
+  }
+  const hasHeader = headerIndex >= 0;
+  const fieldsByColumn = hasHeader ? fieldsOf(list[headerIndex].map(normalizeImportText)) : [];
+  const dataRows = hasHeader ? list.slice(headerIndex + 1) : list;
+  const entries = dataRows.map(row => {
+    const entry = {};
+    row.forEach((cell, index) => {
+      const field = hasHeader ? fieldsByColumn[index] : vacationImportFallbackOrder[index];
+      if (!field || entry[field] !== undefined) return;
+      entry[field] = String(cell == null ? "" : cell).trim();
+    });
+    return entry;
+  });
+  return { entries, hasHeader, listedRows: list.length };
+}
+
+// "janeiro", "Janeiro", "jan" ... viram o nome canônico do mês.
+function normalizeImportMonth(value) {
+  const key = normalizeImportText(value);
+  if (!key) return "";
+  const exact = monthNames.findIndex(month => normalizeImportText(month) === key);
+  if (exact >= 0) return monthNames[exact];
+  const short = monthNames.findIndex(month => normalizeImportText(month).slice(0, 3) === key);
+  return short >= 0 ? monthNames[short] : "";
+}
+
+function importMonthFromIsoDate(value) {
+  if (!isIsoDate(value)) return "";
+  return monthNames[Number(value.slice(5, 7)) - 1] || "";
+}
+
+function importYearFromIsoDate(value) {
+  return isIsoDate(value) ? value.slice(0, 4) : "";
+}
+
+// Chave (servidor + período) de uma férias já lançada: serve para comparar a
+// lista com o que já existe e para descartar repetições dentro da própria lista.
+function vacationImportPeriodKey(request) {
+  const name = normalizeImportText(request?.person || request?.name || "");
+  if (!name) return "";
+  const start = isIsoDate(request?.start) ? request.start : "";
+  const month = normalizeImportText(request?.month || importMonthFromIsoDate(request?.start) || importMonthFromIsoDate(request?.end) || "");
+  const year = String(request?.year || importYearFromIsoDate(request?.start) || importYearFromIsoDate(request?.end) || "").trim();
+  return `${name}|${start || `${month}/${year}`}`;
+}
+
+// Planeja a importação sem alterar nada: o que entra, o que fica com dados
+// faltando, o que é ignorado (período já lançado) e o que é recusado, linha
+// por linha.
+function planVacationImport(rows) {
+  const plan = { requests: [], incomplete: [], skipped: [], errors: [], newUnidades: [], fgAdds: [], total: 0, headerFound: false };
+  const mapped = mapVacationImportRows(rows);
+  const entries = mapped.entries;
+  plan.total = entries.length;
+  plan.headerFound = mapped.hasHeader;
+  if (entries.length === 0) {
+    plan.errors.push("Não encontrei nenhuma linha de dados na lista.");
+    return plan;
+  }
+
+  const pendingUnidades = [];
+  const findUnidade = value => {
+    const key = normalizeImportText(value);
+    if (!key) return null;
+    return [...unidades, ...pendingUnidades].find(item => normalizeImportText(item.name) === key) || null;
+  };
+
+  const takenPeriods = new Set();
+  getApprovedVacationRequests().forEach(request => {
+    const key = vacationImportPeriodKey(request);
+    if (key) takenPeriods.add(key);
+  });
+  const takenFgNames = new Set(fgServerRoster.map(entry => normalizeImportText(getFgRosterName(entry))).filter(Boolean));
+  const currentYear = String(new Date().getFullYear());
+
+  entries.forEach((entry, index) => {
+    const line = index + 2; // na lista, a linha 1 é o cabeçalho
+    const name = String(entry.person || "").trim();
+    const label = name || `linha ${line}`;
+    if (!name) {
+      plan.errors.push(`${label}: sem o nome do servidor (essa linha não entrou).`);
+      return;
+    }
+
+    const start = parseImportDate(entry.start);
+    const end = parseImportDate(entry.end);
+    const month = normalizeImportMonth(entry.month) || importMonthFromIsoDate(start) || importMonthFromIsoDate(end) || "";
+    const yearFromColumn = /^\d{4}$/.test(String(entry.year || "")) ? String(entry.year) : "";
+    const year = yearFromColumn || importYearFromIsoDate(start) || importYearFromIsoDate(end) || currentYear;
+
+    // Sem período não dá para lançar: precisa de uma data ou, no mínimo, do mês.
+    if (!start && !end && !month) {
+      plan.errors.push(`${label}: sem período informado — preencha o Início, o Fim ou o Mês (essa linha não entrou).`);
+      return;
+    }
+
+    const periodKey = `${normalizeImportText(name)}|${start || `${normalizeImportText(month)}/${year}`}`;
+    if (takenPeriods.has(periodKey)) {
+      plan.skipped.push(`${label}: férias já lançadas para esse período (essa linha não entrou).`);
+      return;
+    }
+
+    // Unidade: usa a do cadastro ou cria uma nova (só quando informada).
+    const unidadeName = String(entry.unidade || "").trim();
+    let unidadeResolved = "";
+    if (unidadeName) {
+      let unidade = findUnidade(unidadeName);
+      if (!unidade) {
+        unidade = { id: crypto.randomUUID(), name: unidadeName };
+        pendingUnidades.push(unidade);
+        plan.newUnidades.push(unidade);
+      }
+      unidadeResolved = unidade.name;
+    }
+
+    const equipe = String(entry.equipe || "").trim();
+    const funcaoExercida = String(entry.funcaoExercida || "").trim();
+    const substituto = String(entry.substituto || "").trim();
+    const isFg = /^(sim|s|x|1|true|verdadeiro)$/.test(normalizeImportText(entry.fg));
+    const registered = serverPersonalData.find(record =>
+      String(record.name || "").trim().toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"));
+
+    // Campos em branco não barram a linha: viram pendência para completar depois.
+    const gaps = [];
+    if (!start) gaps.push("início");
+    if (!end) gaps.push("fim");
+    if (!unidadeResolved) gaps.push("unidade");
+    if (isFg && !funcaoExercida) gaps.push("função");
+    if (isFg && !substituto) gaps.push("substituto");
+
+    const days = start && end
+      ? Math.round((new Date(`${end}T12:00:00`) - new Date(`${start}T12:00:00`)) / 86400000) + 1
+      : 0;
+    const words = String(name).split(/\s+/).filter(Boolean);
+    const request = {
+      id: `import-${crypto.randomUUID()}`,
+      person: name,
+      initials: `${(words[0] || "").charAt(0)}${(words[1] || "").charAt(0)}`.toLocaleUpperCase("pt-BR") || "SV",
+      color: avatarColors[(requests.length + plan.requests.length) % avatarColors.length],
+      start, end, days,
+      month, year,
+      unidade: unidadeResolved,
+      note: "Importado da lista de férias aprovadas",
+      created: "Importação da lista",
+      status: "approved",
+      type: "férias",
+      launchedByAdmin: true
+    };
+    if (equipe) request.equipe = equipe;
+    if (registered && registered.cpf) request.cpf = registered.cpf;
+    if (funcaoExercida) request.funcaoExercida = funcaoExercida;
+    if (substituto) request.substituto = substituto;
+
+    plan.requests.push(request);
+    takenPeriods.add(periodKey);
+    if (gaps.length) plan.incomplete.push(`${name}: entrou faltando ${gaps.join(", ")}.`);
+
+    // Função Gratificada: quem a lista marca como Sim entra no cadastro de FG
+    // (é por ali que os relatórios separam servidores com FG).
+    const fgKey = normalizeImportText(name);
+    if (isFg && fgKey && !takenFgNames.has(fgKey)) {
+      takenFgNames.add(fgKey);
+      const registeredCpf = registered ? registered.cpf : "";
+      plan.fgAdds.push({
+        id: registered ? registered.id : fgRosterEntryId({ name, cpf: registeredCpf }),
+        name,
+        cpf: registeredCpf,
+        funcaoExercida
+      });
+    }
+  });
+
+  return plan;
+}
+
+// Quebra a lista colada em linhas e células, como faria com um arquivo CSV.
+function parsePastedImportRows(text) {
+  const lines = String(text || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  if (!lines.length) return [];
+  const delimiter = lines[0].includes("\t") ? "\t" : lines[0].includes(";") ? ";" : lines[0].includes(",") ? "," : null;
+  if (!delimiter) return lines.map(line => [line]);
+  return lines.map(line => line.split(delimiter).map(cell => cell.replace(/^"|"$/g, "").trim()));
+}
+
+function setVacationImportMessage(message, isError) {
+  const element = document.getElementById("vacation-import-message");
+  if (!element) return;
+  element.textContent = message || "";
+  element.classList.toggle("error", Boolean(isError));
+}
+
+// Lista, uma a uma, as linhas que não entraram (recusadas, repetidas ou incompletas).
+function setVacationImportProblems(problems) {
+  const details = document.getElementById("vacation-import-problems");
+  const list = document.getElementById("vacation-import-problems-list");
+  const summary = document.getElementById("vacation-import-problems-summary");
+  if (!details || !list) return;
+  list.innerHTML = "";
+  if (!problems.length) {
+    details.hidden = true;
+    details.open = false;
+    if (summary) summary.textContent = "";
+    return;
+  }
+  problems.forEach(text => {
+    const item = document.createElement("li");
+    item.textContent = text;
+    list.appendChild(item);
+  });
+  if (summary) summary.textContent = `Ver as linhas que precisam de atenção (${problems.length})`;
+  details.hidden = false;
+  details.open = true;
+}
+
+on("vacation-import-open", "click", () => {
+  const dialog = document.getElementById("vacation-import-dialog");
+  if (!dialog) return;
+  const form = document.getElementById("vacation-import-form");
+  if (form) form.reset();
+  setVacationImportMessage("");
+  setVacationImportProblems([]);
+  dialog.showModal();
+});
+
+on("vacation-import-cancel", "click", () => {
+  const dialog = document.getElementById("vacation-import-dialog");
+  if (dialog) dialog.close();
+});
+
+on("vacation-import-form", "submit", async event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const input = form.elements.arquivo;
+  const file = input && input.files && input.files[0];
+  const textarea = document.getElementById("vacation-import-paste");
+  const pasted = textarea ? textarea.value : "";
+
+  let rows;
+  let source = "";
+  if (file) {
+    setVacationImportMessage("Lendo a planilha...");
+    try {
+      const sheet = await readSpreadsheetRows(file);
+      rows = sheet.rows;
+      source = sheet.sheetCount > 1 ? ` (usei a aba "${sheet.sheetName}"; a planilha tem ${sheet.sheetCount} abas)` : "";
+    } catch (error) {
+      const detail = error instanceof Error ? ` (${error.message})` : "";
+      setVacationImportMessage(`Não consegui ler o arquivo${detail}. Use um .xlsx, .xls ou .csv salvo pelo Excel.`, true);
+      return;
+    }
+  } else if (pasted.trim()) {
+    rows = parsePastedImportRows(pasted);
+    source = " (lista colada)";
+  } else {
+    setVacationImportMessage("Escolha um arquivo da planilha ou cole a lista de férias.", true);
+    return;
+  }
+
+  const plan = planVacationImport(rows);
+
+  // Grava primeiro as listas de apoio (unidades e Função Gratificada) e, por
+  // fim, as férias. Se algo falhar, desfaz tudo o que foi enfileirado aqui.
+  if (plan.newUnidades.length) unidades.push(...plan.newUnidades);
+  if (plan.fgAdds.length) fgServerRoster.push(...plan.fgAdds);
+  if (plan.requests.length) requests.unshift(...plan.requests);
+
+  const saved = (!plan.fgAdds.length || saveFgServerRoster())
+    && (!plan.newUnidades.length || saveUnidades())
+    && (!plan.requests.length || saveRequests());
+
+  if (!saved) {
+    if (plan.requests.length) requests.splice(0, plan.requests.length);
+    if (plan.fgAdds.length) fgServerRoster.splice(fgServerRoster.length - plan.fgAdds.length, plan.fgAdds.length);
+    if (plan.newUnidades.length) unidades.splice(unidades.length - plan.newUnidades.length, plan.newUnidades.length);
+    setVacationImportMessage("Não consegui salvar a importação neste navegador. Nada foi alterado — tente de novo.", true);
+    return;
+  }
+
+  if (plan.newUnidades.length) renderUnidades();
+  if (plan.fgAdds.length) renderFgServerRoster();
+  renderAll();
+
+  const imported = plan.requests.length;
+  const parts = [`${imported} período${imported === 1 ? "" : "s"} de férias importado${imported === 1 ? "" : "s"}`];
+  if (plan.incomplete.length) parts.push(`${plan.incomplete.length} com dados faltando`);
+  if (plan.skipped.length) parts.push(`${plan.skipped.length} ignorado${plan.skipped.length === 1 ? "" : "s"} (${plan.skipped.length === 1 ? "período já lançado" : "períodos já lançados"})`);
+  if (plan.errors.length) parts.push(`${plan.errors.length} recusado${plan.errors.length === 1 ? "" : "s"}`);
+  if (plan.newUnidades.length) parts.push(`${plan.newUnidades.length} unidade${plan.newUnidades.length === 1 ? "" : "s"} criada${plan.newUnidades.length === 1 ? "" : "s"}`);
+  if (plan.fgAdds.length) parts.push(`${plan.fgAdds.length} servidor${plan.fgAdds.length === 1 ? "" : "es"} no cadastro de Função Gratificada`);
+  const readNote = ` Li ${plan.total} linha${plan.total === 1 ? "" : "s"} de dados${source}.`;
+  const headerNote = plan.headerFound
+    ? ""
+    : " Não reconheci a linha de títulos; usei a ordem padrão (Servidor, Mês, Equipe, Unidade, F. Gratificada, Função, Substituto, Início, Fim e Ano).";
+  const nothingImported = plan.requests.length === 0;
+  const observations = plan.incomplete.length + plan.skipped.length + plan.errors.length;
+  setVacationImportMessage(`${parts.join("; ")}.${readNote}${headerNote}`, nothingImported && plan.errors.length > 0);
+  setVacationImportProblems([...plan.errors, ...plan.skipped, ...plan.incomplete]);
+  if (plan.errors.length) {
+    console.warn("Importação de férias — linhas com problema:", plan.errors);
+  }
+  showToast(nothingImported
+    ? "Nenhum período de férias foi importado."
+    : `Importação concluída: ${imported} período${imported === 1 ? "" : "s"} de férias importado${imported === 1 ? "" : "s"}${plan.incomplete.length ? ` (${plan.incomplete.length} com dados a preencher)` : ""}.`);
+  // Só fecha sozinho quando não há nada para a pessoa ler.
   if (observations === 0) form.closest("dialog").close();
 });
 
