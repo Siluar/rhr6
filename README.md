@@ -165,7 +165,7 @@ editar e excluir), persistida nas coleções do Firestore:
   O botão **"Importar Excel"** lê uma planilha `.xlsx`, `.xls` ou `.csv` e
   cadastra os servidores de uma vez: as colunas são reconhecidas **pelo título,
   em qualquer ordem** (Servidor, E-mail, CPF, RG, Telefone, Quadro, Função,
-  Unidade e, se houver, Data de nascimento e Função Gratificada), procurando a
+  Unidade, Equipe e, se houver, Data de nascimento e Função Gratificada), procurando a
   linha de títulos no começo da planilha — pode haver um título antes.
   Unidades, funções e quadros que ainda não existirem são criados
   automaticamente, e quem já está cadastrado (mesmo CPF ou e-mail) é **pulado**.
@@ -173,7 +173,7 @@ editar e excluir), persistida nas coleções do Firestore:
   assim e o que ficou faltando é listado em *"Ver o que precisa de atenção"*,
   para completar depois pela edição (o cadastro manual também só exige o nome).
   A busca do cadastro procura em nome, CPF, RG, e-mail, telefone, quadro,
-  função e unidade.
+  função, unidade e equipe.
   No **Cadastro de Servidores com Função Gratificada** cada entrada guarda a
   **Função exercida**, escolhida entre as funções do **Cadastro de Funções
   Gratificadas** (ver abaixo), que pode ser trocada direto na tabela; o painel
@@ -188,6 +188,12 @@ editar e excluir), persistida nas coleções do Firestore:
   que saem da própria tabela. Quando a solicitação não traz a função, ela é
   buscada no cadastro de Função Gratificada (pelo CPF ou pelo nome), de modo que
   os pedidos antigos também aparecem classificados.
+
+  O cadastro guarda ainda a **Equipe** (as equipes da escala — Alfa, Bravo,
+  Charlie e Delta —, configuráveis em `config.js`), logo depois da **Unidade**.
+  A equipe do cadastro é a fonte do relatório **Férias por equipe**: lançar
+  férias copia a unidade e a equipe do servidor para a solicitação, e o próprio
+  relatório consegue atribuir a equipe de quem ainda não tem cadastro.
 - **Cadastro de Unidades** — item **Unidades** próprio na barra lateral para
   criar, editar e excluir as unidades penais (coleção `unidades`). As unidades
   cadastradas alimentam o select "Unidade Penal" do formulário de dados dos

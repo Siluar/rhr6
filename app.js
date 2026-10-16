@@ -1328,6 +1328,16 @@ function fillServerDataReferenceSelects() {
       if (autoQuadro) serverDataQuadro.value = autoQuadro;
       else if (current) serverDataQuadro.value = current;
     }
+    // Equipe: as equipes da escala (config.js), iguais para todas as unidades.
+    const equipeSelect = serverDataForm.elements.namedItem("equipe");
+    if (equipeSelect) {
+      const current = equipeSelect.value;
+      equipeSelect.innerHTML = `<option value="">Selecione a equipe</option>${getEquipeOptions().map(team => `<option value="${escapeHtml(team)}">${escapeHtml(team)}</option>`).join("")}`;
+      if (current && !Array.from(equipeSelect.options).some(option => option.value === current)) {
+        equipeSelect.add(new Option(`${current} (cadastro existente)`, current));
+      }
+      if (current) equipeSelect.value = current;
+    }
   }
   const cargoQuadroSelect = document.getElementById("cargo-quadro");
   if (cargoQuadroSelect) {
@@ -1539,8 +1549,8 @@ function readLocalJson(key, fallback) {
 }
 
 // Busca do cadastro de servidores: procura em nome, CPF, RG, e-mail, telefone,
-// quadro, função e unidade. Basta que todas as palavras digitadas apareçam em
-// algum campo (a ordem não importa).
+// quadro, função, unidade e equipe. Basta que todas as palavras digitadas
+// apareçam em algum campo (a ordem não importa).
 function getFilteredServerPersonalData() {
   const searchInput = document.getElementById("server-data-search");
   const searchTerm = searchInput ? searchInput.value.trim() : "";
@@ -1550,7 +1560,7 @@ function getFilteredServerPersonalData() {
   return serverPersonalData.filter(record => {
     const haystack = normalizeSearchText([
       record.name, record.email, record.cpf, record.rg, record.phone,
-      record.quadro, record.cargo, record.unidadePenal
+      record.quadro, record.cargo, record.unidadePenal, record.equipe
     ].join(" "));
     if (tokens.length && tokens.every(token => haystack.includes(token))) return true;
     const cpfDigits = String(record.cpf || "").replace(/\D/g, "");
@@ -1564,9 +1574,9 @@ function renderServerPersonalData() {
   const filteredRecords = getFilteredServerPersonalData();
   body.innerHTML = filteredRecords.length
     ? filteredRecords.map(record => {
-      return `<tr><td>${escapeHtml(record.name)}</td><td>${escapeHtml(record.email)}</td><td>${escapeHtml(record.cpf)}</td><td>${escapeHtml(record.rg)}</td><td>${escapeHtml(record.phone)}</td><td>${escapeHtml(record.quadro || "Não informado")}</td><td>${escapeHtml(record.cargo || "Não informado")}</td><td>${escapeHtml(record.unidadePenal || "Não informado")}</td><td>${escapeHtml(isServerInFgRoster(record) ? "Sim" : "Não")}</td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-server-data="${escapeHtml(record.id)}" aria-label="Editar dados de ${escapeHtml(record.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-server-data="${escapeHtml(record.id)}" aria-label="Remover dados de ${escapeHtml(record.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+      return `<tr><td>${escapeHtml(record.name)}</td><td>${escapeHtml(record.email)}</td><td>${escapeHtml(record.cpf)}</td><td>${escapeHtml(record.rg)}</td><td>${escapeHtml(record.phone)}</td><td>${escapeHtml(record.quadro || "Não informado")}</td><td>${escapeHtml(record.cargo || "Não informado")}</td><td>${escapeHtml(record.unidadePenal || "Não informado")}</td><td>${escapeHtml(record.equipe || "Não informada")}</td><td>${escapeHtml(isServerInFgRoster(record) ? "Sim" : "Não")}</td><td><div class="request-actions"><button class="action-icon approve" type="button" data-edit-server-data="${escapeHtml(record.id)}" aria-label="Editar dados de ${escapeHtml(record.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-server-data="${escapeHtml(record.id)}" aria-label="Remover dados de ${escapeHtml(record.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
     }).join("")
-    : `<tr><td class="detailed-report-empty" colspan="10">${serverPersonalData.length ? "Nenhum servidor corresponde ao filtro informado." : "Nenhum dado de servidor cadastrado."}</td></tr>`;
+    : `<tr><td class="detailed-report-empty" colspan="11">${serverPersonalData.length ? "Nenhum servidor corresponde ao filtro informado." : "Nenhum dado de servidor cadastrado."}</td></tr>`;
   if (document.getElementById("view-report-servers")?.classList.contains("active")) renderServerDirectoryReport();
   renderVacationTodayStat();
   refreshIcons();
@@ -2124,6 +2134,7 @@ function addVacationLaunch(event) {
     type: vacationLaunchType,
     cpf: server.cpf,
     unidade: server.unidadePenal || "",
+    equipe: server.equipe || "",
     launchedByAdmin: true
   };
   if (isFg) {
@@ -2908,9 +2919,14 @@ let selectedEquipeName = "";
 let selectedEquipeYear = "";
 let equipeAssignPeople = [];
 
-// Equipe do lançamento (campo "equipe", preenchido pela importação de férias ou
-// pela atribuição feita no próprio relatório).
+// Equipe do servidor: vem do cadastro (campo "equipe"); quando o servidor não
+// tem cadastro, cai para a equipe gravada no próprio lançamento de férias.
 function getRequestEquipe(request) {
+  const key = personKey(request?.person);
+  if (key) {
+    const record = serverPersonalData.find(item => personKey(item.name) === key);
+    if (record && hasText(record.equipe)) return String(record.equipe).trim();
+  }
   return String(request?.equipe || request?.team || "").trim();
 }
 
@@ -2956,26 +2972,43 @@ function submitEquipeAssign(event) {
     showToast("Selecione a equipe de pelo menos um servidor.");
     return;
   }
-  // Guarda o estado anterior para desfazer se o salvamento falhar.
-  const snapshot = requests.map(request => ({ id: request.id, equipe: request.equipe }));
-  let changed = 0;
+  // Guarda o estado anterior das duas fontes (cadastro e lançamentos) para
+  // desfazer caso o salvamento falhe.
+  const requestSnapshot = requests.map(request => ({ id: request.id, equipe: request.equipe }));
+  const serverSnapshot = serverPersonalData.map(record => ({ id: record.id, equipe: record.equipe }));
+  let touchedServer = false;
   requests.forEach(request => {
     const value = updates.get(personKey(request.person));
     if (!value) return;
-    if (getRequestEquipe(request) !== value) changed += 1;
     request.equipe = value;
   });
-  if (!saveRequests()) {
-    snapshot.forEach(item => {
+  // O cadastro é a fonte principal da equipe (o relatório lê o cadastro
+  // primeiro): quando o servidor tem cadastro, grava a equipe lá também.
+  serverPersonalData.forEach(record => {
+    const value = updates.get(personKey(record.name));
+    if (!value) return;
+    touchedServer = true;
+    record.equipe = value;
+  });
+  const requestsSaved = saveRequests();
+  const serversSaved = touchedServer ? saveServerPersonalData() : true;
+  if (!requestsSaved || !serversSaved) {
+    requestSnapshot.forEach(item => {
       const request = requests.find(candidate => candidate.id === item.id);
       if (!request) return;
       if (item.equipe === undefined) delete request.equipe;
       else request.equipe = item.equipe;
     });
+    serverSnapshot.forEach(item => {
+      const record = serverPersonalData.find(candidate => candidate.id === item.id);
+      if (!record) return;
+      if (item.equipe === undefined) delete record.equipe;
+      else record.equipe = item.equipe;
+    });
     return;
   }
   form.closest("dialog").close();
-  showToast(`Equipe definida em ${changed} lançamento${changed === 1 ? "" : "s"}.`);
+  showToast(`Equipe definida para ${updates.size} servidor${updates.size === 1 ? "" : "es"}.`);
   renderReportEquipe();
 }
 
@@ -4449,6 +4482,7 @@ const serverDataExportColumns = [
   ["Quadro", record => record.quadro],
   ["Função", record => record.cargo],
   ["Unidade", record => record.unidadePenal],
+  ["Equipe", record => record.equipe],
   ["Função Gratificada", record => (isServerInFgRoster(record) ? "Sim" : "Não")]
 ];
 
@@ -4512,12 +4546,13 @@ const serverImportColumns = [
   ["phone", /telefone|celular|^fone$|^tel$/],
   ["quadro", /^quadro$|^qpp[pe]$/],
   ["unidade", /unidade|lotacao/],
+  ["equipe", /^equipe$|^time$|^turma$/],
   ["name", /servidor|^nome/],
   ["cargo", /funcao|^cargo$/]
 ];
 
 // Ordem assumida quando a planilha não tem cabeçalho reconhecível.
-const serverImportFallbackOrder = ["name", "email", "cpf", "rg", "phone", "quadro", "cargo", "unidade"];
+const serverImportFallbackOrder = ["name", "email", "cpf", "rg", "phone", "quadro", "cargo", "unidade", "equipe"];
 
 function normalizeImportText(value) {
   return String(value == null ? "" : value).trim().toLocaleLowerCase("pt-BR")
@@ -4608,6 +4643,7 @@ function planServerImport(rows) {
     const rg = String(entry.rg || "").trim();
     const phoneDigits = String(entry.phone || "").replace(/\D/g, "");
     const unidadeName = String(entry.unidade || "").trim();
+    const equipeName = String(entry.equipe || "").trim();
     const cargoName = String(entry.cargo || "").trim();
     const quadroName = String(entry.quadro || "").trim();
     const label = name || email || `linha ${line}`;
@@ -4684,6 +4720,7 @@ function planServerImport(rows) {
       phone: phoneDigits,
       email,
       unidadePenal: unidadeResolved,
+      equipe: equipeName,
       cargo: cargoResolved,
       quadro: quadroResolved
     };
@@ -5252,6 +5289,7 @@ document.addEventListener("click", event => {
       phone: record.phone,
       email: record.email,
       unidadePenal: record.unidadePenal || "",
+      equipe: record.equipe || "",
       cargo: record.cargo || "",
       quadro: record.quadro || ""
     })) {
@@ -6052,6 +6090,7 @@ serverDataForm.addEventListener("submit", event => {
   const phoneDigits = phone.replace(/\D/g, "");
   const email = String(formData.get("email") || "").trim();
   const unidadePenal = String(formData.get("unidadePenal") || "").trim();
+  const equipe = String(formData.get("equipe") || "").trim();
   const cargo = String(formData.get("cargo") || "").trim();
   const quadro = String(formData.get("quadro") || "").trim();
   const editedRecord = editingServerDataId
@@ -6106,7 +6145,7 @@ serverDataForm.addEventListener("submit", event => {
   const previousAccounts = serverAccounts.map(account => ({ ...account }));
   const previousPersonalDataStorage = localStorage.getItem(serverDataStorageKey);
   const previousAccountsStorage = linkedAccount ? localStorage.getItem(serverAccountsStorageKey) : null;
-  const record = { id: editingServerDataId || crypto.randomUUID(), name, cpf, rg, birthDate, phone, email, unidadePenal, cargo, quadro };
+  const record = { id: editingServerDataId || crypto.randomUUID(), name, cpf, rg, birthDate, phone, email, unidadePenal, equipe, cargo, quadro };
   if (editedRecord) {
     serverPersonalData = serverPersonalData.map(item => item.id === editedRecord.id ? record : item);
     if (linkedAccount) {

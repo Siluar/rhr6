@@ -509,10 +509,10 @@ test("servidores: colunas na ordem pedida e Função Gratificada na última colu
     app.click('[data-view="server-data"]');
     await app.settle();
 
-    // Cabeçalhos, na ordem pedida, com "Função Gratificada" no fim.
+    // Cabeçalhos, na ordem pedida, com "Equipe" depois de "Unidade" e "Função Gratificada" no fim.
     const headers = app.$$("#view-server-data thead th").map(th => th.textContent.trim());
     assert.deepEqual(headers, [
-      "Servidor", "E-mail", "CPF", "RG", "Telefone", "Quadro", "Função", "Unidade", "Função Gratificada", "Ação"
+      "Servidor", "E-mail", "CPF", "RG", "Telefone", "Quadro", "Função", "Unidade", "Equipe", "Função Gratificada", "Ação"
     ]);
 
     const cellsOf = name => {
@@ -528,10 +528,11 @@ test("servidores: colunas na ordem pedida e Função Gratificada na última colu
     assert.equal(comFg[5], "QPPP", "6ª coluna: quadro");
     assert.equal(comFg[6], "Policial Penal", "7ª coluna: função");
     assert.equal(comFg[7], "CP Umuarama", "8ª coluna: unidade");
-    assert.equal(comFg[8], "Sim", "9ª coluna: possui Função Gratificada");
+    assert.equal(comFg[8], "Não informada", "9ª coluna: equipe");
+    assert.equal(comFg[9], "Sim", "10ª coluna: possui Função Gratificada");
 
     const semFg = cellsOf("Servidor Sem Fg");
-    assert.equal(semFg[8], "Não", "quem não tem Função Gratificada deve mostrar Não");
+    assert.equal(semFg[9], "Não", "quem não tem Função Gratificada deve mostrar Não");
   });
 });
 
@@ -591,13 +592,13 @@ test("importação: linha com dados faltando entra mesmo assim, e o que falta fi
     await app.settle();
 
     const rows = [
-      ["Servidor", "E-mail", "CPF", "RG", "Telefone", "Quadro", "Função", "Unidade", "Função Gratificada"],
-      ["Novo Servidor", "novo@pp.pr.gov.br", "123.456.789-09", "9988776", "(44) 98888-7777", "QPPP", "Policial Penal", "CP Umuarama", "Sim"],
-      ["Já Existe", "outro@pp.pr.gov.br", "11122233344", "111", "44999990000", "QPPP", "Policial Penal", "CP Umuarama", "Não"],
-      ["Sem CPF", "semcpf@pp.pr.gov.br", "123", "222", "44999990000", "QPPP", "Policial Penal", "CP Umuarama", ""],
-      ["Novo Lugar", "lugar@pp.pr.gov.br", "98765432100", "333", "44999991111", "QPPE", "Agente de Execução", "Unidade Inédita", "Não"],
-      ["Sem E-mail", "", "55566677788", "444", "44999992222", "QPPP", "Policial Penal", "CP Umuarama", ""],
-      ["Só o Nome", "", "", "", "", "", "", "", ""]
+      ["Servidor", "E-mail", "CPF", "RG", "Telefone", "Quadro", "Função", "Unidade", "Função Gratificada", "Equipe"],
+      ["Novo Servidor", "novo@pp.pr.gov.br", "123.456.789-09", "9988776", "(44) 98888-7777", "QPPP", "Policial Penal", "CP Umuarama", "Sim", "Bravo"],
+      ["Já Existe", "outro@pp.pr.gov.br", "11122233344", "111", "44999990000", "QPPP", "Policial Penal", "CP Umuarama", "Não", ""],
+      ["Sem CPF", "semcpf@pp.pr.gov.br", "123", "222", "44999990000", "QPPP", "Policial Penal", "CP Umuarama", "", "Alfa"],
+      ["Novo Lugar", "lugar@pp.pr.gov.br", "98765432100", "333", "44999991111", "QPPE", "Agente de Execução", "Unidade Inédita", "Não", "Charlie"],
+      ["Sem E-mail", "", "55566677788", "444", "44999992222", "QPPP", "Policial Penal", "CP Umuarama", "", ""],
+      ["Só o Nome", "", "", "", "", "", "", "", "", ""]
     ];
     const plan = app.window.__planServerImport(rows);
 
@@ -620,6 +621,7 @@ test("importação: linha com dados faltando entra mesmo assim, e o que falta fi
     assert.equal(novo.birthDate, "", "sem data de nascimento na planilha, fica em branco");
     assert.equal(novo.quadro, "QPPP");
     assert.equal(novo.unidadePenal, "CP Umuarama");
+    assert.equal(novo.equipe, "Bravo", "a equipe da planilha deveria ser guardada no cadastro");
 
     // A linha só com o nome entra com o resto em branco, sem quebrar nada.
     const soNome = plan.records.find(record => record.name === "Só o Nome");
@@ -631,6 +633,7 @@ test("importação: linha com dados faltando entra mesmo assim, e o que falta fi
     assert.equal(soNome.unidadePenal, "");
     assert.equal(soNome.cargo, "");
     assert.equal(soNome.quadro, "");
+    assert.equal(soNome.equipe, "", "sem equipe na planilha, fica em branco");
 
     assert.ok(plan.skipped[0].startsWith("Já Existe"), "mensagem aponta a linha repetida");
     assert.ok(plan.incomplete.some(item => item.startsWith("Sem CPF")), "aponta o CPF incompleto");
@@ -1537,6 +1540,48 @@ test("relatório por equipe: agrupa por equipe e atribui a quem está sem", asyn
     assert.ok(app.sync._all("requests").some(r => r.person === "Sem Equipe" && r.equipe === "Bravo"), "a mudança deveria subir para a nuvem");
     assert.equal(app.byId("equipe-assign-open").hidden, true, "sem pendentes, o botão de atribuir deveria sumir");
     assert.match(app.byId("report-equipe-body").textContent, /Equipe Bravo/, "a equipe atribuída deveria aparecer no relatório");
+  });
+});
+
+test("cadastro de servidores: equipe fica no cadastro e alimenta o relatório por equipe", async () => {
+  await withApp({}, async app => {
+    const { state } = app;
+    createServer(app, { name: "Servidor Equipe", cpf: "35715945600", email: "servidor.equipe@pp.pr.gov.br", equipe: "Bravo" });
+    await app.settle();
+
+    // A equipe fica gravada no cadastro e sobe para a nuvem.
+    const saved = state().serverPersonalData.find(r => r.name === "Servidor Equipe");
+    assert.ok(saved, "o servidor deveria ser cadastrado");
+    assert.equal(saved.equipe, "Bravo", "a equipe deveria ficar no cadastro");
+    assert.ok(app.sync._all("servidores").some(r => r.name === "Servidor Equipe" && r.equipe === "Bravo"),
+      "a equipe do cadastro deveria subir para a nuvem");
+
+    // A tabela mostra a equipe, logo depois da unidade.
+    app.click('[data-view="server-data"]');
+    await app.settle();
+    const row = app.$$("#server-data-body tr").find(item => item.textContent.includes("Servidor Equipe"));
+    assert.ok(row, "o servidor deveria aparecer na tabela");
+    assert.equal([...row.querySelectorAll("td")][8].textContent.trim(), "Bravo", "a coluna Equipe deveria mostrar a equipe");
+
+    // Lançar férias copia a unidade e a equipe do cadastro para a solicitação.
+    const serverId = findId(state().serverPersonalData, s => s.name === "Servidor Equipe");
+    const launchForm = app.byId("vacation-launch-form");
+    app.byId("vacation-launch-server").value = serverId;
+    launchForm.elements["vacation-launch-start"].value = "2026-11-10";
+    launchForm.elements["vacation-launch-end"].value = "2026-11-20";
+    app.submit(launchForm);
+    await app.settle();
+    const request = state().requests.find(r => r.person === "Servidor Equipe");
+    assert.ok(request, "as férias deveriam ser lançadas");
+    assert.equal(request.equipe, "Bravo", "a equipe do cadastro deveria ir para o lançamento");
+
+    // O relatório por equipe usa a equipe do cadastro do servidor.
+    app.click('[data-view="report-equipe"]');
+    await app.settle();
+    const body = app.byId("report-equipe-body").textContent;
+    assert.match(body, /Equipe Bravo/, "o servidor deveria aparecer no grupo da equipe do cadastro");
+    assert.match(body, /Servidor Equipe/, "o servidor deveria aparecer no relatório");
+    assert.equal(app.byId("equipe-assign-open").hidden, true, "com equipe definida, não deveria haver pendente de atribuição");
   });
 });
 

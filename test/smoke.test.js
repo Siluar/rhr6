@@ -173,7 +173,7 @@ test("cadastro de servidores: colunas na ordem pedida, com Função Gratificada 
   const thead = html.slice(html.lastIndexOf("<thead>", bodyIndex), bodyIndex);
   const headers = [...thead.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(match => match[1].trim());
   assert.deepEqual(headers, [
-    "Servidor", "E-mail", "CPF", "RG", "Telefone", "Quadro", "Função", "Unidade", "Função Gratificada", "Ação"
+    "Servidor", "E-mail", "CPF", "RG", "Telefone", "Quadro", "Função", "Unidade", "Equipe", "Função Gratificada", "Ação"
   ]);
   // A data de nascimento saiu da tabela.
   assert.ok(!headers.includes("Nascimento"), "a coluna Nascimento não deve mais estar na tabela");
