@@ -2267,10 +2267,8 @@ function renderReportFg() {
       const functionName = getRequestFuncaoExercida(request) || request.cargo || "Não informado";
       const person = String(request.person || "Não identificado");
       const substitute = String(request.substituto || request.substitute || "Não informado");
-      const personCpf = request.cpf || findServerCpfByName(person);
-      const substituteCpf = request.substituteCpf || request.cpfSubstituto || findServerCpfByName(substitute);
       const month = `${monthName.charAt(0).toLocaleUpperCase("pt-BR")}${monthName.slice(1)}`;
-      return `<tr><td>${escapeHtml(formatCpfLabel(personCpf))} — ${escapeHtml(person)}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(month)}</td><td>${escapeHtml(functionName)}</td><td>${escapeHtml(formatCpfLabel(substituteCpf))} — ${escapeHtml(substitute)}</td><td>${escapeHtml(formatReportPeriod(request, selectedVacationYear, selectedVacationMonth))}</td></tr>`;
+      return `<tr><td>${escapeHtml(person)}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(month)}</td><td>${escapeHtml(functionName)}</td><td>${escapeHtml(substitute)}</td><td>${escapeHtml(formatReportPeriod(request, selectedVacationYear, selectedVacationMonth))}</td></tr>`;
     }).join("")
     : `<tr><td class="current-vacations-empty" colspan="6">Nenhum servidor com Função Gratificada com férias aprovadas neste mês.</td></tr>`;
 }
@@ -2290,17 +2288,6 @@ function getRequestFuncaoExercida(request) {
     return Boolean(name) && normalizeSearchText(getFgRosterName(item)) === name;
   });
   return String(entry?.funcaoExercida || "").trim();
-}
-
-function findServerCpfByName(name) {
-  const normalizedName = String(name || "").trim().toLocaleLowerCase("pt-BR");
-  return serverPersonalData.find(record => String(record.name || "").trim().toLocaleLowerCase("pt-BR") === normalizedName)?.cpf || "";
-}
-
-function formatCpfLabel(value) {
-  const digits = String(value || "").replace(/\D/g, "");
-  if (!/^\d{11}$/.test(digits)) return "CPF não informado";
-  return `CPF ${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
 }
 
 // Tipos de solicitação de licença e como cada relatório os agrupa.
@@ -2410,6 +2397,659 @@ function renderReportMedica() {
   reportBody.innerHTML = filteredRequests.length
     ? filteredRequests.map(request => `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(getRequestFuncaoExercida(request) || "Não informado")}</td><td>${escapeHtml(getRequestMonthDisplay(request))}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(getRequestPeriodDisplay(request))}</td></tr>`).join("")
     : `<tr><td class="detailed-report-empty" colspan="5">Nenhuma licença médica concedida.</td></tr>`;
+}
+
+// ---------------------------------------------------------------------------
+// Relatórios gerenciais: férias vencidas/a vencer, pendências de cadastro,
+// Função Gratificada em exercício hoje, ficha do servidor e férias por equipe.
+// Todos usam apenas o que já existe no cadastro e nas solicitações.
+// ---------------------------------------------------------------------------
+
+function hasText(value) {
+  return String(value == null ? "" : value).trim() !== "";
+}
+
+// Chave da pessoa (nome sem acento e minúsculo) para cruzar cadastro,
+// solicitações e a lista de Função Gratificada.
+function personKey(value) {
+  return normalizeSearchText(value).replace(/\s+/g, " ").trim();
+}
+
+function todayIsoKey() {
+  return dateKey(new Date());
+}
+
+function initialsForName(value) {
+  return String(value || "").split(/\s+/).filter(Boolean).slice(0, 2)
+    .map(part => part[0]).join("").toLocaleUpperCase("pt-BR") || "?";
+}
+
+// Início de uma solicitação em ISO. Quando só existe o mês (com ou sem ano),
+// assume o primeiro dia do mês; sem ano, usa o ano corrente.
+function getRequestStartIso(request) {
+  if (isIsoDate(String(request?.start || ""))) return String(request.start);
+  const monthName = normalizeTypeText(request?.month);
+  const monthIndex = monthNames.findIndex(month => normalizeTypeText(month) === monthName);
+  if (monthIndex < 0) return "";
+  const year = Number(request?.year || request?.ano || new Date().getFullYear());
+  if (!year) return "";
+  return dateKey(new Date(year, monthIndex, 1));
+}
+
+// Fim de uma solicitação em ISO (último dia do mês quando não há data final).
+function getRequestEndIso(request) {
+  if (isIsoDate(String(request?.end || ""))) return String(request.end);
+  const startIso = getRequestStartIso(request);
+  if (!startIso) return "";
+  const year = Number(startIso.slice(0, 4));
+  const monthIndex = Number(startIso.slice(5, 7)) - 1;
+  return dateKey(new Date(year, monthIndex + 1, 0));
+}
+
+// Meses inteiros decorridos entre duas datas ISO.
+function monthsBetweenIso(fromIso, toIso) {
+  if (!isIsoDate(String(fromIso || "")) || !isIsoDate(String(toIso || ""))) return null;
+  const from = new Date(`${fromIso}T12:00:00`);
+  const to = new Date(`${toIso}T12:00:00`);
+  let months = (to.getFullYear() - from.getFullYear()) * 12 + (to.getMonth() - from.getMonth());
+  if (to.getDate() < from.getDate()) months -= 1;
+  return months;
+}
+
+function formatIsoBr(iso) {
+  return isIsoDate(String(iso || "")) ? formatDate(iso, { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
+}
+
+// Equipes da escala (config.js): a mesma rotação usada no calendário.
+function getEquipeOptions() {
+  const configured = window.RH_CONFIG && window.RH_CONFIG.escala && Array.isArray(window.RH_CONFIG.escala.equipes)
+    ? window.RH_CONFIG.escala.equipes
+    : [];
+  const base = configured.map(value => String(value || "").trim()).filter(Boolean);
+  return base.length ? base : ["Alfa", "Bravo", "Charlie", "Delta"];
+}
+
+// --- Relatório: férias vencidas e a vencer --------------------------------
+
+let selectedVencimentoUnit = "";
+let selectedVencimentoStatus = "";
+
+const vencimentoStatusOrder = { vencida: 0, avencer: 1, programada: 2, semFerias: 3, regular: 4 };
+
+const vencimentoStatusLabels = {
+  vencida: "Vencida",
+  avencer: "A vencer (até 90 dias)",
+  programada: "Férias programadas",
+  semFerias: "Sem férias registradas",
+  regular: "Regular"
+};
+
+// Considera vencida a partir de 12 meses sem fruir férias (art. 137 do CTN);
+// em alerta quando faltam 90 dias ou menos para completar os 12 meses.
+function vencimentoStatusKey(months) {
+  if (months === null) return "semFerias";
+  if (months < 0) return "programada";
+  if (months >= 12) return "vencida";
+  if (months >= 9) return "avencer";
+  return "regular";
+}
+
+// Cruza o cadastro com as férias aprovadas e devolve, por servidor, o último
+// período de férias e quantos meses se passaram desde o início dele.
+function buildVencimentoRows() {
+  const today = todayIsoKey();
+  const people = new Map();
+  serverPersonalData.forEach(record => {
+    const key = personKey(record.name);
+    if (!key || people.has(key)) return;
+    people.set(key, {
+      name: String(record.name || "").trim(),
+      unidade: String(record.unidadePenal || "").trim(),
+      quadro: String(record.quadro || "").trim()
+    });
+  });
+
+  getApprovedVacationRequests().forEach(request => {
+    const key = personKey(request.person);
+    if (!key) return;
+    const unidade = String(request.unidade || request.unit || "").trim();
+    if (!people.has(key)) {
+      people.set(key, { name: String(request.person || "").trim(), unidade, quadro: "" });
+      return;
+    }
+    const person = people.get(key);
+    if (!person.unidade) person.unidade = unidade;
+  });
+
+  const lastByKey = new Map();
+  getApprovedVacationRequests().forEach(request => {
+    const key = personKey(request.person);
+    const startIso = getRequestStartIso(request);
+    if (!key || !startIso) return;
+    const current = lastByKey.get(key);
+    if (!current || startIso > current.startIso) {
+      lastByKey.set(key, { startIso, endIso: getRequestEndIso(request) || startIso });
+    }
+  });
+
+  return [...people.entries()].map(([key, person]) => {
+    const last = lastByKey.get(key) || null;
+    const months = last ? monthsBetweenIso(last.startIso, today) : null;
+    return { ...person, last, months, statusKey: vencimentoStatusKey(months) };
+  });
+}
+
+function renderReportVencimento() {
+  const body = document.getElementById("report-vencimento-body");
+  const unitSelect = document.getElementById("report-vencimento-unit");
+  const statusSelect = document.getElementById("report-vencimento-status");
+  const search = document.getElementById("report-vencimento-search");
+  if (!body || !unitSelect || !statusSelect || !search) return;
+
+  const rows = buildVencimentoRows();
+  const units = [...new Set(rows.map(row => row.unidade).filter(Boolean))].sort((left, right) => left.localeCompare(right, "pt-BR"));
+  if (selectedVencimentoUnit && !units.includes(selectedVencimentoUnit)) selectedVencimentoUnit = "";
+  unitSelect.innerHTML = `<option value="">Todas as unidades</option>${units.map(unit => `<option value="${escapeHtml(unit)}">${escapeHtml(unit)}</option>`).join("")}`;
+  unitSelect.value = selectedVencimentoUnit;
+
+  statusSelect.innerHTML = `<option value="">Todas as situações</option>`
+    + Object.keys(vencimentoStatusOrder).map(key => `<option value="${key}">${escapeHtml(vencimentoStatusLabels[key])}</option>`).join("");
+  statusSelect.value = selectedVencimentoStatus;
+
+  const query = normalizeSearchText(search.value.trim());
+  const filtered = rows
+    .filter(row => (!selectedVencimentoUnit || row.unidade === selectedVencimentoUnit)
+      && (!selectedVencimentoStatus || row.statusKey === selectedVencimentoStatus)
+      && (!query || normalizeSearchText(row.name).includes(query)))
+    .sort((left, right) => (vencimentoStatusOrder[left.statusKey] - vencimentoStatusOrder[right.statusKey])
+      || ((right.months === null ? -1 : right.months) - (left.months === null ? -1 : left.months))
+      || left.name.localeCompare(right.name, "pt-BR"));
+
+  const countElement = document.getElementById("report-vencimento-count");
+  if (countElement) {
+    const vencidas = rows.filter(row => row.statusKey === "vencida").length;
+    const aVencer = rows.filter(row => row.statusKey === "avencer").length;
+    countElement.textContent = `${rows.length} servidor${rows.length === 1 ? "" : "es"} · ${vencidas} vencida${vencidas === 1 ? "" : "s"} · ${aVencer} a vencer`;
+  }
+
+  body.innerHTML = filtered.length
+    ? filtered.map(row => `<tr><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.unidade || "Não informada")}</td><td>${escapeHtml(row.quadro || "Não informado")}</td><td>${row.last ? escapeHtml(`${formatIsoBr(row.last.startIso)} a ${formatIsoBr(row.last.endIso)}`) : "Nunca registradas"}</td><td>${row.months === null || row.months < 0 ? "—" : row.months}</td><td>${escapeHtml(vencimentoStatusLabels[row.statusKey])}</td></tr>`).join("")
+    : `<tr><td class="detailed-report-empty" colspan="6">Nenhum servidor encontrado com esses filtros.</td></tr>`;
+}
+
+// --- Relatório: pendências de cadastro ------------------------------------
+
+let selectedPendenciaType = "";
+let selectedPendenciaUnit = "";
+
+const pendenciaLabels = {
+  "sem-cadastro": "Servidor sem cadastro",
+  "ferias-sem-unidade": "Férias sem unidade",
+  "ferias-sem-cpf": "Férias sem CPF",
+  "fg-sem-substituto": "Férias de F.G. sem substituto",
+  "cadastro-sem-cpf": "Cadastro sem CPF",
+  "cadastro-sem-unidade": "Cadastro sem unidade",
+  "cadastro-sem-funcao": "Cadastro sem função",
+  "cadastro-sem-quadro": "Cadastro sem quadro",
+  "cadastro-sem-email": "Cadastro sem e-mail",
+  "cadastro-sem-telefone": "Cadastro sem telefone"
+};
+
+// Ordem de prioridade: primeiro o que impede o relatório de funcionar
+// (servidor sem cadastro), depois os dados incompletos.
+const pendenciaOrder = Object.keys(pendenciaLabels);
+
+function buildPendenciaRows() {
+  const rows = [];
+  const cadastroByKey = new Map();
+  serverPersonalData.forEach(record => {
+    const key = personKey(record.name);
+    if (key) cadastroByKey.set(key, record);
+    const person = String(record.name || "").trim();
+    const unidade = String(record.unidadePenal || "").trim();
+    const push = type => rows.push({ person, unidade, type, origem: "Cadastro", referencia: "Cadastro de servidores" });
+    if (!String(record.cpf || "").replace(/\D/g, "")) push("cadastro-sem-cpf");
+    if (!hasText(record.unidadePenal)) push("cadastro-sem-unidade");
+    if (!hasText(record.cargo)) push("cadastro-sem-funcao");
+    if (!hasText(record.quadro)) push("cadastro-sem-quadro");
+    if (!hasText(record.email)) push("cadastro-sem-email");
+    if (!hasText(record.phone)) push("cadastro-sem-telefone");
+  });
+
+  const vacationsByKey = new Map();
+  getApprovedVacationRequests().forEach(request => {
+    const key = personKey(request.person);
+    if (!key) return;
+    if (!vacationsByKey.has(key)) vacationsByKey.set(key, []);
+    vacationsByKey.get(key).push(request);
+  });
+
+  // Quem tem Função Gratificada precisa de substituto nas férias.
+  const fgKeys = new Set();
+  fgServerRoster.forEach(entry => {
+    const key = personKey(getFgRosterName(entry));
+    if (key) fgKeys.add(key);
+  });
+  requests.forEach(request => {
+    if (!hasText(request.funcaoExercida)) return;
+    const key = personKey(request.person);
+    if (key) fgKeys.add(key);
+  });
+
+  vacationsByKey.forEach((list, key) => {
+    const cadastro = cadastroByKey.get(key) || null;
+    const person = String(list[0].person || "").trim();
+    const unidade = String((cadastro && cadastro.unidadePenal) || "").trim()
+      || String(list.map(item => item.unidade || item.unit).find(hasText) || "").trim();
+    const latest = list.slice().sort((left, right) => String(getRequestStartIso(right) || "").localeCompare(String(getRequestStartIso(left) || "")))[0];
+    const referencia = `Férias: ${formatReportPeriod(latest)}`;
+    if (!cadastro) rows.push({ person, unidade, type: "sem-cadastro", origem: "Férias", referencia });
+    if (!String((cadastro && cadastro.cpf) || "").replace(/\D/g, "") && !list.some(item => String(item.cpf || "").replace(/\D/g, ""))) {
+      rows.push({ person, unidade, type: "ferias-sem-cpf", origem: "Férias", referencia });
+    }
+    if (!unidade) rows.push({ person, unidade, type: "ferias-sem-unidade", origem: "Férias", referencia });
+    if (fgKeys.has(key) && list.some(item => !hasText(item.substituto))) {
+      rows.push({ person, unidade, type: "fg-sem-substituto", origem: "Férias", referencia });
+    }
+  });
+
+  return rows.sort((left, right) => (pendenciaOrder.indexOf(left.type) - pendenciaOrder.indexOf(right.type))
+    || left.person.localeCompare(right.person, "pt-BR"));
+}
+
+function renderReportPendencias() {
+  const body = document.getElementById("report-pendencias-body");
+  const typeSelect = document.getElementById("report-pendencias-type");
+  const unitSelect = document.getElementById("report-pendencias-unit");
+  const search = document.getElementById("report-pendencias-search");
+  if (!body || !typeSelect || !unitSelect || !search) return;
+
+  const rows = buildPendenciaRows();
+  const presentTypes = pendenciaOrder.filter(type => rows.some(row => row.type === type));
+  if (selectedPendenciaType && !presentTypes.includes(selectedPendenciaType)) selectedPendenciaType = "";
+  typeSelect.innerHTML = `<option value="">Todas as pendências</option>${presentTypes.map(type => `<option value="${type}">${escapeHtml(pendenciaLabels[type])}</option>`).join("")}`;
+  typeSelect.value = selectedPendenciaType;
+
+  const units = [...new Set(rows.map(row => row.unidade).filter(Boolean))].sort((left, right) => left.localeCompare(right, "pt-BR"));
+  if (selectedPendenciaUnit && !units.includes(selectedPendenciaUnit)) selectedPendenciaUnit = "";
+  unitSelect.innerHTML = `<option value="">Todas as unidades</option>${units.map(unit => `<option value="${escapeHtml(unit)}">${escapeHtml(unit)}</option>`).join("")}`;
+  unitSelect.value = selectedPendenciaUnit;
+
+  const query = normalizeSearchText(search.value.trim());
+  const filtered = rows.filter(row => (!selectedPendenciaType || row.type === selectedPendenciaType)
+    && (!selectedPendenciaUnit || row.unidade === selectedPendenciaUnit)
+    && (!query || normalizeSearchText(row.person).includes(query)));
+
+  const countElement = document.getElementById("report-pendencias-count");
+  if (countElement) {
+    const people = new Set(filtered.map(row => personKey(row.person))).size;
+    countElement.textContent = `${filtered.length} pendência${filtered.length === 1 ? "" : "s"} · ${people} servidor${people === 1 ? "" : "es"}`;
+  }
+
+  body.innerHTML = filtered.length
+    ? filtered.map(row => `<tr><td>${escapeHtml(row.person || "Não identificado")}</td><td>${escapeHtml(row.unidade || "Não informada")}</td><td>${escapeHtml(pendenciaLabels[row.type] || row.type)}</td><td>${escapeHtml(row.origem)}</td><td>${escapeHtml(row.referencia)}</td></tr>`).join("")
+    : `<tr><td class="detailed-report-empty" colspan="5">Nenhuma pendência encontrada com esses filtros.</td></tr>`;
+}
+
+// --- Relatório: F.G. em exercício hoje ------------------------------------
+
+let selectedFgExercicioStatus = "";
+let selectedFgExercicioUnit = "";
+
+// Quem possui função gratificada: a lista do cadastro de F.G. mais quem aparece
+// com "Função exercida" nas solicitações.
+function getFgHolders() {
+  const holders = new Map();
+  const put = (name, cpf, funcao, unidade) => {
+    const key = personKey(name);
+    if (!key) return;
+    const current = holders.get(key);
+    if (!current) {
+      holders.set(key, {
+        name: String(name || "").trim(),
+        cpf: String(cpf || "").trim(),
+        funcaoExercida: String(funcao || "").trim(),
+        unidade: String(unidade || "").trim()
+      });
+      return;
+    }
+    if (!current.cpf && hasText(cpf)) current.cpf = String(cpf).trim();
+    if (!current.funcaoExercida && hasText(funcao)) current.funcaoExercida = String(funcao).trim();
+    if (!current.unidade && hasText(unidade)) current.unidade = String(unidade).trim();
+  };
+  fgServerRoster.forEach(entry => {
+    const name = getFgRosterName(entry);
+    const cpf = getFgRosterCpf(entry);
+    const registered = findFgRegisteredServer(entry, name, cpf);
+    put(name, cpf || (registered ? registered.cpf : ""), entry.funcaoExercida, registered ? registered.unidadePenal : "");
+  });
+  requests.forEach(request => {
+    if (!hasText(request.funcaoExercida)) return;
+    put(request.person, request.cpf, request.funcaoExercida, request.unidade || request.unit);
+  });
+  return [...holders.values()].sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
+}
+
+// Situação de hoje de cada detentor de F.G.: de férias (com o substituto do
+// período) ou em exercício, além da próxima saída programada.
+function buildFgExercicioRows() {
+  const today = todayIsoKey();
+  const vacationsByKey = new Map();
+  getApprovedVacationRequests().forEach(request => {
+    const key = personKey(request.person);
+    const startIso = getRequestStartIso(request);
+    if (!key || !startIso) return;
+    if (!vacationsByKey.has(key)) vacationsByKey.set(key, []);
+    vacationsByKey.get(key).push({ request, startIso, endIso: getRequestEndIso(request) || startIso });
+  });
+
+  return getFgHolders().map(holder => {
+    const list = (vacationsByKey.get(personKey(holder.name)) || []).sort((left, right) => left.startIso.localeCompare(right.startIso));
+    const current = list.find(item => item.startIso <= today && item.endIso >= today) || null;
+    const next = list.find(item => item.startIso > today) || null;
+    return {
+      ...holder,
+      statusKey: current ? "deFerias" : "emExercicio",
+      substitu: current ? String(current.request.substituto || "").trim() : "",
+      next
+    };
+  });
+}
+
+function renderReportFgExercicio() {
+  const body = document.getElementById("report-fg-exercicio-body");
+  const statusSelect = document.getElementById("report-fg-exercicio-status");
+  const unitSelect = document.getElementById("report-fg-exercicio-unit");
+  const search = document.getElementById("report-fg-exercicio-search");
+  if (!body || !statusSelect || !unitSelect || !search) return;
+
+  const rows = buildFgExercicioRows();
+  statusSelect.innerHTML = `<option value="">Todas as situações</option><option value="emExercicio">Em exercício</option><option value="deFerias">De férias</option>`;
+  statusSelect.value = selectedFgExercicioStatus;
+
+  const units = [...new Set(rows.map(row => row.unidade).filter(Boolean))].sort((left, right) => left.localeCompare(right, "pt-BR"));
+  if (selectedFgExercicioUnit && !units.includes(selectedFgExercicioUnit)) selectedFgExercicioUnit = "";
+  unitSelect.innerHTML = `<option value="">Todas as unidades</option>${units.map(unit => `<option value="${escapeHtml(unit)}">${escapeHtml(unit)}</option>`).join("")}`;
+  unitSelect.value = selectedFgExercicioUnit;
+
+  const query = normalizeSearchText(search.value.trim());
+  const filtered = rows.filter(row => (!selectedFgExercicioStatus || row.statusKey === selectedFgExercicioStatus)
+    && (!selectedFgExercicioUnit || row.unidade === selectedFgExercicioUnit)
+    && (!query || normalizeSearchText(row.name).includes(query)));
+
+  const countElement = document.getElementById("report-fg-exercicio-count");
+  if (countElement) {
+    const deFerias = rows.filter(row => row.statusKey === "deFerias").length;
+    countElement.textContent = `${rows.length} com função gratificada · ${rows.length - deFerias} em exercício · ${deFerias} de férias`;
+  }
+
+  body.innerHTML = filtered.length
+    ? filtered.map(row => `<tr><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.funcaoExercida || "Não informada")}</td><td>${escapeHtml(row.unidade || "Não informada")}</td><td>${escapeHtml(row.statusKey === "deFerias" ? "De férias" : "Em exercício")}</td><td>${escapeHtml(row.statusKey === "deFerias" ? (row.substitu || "Não informado") : "—")}</td><td>${row.next ? escapeHtml(formatReportPeriod(row.next.request)) : "—"}</td></tr>`).join("")
+    : `<tr><td class="detailed-report-empty" colspan="6">Nenhum servidor com função gratificada encontrado com esses filtros.</td></tr>`;
+
+  const functionBody = document.getElementById("report-fg-exercicio-funcoes-body");
+  if (functionBody) {
+    const counts = new Map();
+    rows.forEach(row => {
+      const funcao = row.funcaoExercida || "Não informada";
+      if (!counts.has(funcao)) counts.set(funcao, { total: 0, deFerias: 0 });
+      const entry = counts.get(funcao);
+      entry.total += 1;
+      if (row.statusKey === "deFerias") entry.deFerias += 1;
+    });
+    functionBody.innerHTML = counts.size
+      ? [...counts.entries()].sort((left, right) => left[0].localeCompare(right[0], "pt-BR"))
+        .map(([funcao, value]) => `<tr><td>${escapeHtml(funcao)}</td><td>${value.total}</td><td>${value.deFerias}</td></tr>`).join("")
+      : `<tr><td class="detailed-report-empty" colspan="3">Nenhuma função gratificada em uso.</td></tr>`;
+  }
+}
+
+// --- Relatório: ficha do servidor -----------------------------------------
+
+let selectedFichaPerson = "";
+
+// Nomes disponíveis para a ficha: o cadastro de servidores mais quem aparece
+// nas solicitações (mesmo sem cadastro).
+function getFichaPeople() {
+  const people = new Map();
+  serverPersonalData.forEach(record => {
+    const key = personKey(record.name);
+    if (key) people.set(key, String(record.name || "").trim());
+  });
+  requests.forEach(request => {
+    const key = personKey(request.person);
+    if (key && !people.has(key)) people.set(key, String(request.person || "").trim());
+  });
+  return [...people.values()].sort((left, right) => left.localeCompare(right, "pt-BR"));
+}
+
+// Preenche o seletor de servidores respeitando a busca digitada.
+function renderReportFichaSelect() {
+  const select = document.getElementById("report-ficha-select");
+  if (!select) return "";
+  const search = document.getElementById("report-ficha-search");
+  const query = normalizeSearchText(search ? search.value.trim() : "");
+  const people = getFichaPeople().filter(name => !query || normalizeSearchText(name).includes(query));
+  if (!people.length) {
+    selectedFichaPerson = "";
+    select.disabled = true;
+    select.innerHTML = `<option value="">Nenhum servidor encontrado</option>`;
+    return "";
+  }
+  select.disabled = false;
+  const currentKey = personKey(selectedFichaPerson);
+  selectedFichaPerson = people.find(name => personKey(name) === currentKey) || people[0];
+  select.innerHTML = people.map(name => `<option value="${escapeHtml(name)}"${name === selectedFichaPerson ? " selected" : ""}>${escapeHtml(name)}</option>`).join("");
+  select.value = selectedFichaPerson;
+  return selectedFichaPerson;
+}
+
+function renderReportFicha() {
+  const dataBox = document.getElementById("report-ficha-data");
+  const historyBody = document.getElementById("report-ficha-history-body");
+  if (!dataBox || !historyBody) return;
+
+  const person = renderReportFichaSelect();
+  if (!person) {
+    dataBox.innerHTML = `<p class="empty-note">Nenhum servidor encontrado para a busca informada.</p>`;
+    historyBody.innerHTML = `<tr><td class="detailed-report-empty" colspan="7">Selecione um servidor para ver a ficha.</td></tr>`;
+    return;
+  }
+
+  const key = personKey(person);
+  const record = serverPersonalData.find(item => personKey(item.name) === key) || null;
+  const personRequests = requests
+    .filter(request => personKey(request.person) === key)
+    .sort((left, right) => String(getRequestStartIso(right) || "").localeCompare(String(getRequestStartIso(left) || "")));
+  const vacations = personRequests.filter(request => request.status === "approved"
+    && (!normalizeRequestType(request) || normalizeRequestType(request) === "ferias"));
+  const totalDays = vacations.reduce((sum, request) => sum + (Number(request.days) || 0), 0);
+  const fgEntry = fgServerRoster.find(entry => personKey(getFgRosterName(entry)) === key) || null;
+  const funcaoExercida = String((fgEntry && fgEntry.funcaoExercida) || "").trim()
+    || personRequests.map(request => String(request.funcaoExercida || "").trim()).find(hasText) || "";
+  const unidade = String((record && record.unidadePenal) || "").trim()
+    || String(personRequests.map(request => request.unidade || request.unit).find(hasText) || "").trim();
+
+  const dataRows = [
+    ["RG", record ? record.rg : ""],
+    ["E-mail", record ? record.email : (personRequests.map(request => request.email).find(hasText) || "")],
+    ["Telefone", record ? record.phone : ""],
+    ["Quadro", record ? record.quadro : ""],
+    ["Função", record ? record.cargo : ""],
+    ["Unidade de lotação", unidade],
+    ["Função gratificada", funcaoExercida || "Não possui"]
+  ].filter(([, value]) => hasText(value));
+
+  const colorIndex = [...key].reduce((sum, character) => sum + character.charCodeAt(0), 0) % avatarColors.length;
+  dataBox.innerHTML = `
+    <div class="ficha-identity">${avatar(initialsForName(person), avatarColors[colorIndex])}
+      <div><h3>${escapeHtml(person)}</h3><p>${escapeHtml(record ? "Servidor cadastrado" : "Sem cadastro de dados funcionais")}${unidade ? ` · ${escapeHtml(unidade)}` : ""}</p></div>
+    </div>
+    <dl class="ficha-data-list">${dataRows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>
+    <div class="ficha-stats">
+      <div><strong>${vacations.length}</strong><span>período${vacations.length === 1 ? "" : "s"} de férias aprovado${vacations.length === 1 ? "" : "s"}</span></div>
+      <div><strong>${totalDays}</strong><span>dia${totalDays === 1 ? "" : "s"} de férias</span></div>
+      <div><strong>${personRequests.length}</strong><span>solicitaç${personRequests.length === 1 ? "ão" : "ões"} registrada${personRequests.length === 1 ? "" : "s"}</span></div>
+      <div><strong>${fgEntry ? escapeHtml(funcaoExercida || "Sim") : "Não"}</strong><span>função gratificada</span></div>
+    </div>`;
+
+  historyBody.innerHTML = personRequests.length
+    ? personRequests.map(request => {
+      const type = String(request.type || "férias").trim();
+      const situacao = request.status === "approved" ? "Aprovada" : request.status === "rejected" ? "Recusada" : "Pendente";
+      return `<tr><td>${escapeHtml(type.charAt(0).toLocaleUpperCase("pt-BR") + type.slice(1))}</td><td>${escapeHtml(formatReportPeriod(request))}</td><td>${Number(request.days) || "—"}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(getRequestFuncaoExercida(request) || "—")}</td><td>${escapeHtml(request.substituto || request.substitute || "—")}</td><td>${escapeHtml(situacao)}</td></tr>`;
+    }).join("")
+    : `<tr><td class="detailed-report-empty" colspan="7">Nenhuma solicitação registrada para este servidor.</td></tr>`;
+}
+
+// --- Relatório: férias por equipe ----------------------------------------
+
+let selectedEquipeName = "";
+let selectedEquipeYear = "";
+let equipeAssignPeople = [];
+
+// Equipe do lançamento (campo "equipe", preenchido pela importação de férias ou
+// pela atribuição feita no próprio relatório).
+function getRequestEquipe(request) {
+  return String(request?.equipe || request?.team || "").trim();
+}
+
+// Servidores com férias aprovadas e sem equipe definida.
+function getUnassignedEquipePeople() {
+  const people = new Map();
+  getApprovedVacationRequests().forEach(request => {
+    if (getRequestEquipe(request)) return;
+    const key = personKey(request.person);
+    if (!key || people.has(key)) return;
+    people.set(key, {
+      key,
+      name: String(request.person || "").trim(),
+      unidade: String(request.unidade || request.unit || "").trim()
+    });
+  });
+  return [...people.values()].sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
+}
+
+function openEquipeAssignDialog() {
+  const dialog = document.getElementById("equipe-assign-dialog");
+  const list = document.getElementById("equipe-assign-list");
+  if (!dialog || !list) return;
+  const teams = getEquipeOptions();
+  equipeAssignPeople = getUnassignedEquipePeople();
+  list.innerHTML = equipeAssignPeople.length
+    ? equipeAssignPeople.map((person, index) => `<tr><td>${escapeHtml(person.name)}</td><td>${escapeHtml(person.unidade || "Não informada")}</td><td><select data-equipe-assign-row="${index}" aria-label="Equipe de ${escapeHtml(person.name)}"><option value="">Selecione</option>${teams.map(team => `<option value="${escapeHtml(team)}">${escapeHtml(team)}</option>`).join("")}</select></td></tr>`).join("")
+    : `<tr><td class="detailed-report-empty" colspan="3">Todos os servidores com férias já têm equipe definida.</td></tr>`;
+  refreshIcons();
+  dialog.showModal();
+}
+
+function submitEquipeAssign(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const updates = new Map();
+  equipeAssignPeople.forEach((person, index) => {
+    const select = form.querySelector(`[data-equipe-assign-row="${index}"]`);
+    const value = select ? select.value.trim() : "";
+    if (value) updates.set(person.key, value);
+  });
+  if (!updates.size) {
+    showToast("Selecione a equipe de pelo menos um servidor.");
+    return;
+  }
+  // Guarda o estado anterior para desfazer se o salvamento falhar.
+  const snapshot = requests.map(request => ({ id: request.id, equipe: request.equipe }));
+  let changed = 0;
+  requests.forEach(request => {
+    const value = updates.get(personKey(request.person));
+    if (!value) return;
+    if (getRequestEquipe(request) !== value) changed += 1;
+    request.equipe = value;
+  });
+  if (!saveRequests()) {
+    snapshot.forEach(item => {
+      const request = requests.find(candidate => candidate.id === item.id);
+      if (!request) return;
+      if (item.equipe === undefined) delete request.equipe;
+      else request.equipe = item.equipe;
+    });
+    return;
+  }
+  form.closest("dialog").close();
+  showToast(`Equipe definida em ${changed} lançamento${changed === 1 ? "" : "s"}.`);
+  renderReportEquipe();
+}
+
+function renderReportEquipe() {
+  const body = document.getElementById("report-equipe-body");
+  const equipeSelect = document.getElementById("report-equipe-select");
+  const yearSelect = document.getElementById("report-equipe-year");
+  const search = document.getElementById("report-equipe-search");
+  if (!body || !equipeSelect || !yearSelect || !search) return;
+
+  const vacations = getApprovedVacationRequests();
+  const currentYear = String(new Date().getFullYear());
+  const years = getAvailableReportYears(vacations, currentYear);
+  if (selectedEquipeYear && !years.includes(selectedEquipeYear)) selectedEquipeYear = "";
+  yearSelect.innerHTML = `<option value="">Todos os anos</option>${years.map(year => `<option value="${year}">${escapeHtml(year)}</option>`).join("")}`;
+  yearSelect.value = selectedEquipeYear;
+
+  const knownTeams = getEquipeOptions();
+  const extraTeams = [...new Set(vacations.map(getRequestEquipe).filter(Boolean))]
+    .filter(team => !knownTeams.some(known => personKey(known) === personKey(team)));
+  const allTeams = [...knownTeams, ...extraTeams];
+  if (selectedEquipeName && selectedEquipeName !== "__none" && !allTeams.some(team => personKey(team) === personKey(selectedEquipeName))) {
+    selectedEquipeName = "";
+  }
+  equipeSelect.innerHTML = `<option value="">Todas as equipes</option>${allTeams.map(team => `<option value="${escapeHtml(team)}">${escapeHtml(team)}</option>`).join("")}<option value="__none">Sem equipe informada</option>`;
+  equipeSelect.value = selectedEquipeName;
+
+  const query = normalizeSearchText(search.value.trim());
+  const filtered = vacations.filter(request => {
+    const equipe = getRequestEquipe(request);
+    if (selectedEquipeName === "__none" && equipe) return false;
+    if (selectedEquipeName && selectedEquipeName !== "__none" && personKey(equipe) !== personKey(selectedEquipeName)) return false;
+    if (selectedEquipeYear) {
+      const startIso = getRequestStartIso(request);
+      const endIso = getRequestEndIso(request);
+      if (startIso && endIso) {
+        if (!(startIso <= `${selectedEquipeYear}-12-31` && endIso >= `${selectedEquipeYear}-01-01`)) return false;
+      } else if (selectedEquipeYear !== currentYear) return false;
+    }
+    return !query || normalizeSearchText(request.person).includes(query);
+  });
+
+  const groups = new Map();
+  allTeams.forEach(team => groups.set(team, []));
+  groups.set("__none", []);
+  filtered.forEach(request => {
+    const key = getRequestEquipe(request) || "__none";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(request);
+  });
+
+  const orderedGroups = [...groups.entries()].filter(([, list]) => list.length);
+  body.innerHTML = orderedGroups.length
+    ? orderedGroups.map(([team, list]) => {
+      const label = team === "__none" ? "Sem equipe informada" : `Equipe ${team}`;
+      const rows = list.slice()
+        .sort((left, right) => String(left.person || "").localeCompare(String(right.person || ""), "pt-BR")
+          || String(getRequestStartIso(left) || "").localeCompare(String(getRequestStartIso(right) || "")))
+        .map(request => `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(formatReportPeriod(request, selectedEquipeYear || currentYear))}</td><td>${Number(request.days) || 1}</td></tr>`).join("");
+      return `<tr class="report-requests-group"><th scope="colgroup" colspan="4">${escapeHtml(label)} (${list.length})</th></tr>${rows}`;
+    }).join("")
+    : `<tr><td class="detailed-report-empty" colspan="4">Nenhum período de férias encontrado com esses filtros.</td></tr>`;
+
+  const unassigned = getUnassignedEquipePeople().length;
+  const countElement = document.getElementById("report-equipe-count");
+  if (countElement) {
+    countElement.textContent = `${filtered.length} lançamento${filtered.length === 1 ? "" : "s"} · ${unassigned} servidor${unassigned === 1 ? "" : "es"} sem equipe`;
+  }
+  const assignButton = document.getElementById("equipe-assign-open");
+  if (assignButton) {
+    assignButton.hidden = unassigned === 0;
+    const label = assignButton.querySelector("span");
+    if (label) label.textContent = `Atribuir equipes (${unassigned})`;
+  }
 }
 
 function getAvailableReportYears(approvedRequests, currentYear) {
@@ -2525,12 +3165,6 @@ function getRequestYearValue(request) {
   if (isIsoDate(createdAt)) return createdAt.slice(0, 4);
   const explicit = String(request?.year || request?.ano || "").trim();
   return /^\d{4}$/.test(explicit) ? explicit : "";
-}
-
-function getRequestJustification(request) {
-  if (request?.status === "rejected") return String(request.rejectionJustification || "").trim();
-  if (request?.status === "approved") return String(request.approvalJustification || "").trim();
-  return "";
 }
 
 // Categorias dos relatórios: férias, licenças (prêmio, capacitação, médica e afins)
@@ -2720,7 +3354,7 @@ function renderReportRequests() {
   if (countElement) countElement.textContent = `${filtered.length} ${filtered.length === 1 ? "solicitação" : "solicitações"}`;
 
   if (!filtered.length) {
-    body.innerHTML = `<tr><td class="detailed-report-empty" colspan="8">Nenhuma solicitação encontrada com esses filtros.</td></tr>`;
+    body.innerHTML = `<tr><td class="detailed-report-empty" colspan="6">Nenhuma solicitação encontrada com esses filtros.</td></tr>`;
     return;
   }
 
@@ -2733,8 +3367,7 @@ function renderReportRequests() {
   const renderRow = request => {
     const period = getRequestPeriodDisplay(request);
     const displayPeriod = period && period !== "Não informado" ? period : getRequestMonthCycleDisplay(request);
-    const justification = getRequestJustification(request) || "—";
-    return `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(formatCpfLabel(request.cpf))}</td><td>${escapeHtml(getRequestFuncaoExercida(request) || "Não informado")}</td><td>${escapeHtml(getRequestCategoryLabel(request))}</td><td>${escapeHtml(getRequestTypeLabel(request))}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(displayPeriod)}</td><td>${escapeHtml(justification)}</td></tr>`;
+    return `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(getRequestFuncaoExercida(request) || "Não informado")}</td><td>${escapeHtml(getRequestCategoryLabel(request))}</td><td>${escapeHtml(getRequestTypeLabel(request))}</td><td>${escapeHtml(request.unidade || request.unit || "Não informada")}</td><td>${escapeHtml(displayPeriod)}</td></tr>`;
   };
 
   body.innerHTML = groupedStatuses
@@ -2744,7 +3377,7 @@ function renderReportRequests() {
         .filter(request => String(request.status || "") === status)
         .sort((left, right) => String(left.person || "").localeCompare(String(right.person || ""), "pt-BR") || String(left.start || left.month || "").localeCompare(String(right.start || right.month || "")));
       if (!items.length) return "";
-      return `<tr class="report-requests-group"><th scope="colgroup" colspan="8">${escapeHtml(requestStatusLabels[status] || status)} (${items.length})</th></tr>${items.map(renderRow).join("")}`;
+      return `<tr class="report-requests-group"><th scope="colgroup" colspan="6">${escapeHtml(requestStatusLabels[status] || status)} (${items.length})</th></tr>${items.map(renderRow).join("")}`;
     })
     .join("");
 }
@@ -2852,6 +3485,11 @@ function renderAll() {
   renderReportPerson();
   renderReportRequests();
   renderReportFg();
+  renderReportEquipe();
+  renderReportVencimento();
+  renderReportPendencias();
+  renderReportFgExercicio();
+  renderReportFicha();
   renderUsuarios();
   renderUnidades();
   renderCargos();
@@ -2880,6 +3518,11 @@ function renderRequestsDependentViews() {
   renderReportPremio();
   renderReportCapacitacao();
   renderReportMedica();
+  renderReportEquipe();
+  renderReportVencimento();
+  renderReportPendencias();
+  renderReportFgExercicio();
+  renderReportFicha();
   renderReportFg();
   renderVacationTodayStat();
   updateCounts();
@@ -3068,9 +3711,9 @@ function renderMeta4() {
       const end = isIsoDate(request.end) ? formatDate(request.end, { day: "2-digit", month: "2-digit", year: "numeric" }) : "Não informado";
       const launchValue = request.meta4Launch === "sim" ? "sim" : "nao";
       const launchDate = launchValue === "sim" ? (isIsoDate(request.meta4LaunchDate) ? request.meta4LaunchDate : dateKey(new Date())) : "";
-      return `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(request.cpf || "Não informado")}</td><td>${escapeHtml(monthValue)}</td><td>${escapeHtml(year)}</td><td>${escapeHtml(start)}</td><td>${escapeHtml(end)}</td><td><select data-meta4-launch data-request-id="${escapeHtml(request.id)}" aria-label="Lançamento de ${escapeHtml(request.person || "servidor")}"><option value="nao"${launchValue === "nao" ? " selected" : ""}>Não</option><option value="sim"${launchValue === "sim" ? " selected" : ""}>Sim</option></select></td><td><input data-meta4-launch-date data-request-id="${escapeHtml(request.id)}" type="date" value="${escapeHtml(launchDate)}"${launchValue === "nao" ? " disabled" : ""} aria-label="Data M4 de ${escapeHtml(request.person || "servidor")}"></td></tr>`;
+      return `<tr><td>${escapeHtml(request.person || "Não identificado")}</td><td>${escapeHtml(monthValue)}</td><td>${escapeHtml(year)}</td><td>${escapeHtml(start)}</td><td>${escapeHtml(end)}</td><td><select data-meta4-launch data-request-id="${escapeHtml(request.id)}" aria-label="Lançamento de ${escapeHtml(request.person || "servidor")}"><option value="nao"${launchValue === "nao" ? " selected" : ""}>Não</option><option value="sim"${launchValue === "sim" ? " selected" : ""}>Sim</option></select></td><td><input data-meta4-launch-date data-request-id="${escapeHtml(request.id)}" type="date" value="${escapeHtml(launchDate)}"${launchValue === "nao" ? " disabled" : ""} aria-label="Data M4 de ${escapeHtml(request.person || "servidor")}"></td></tr>`;
     }).join("")
-    : `<tr><td class="detailed-report-empty" colspan="8">Nenhum pedido enviado por usuários.</td></tr>`;
+    : `<tr><td class="detailed-report-empty" colspan="7">Nenhum pedido enviado por usuários.</td></tr>`;
 }
 
 function renderFgProtocols() {
@@ -3102,8 +3745,6 @@ function renderFgProtocols() {
     ? filteredRequests.map(request => {
       const person = String(request.person || "Não identificado");
       const substitute = String(request.substituto || request.substitute || "Não informado");
-      const personCpf = request.cpf || findServerCpfByName(person);
-      const substituteCpf = request.substituteCpf || request.cpfSubstituto || findServerCpfByName(substitute);
       const rawMonth = request.month || (isIsoDate(request.start)
         ? new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(new Date(`${request.start}T12:00:00`))
         : "Não informado");
@@ -3118,9 +3759,9 @@ function renderFgProtocols() {
         : 0);
       const daysLabel = durationDays > 0 ? String(durationDays) : "Não informado";
       const funcaoExercida = getRequestFuncaoExercida(request) || "Não informado";
-      return `<tr class="${isChecked ? "fg-protocol-checked" : ""}"><td>${escapeHtml(person)}</td><td>${escapeHtml(formatCpfLabel(personCpf))}</td><td>${escapeHtml(funcaoExercida)}</td><td>${escapeHtml(substitute)}</td><td>${escapeHtml(formatCpfLabel(substituteCpf))}</td><td>${escapeHtml(month)}</td><td>${escapeHtml(year)}</td><td>${escapeHtml(start)}</td><td>${escapeHtml(end)}</td><td>${escapeHtml(daysLabel)}</td><td><select data-fg-protocol-status data-request-id="${escapeHtml(request.id)}" aria-label="Status do protocolo de ${escapeHtml(person)}"><option value="fazer"${protocolDone ? "" : " selected"}>Fazer protocolo</option><option value="feito"${protocolDone ? " selected" : ""}>Protocolo feito</option></select></td><td><input data-fg-protocol-number data-request-id="${escapeHtml(request.id)}" type="text" maxlength="60" value="${escapeHtml(request.fgProtocolNumber || "")}"${protocolDone ? "" : " disabled"} aria-label="Número do protocolo de ${escapeHtml(person)}" placeholder="Número"></td><td><input data-fg-protocol-checked data-request-id="${escapeHtml(request.id)}" type="checkbox"${isChecked ? " checked" : ""} aria-label="Marcar protocolo de ${escapeHtml(person)} como conferido"></td></tr>`;
+      return `<tr class="${isChecked ? "fg-protocol-checked" : ""}"><td>${escapeHtml(person)}</td><td>${escapeHtml(funcaoExercida)}</td><td>${escapeHtml(substitute)}</td><td>${escapeHtml(month)}</td><td>${escapeHtml(year)}</td><td>${escapeHtml(start)}</td><td>${escapeHtml(end)}</td><td>${escapeHtml(daysLabel)}</td><td><select data-fg-protocol-status data-request-id="${escapeHtml(request.id)}" aria-label="Status do protocolo de ${escapeHtml(person)}"><option value="fazer"${protocolDone ? "" : " selected"}>Fazer protocolo</option><option value="feito"${protocolDone ? " selected" : ""}>Protocolo feito</option></select></td><td><input data-fg-protocol-number data-request-id="${escapeHtml(request.id)}" type="text" maxlength="60" value="${escapeHtml(request.fgProtocolNumber || "")}"${protocolDone ? "" : " disabled"} aria-label="Número do protocolo de ${escapeHtml(person)}" placeholder="Número"></td><td><input data-fg-protocol-checked data-request-id="${escapeHtml(request.id)}" type="checkbox"${isChecked ? " checked" : ""} aria-label="Marcar protocolo de ${escapeHtml(person)} como conferido"></td></tr>`;
     }).join("")
-    : `<tr><td class="detailed-report-empty" colspan="13">Nenhum pedido de férias de servidores com Função Gratificada.</td></tr>`;
+    : `<tr><td class="detailed-report-empty" colspan="11">Nenhum pedido de férias de servidores com Função Gratificada.</td></tr>`;
 }
 
 function openRequestDetails(requestId) {
@@ -3425,7 +4066,7 @@ function setView(view) {
     toggle.setAttribute("aria-expanded", String(hasActiveItem));
     submenu.hidden = !hasActiveItem;
   });
-  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Unidades", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Cargos", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "cadastro-quadros": ["Quadros", "Cadastro de Quadros", "Cadastre os quadros usados pelos cargos."], "cadastro-fg-functions": ["Funções Gratificadas", "Cadastro de Funções Gratificadas", "Cadastre as funções gratificadas. Esta lista é a mesma usada no cadastro de F.G., no lançamento de férias e no formulário de solicitação."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "backup": ["Gestão", "Backup e restauração", "Exporte uma cópia de segurança dos dados ou restaure a partir de um arquivo."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatórios", "Relatório de servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-requests": ["Solicitações", "Relatório de solicitações", "Consulte todas as solicitações agrupadas por situação."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-premio": ["Licença prêmio", "Relatório de licença prêmio", "Consulte as solicitações de licença prêmio aprovadas."], "report-medica": ["Licença médica", "Relatório de licença médica", "Consulte as solicitações de licença médica aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
+  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Unidades", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Cargos", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "cadastro-quadros": ["Quadros", "Cadastro de Quadros", "Cadastre os quadros usados pelos cargos."], "cadastro-fg-functions": ["Funções Gratificadas", "Cadastro de Funções Gratificadas", "Cadastre as funções gratificadas. Esta lista é a mesma usada no cadastro de F.G., no lançamento de férias e no formulário de solicitação."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "backup": ["Gestão", "Backup e restauração", "Exporte uma cópia de segurança dos dados ou restaure a partir de um arquivo."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatórios", "Relatório de servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-equipe": ["Relatórios", "Relatório por equipe", "Consulte as férias aprovadas agrupadas por equipe (Alfa, Bravo, Charlie e Delta)."], "report-vencimento": ["Relatórios", "Férias vencidas e a vencer", "Acompanhe quem está há 12 meses ou mais sem férias e quem completa o prazo nos próximos 90 dias."], "report-pendencias": ["Relatórios", "Pendências de cadastro", "Veja o que falta preencher no cadastro dos servidores e nas solicitações de férias."], "report-fg-exercicio": ["Relatórios", "F.G. em exercício hoje", "Situação atual de quem possui Função Gratificada: em exercício ou de férias, com o substituto do período."], "report-ficha": ["Relatórios", "Ficha do servidor", "Reúne os dados do cadastro e todo o histórico de férias, licenças, função gratificada e protocolos."], "report-requests": ["Solicitações", "Relatório de solicitações", "Consulte todas as solicitações agrupadas por situação."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-premio": ["Licença prêmio", "Relatório de licença prêmio", "Consulte as solicitações de licença prêmio aprovadas."], "report-medica": ["Licença médica", "Relatório de licença médica", "Consulte as solicitações de licença médica aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
   let [breadcrumb, title, subtitle] = titles[view] || (view === "tasks" ? ["Gestão", "Lista de tarefas", "Registre e acompanhe suas tarefas."] : view === "meta4" ? ["Solicitações", "META 4", "Consulte os pedidos de férias enviados pelos usuários."] : view === "protocols-fg" ? ["Solicitações", "Protocolos F.G", "Acompanhe o status e o número dos protocolos de férias com Função Gratificada."] : titles.overview);
   // Telas de lançamento (férias e licenças) usam o mesmo painel; ajusta textos.
   if (launchConfig) {
@@ -3464,6 +4105,11 @@ function setView(view) {
   if (view === "report-premio") renderReportPremio();
   if (view === "report-capacitacao") renderReportCapacitacao();
   if (view === "report-medica") renderReportMedica();
+  if (view === "report-equipe") renderReportEquipe();
+  if (view === "report-vencimento") renderReportVencimento();
+  if (view === "report-pendencias") renderReportPendencias();
+  if (view === "report-fg-exercicio") renderReportFgExercicio();
+  if (view === "report-ficha") renderReportFicha();
   if (view === "requests") renderRequests("full-requests", false);
   if (view === "usuarios") {
     // Relê a coleção ao abrir a seção para mostrar acessos pendentes novos.
@@ -5348,6 +5994,50 @@ on("report-medica-name", "input", debounce(renderReportMedica));
 on("report-medica-month", "change", event => {
   selectedMedicaMonth = event.currentTarget.value;
   renderReportMedica();
+});
+on("report-equipe-search", "input", debounce(renderReportEquipe));
+on("report-equipe-select", "change", event => {
+  selectedEquipeName = event.currentTarget.value;
+  renderReportEquipe();
+});
+on("report-equipe-year", "change", event => {
+  selectedEquipeYear = event.currentTarget.value;
+  renderReportEquipe();
+});
+on("equipe-assign-open", "click", openEquipeAssignDialog);
+on("equipe-assign-cancel", "click", () => document.getElementById("equipe-assign-dialog").close());
+on("equipe-assign-form", "submit", submitEquipeAssign);
+on("report-vencimento-search", "input", debounce(renderReportVencimento));
+on("report-vencimento-unit", "change", event => {
+  selectedVencimentoUnit = event.currentTarget.value;
+  renderReportVencimento();
+});
+on("report-vencimento-status", "change", event => {
+  selectedVencimentoStatus = event.currentTarget.value;
+  renderReportVencimento();
+});
+on("report-pendencias-search", "input", debounce(renderReportPendencias));
+on("report-pendencias-type", "change", event => {
+  selectedPendenciaType = event.currentTarget.value;
+  renderReportPendencias();
+});
+on("report-pendencias-unit", "change", event => {
+  selectedPendenciaUnit = event.currentTarget.value;
+  renderReportPendencias();
+});
+on("report-fg-exercicio-search", "input", debounce(renderReportFgExercicio));
+on("report-fg-exercicio-status", "change", event => {
+  selectedFgExercicioStatus = event.currentTarget.value;
+  renderReportFgExercicio();
+});
+on("report-fg-exercicio-unit", "change", event => {
+  selectedFgExercicioUnit = event.currentTarget.value;
+  renderReportFgExercicio();
+});
+on("report-ficha-search", "input", debounce(renderReportFicha));
+on("report-ficha-select", "change", event => {
+  selectedFichaPerson = event.currentTarget.value;
+  renderReportFicha();
 });
 serverDataForm.addEventListener("submit", event => {
   event.preventDefault();

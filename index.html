@@ -140,6 +140,7 @@
               <button class="nav-submenu-link" type="button" data-view="reports">Relatório por mês</button>
               <button class="nav-submenu-link" type="button" data-view="report-year">Relatório por ano</button>
               <button class="nav-submenu-link" type="button" data-view="report-unit">Relatório por unidade</button>
+              <button class="nav-submenu-link" type="button" data-view="report-equipe">Relatório por equipe</button>
               <button class="nav-submenu-link" type="button" data-view="report-person">Relatório por servidor</button>
               <button class="nav-submenu-link" type="button" data-open-report="report-servers" data-report-count="unit">Relatório de servidores &mdash; Unidade</button>
               <button class="nav-submenu-link" type="button" data-open-report="report-servers" data-report-count="role">Relatório de servidores &mdash; Cargo</button>
@@ -147,6 +148,10 @@
               <button class="nav-submenu-link" type="button" data-view="report-premio">Licença prêmio</button>
               <button class="nav-submenu-link" type="button" data-view="report-capacitacao">Licença capacitação</button>
               <button class="nav-submenu-link" type="button" data-view="report-medica">Licença médica</button>
+              <button class="nav-submenu-link" type="button" data-view="report-vencimento">Férias vencidas e a vencer</button>
+              <button class="nav-submenu-link" type="button" data-view="report-pendencias">Pendências de cadastro</button>
+              <button class="nav-submenu-link" type="button" data-view="report-fg-exercicio">F.G. em exercício hoje</button>
+              <button class="nav-submenu-link" type="button" data-view="report-ficha">Ficha do servidor</button>
             </div>
           </div>
         </nav>
@@ -208,14 +213,14 @@
           <section class="view-panel" id="view-meta4" aria-label="META 4">
             <section class="panel detailed-reports-panel" aria-labelledby="meta4-title">
               <div class="panel-heading"><div><p class="section-kicker">PEDIDOS DE FÉRIAS</p><h2 id="meta4-title">META 4</h2></div><div class="name-filter-toolbar"><label class="table-search name-filter"><i data-lucide="search"></i><input id="meta4-search" type="search" placeholder="Filtrar por nome" aria-label="Filtrar META 4 pelo nome do solicitante" /></label><label class="report-period-field meta-period-filter" for="meta4-month-filter">Mês<select id="meta4-month-filter"><option value="">Todos os meses</option></select></label><label class="report-period-field meta-period-filter" for="meta4-year-filter">Ano<select id="meta4-year-filter"><option value="">Todos os anos</option></select></label><label class="report-period-field meta-period-filter" for="meta4-launch-filter">Lançamento<select id="meta4-launch-filter"><option value="">Todos</option><option value="sim">Sim</option><option value="nao">Não</option></select></label><span class="task-count" id="meta4-count">0 pedidos</span></div></div>
-              <div class="detailed-report-table-wrap"><table class="detailed-report-table meta4-table"><thead><tr><th scope="col">Nome</th><th scope="col">CPF</th><th scope="col">Mês de férias</th><th scope="col">Ano</th><th scope="col">Início</th><th scope="col">Fim</th><th scope="col">Lançamento</th><th scope="col">M4</th></tr></thead><tbody id="meta4-body"></tbody></table></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table meta4-table"><thead><tr><th scope="col">Nome</th><th scope="col">Mês de férias</th><th scope="col">Ano</th><th scope="col">Início</th><th scope="col">Fim</th><th scope="col">Lançamento</th><th scope="col">M4</th></tr></thead><tbody id="meta4-body"></tbody></table></div>
             </section>
           </section>
 
           <section class="view-panel" id="view-protocols-fg" aria-label="Protocolos de Função Gratificada">
             <section class="panel detailed-reports-panel" aria-labelledby="protocols-fg-title">
               <div class="panel-heading"><div><p class="section-kicker">FÉRIAS COM FUNÇÃO GRATIFICADA</p><h2 id="protocols-fg-title">Protocolos F.G</h2></div><div class="name-filter-toolbar"><label class="table-search name-filter"><i data-lucide="search"></i><input id="protocols-fg-search" type="search" placeholder="Filtrar por nome" aria-label="Filtrar Protocolos F.G por nome do solicitante ou substituto" /></label><label class="report-period-field meta-period-filter" for="protocols-fg-month-filter">Mês<select id="protocols-fg-month-filter"><option value="">Todos os meses</option></select></label><label class="report-period-field meta-period-filter" for="protocols-fg-year-filter">Ano<select id="protocols-fg-year-filter"><option value="">Todos os anos</option></select></label><label class="report-period-field meta-period-filter" for="protocols-fg-status-filter">Status<select id="protocols-fg-status-filter"><option value="">Todos</option><option value="fazer">Fazer protocolo</option><option value="feito">Protocolo feito</option></select></label><span class="task-count" id="protocols-fg-count">0 protocolos</span></div></div>
-              <div class="detailed-report-table-wrap"><table class="detailed-report-table protocols-fg-table"><thead><tr><th scope="col">Servidor solicitante</th><th scope="col">CPF do solicitante</th><th scope="col">Função exercida</th><th scope="col">Substituto</th><th scope="col">CPF do substituto</th><th scope="col">Mês</th><th scope="col">Ano</th><th scope="col">Início</th><th scope="col">Fim</th><th scope="col">Dias de fruição</th><th scope="col">Status do protocolo</th><th scope="col">Número do protocolo</th><th scope="col">Conferido</th></tr></thead><tbody id="protocols-fg-body"></tbody></table></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table protocols-fg-table"><thead><tr><th scope="col">Servidor solicitante</th><th scope="col">Função exercida</th><th scope="col">Substituto</th><th scope="col">Mês</th><th scope="col">Ano</th><th scope="col">Início</th><th scope="col">Fim</th><th scope="col">Dias de fruição</th><th scope="col">Status do protocolo</th><th scope="col">Número do protocolo</th><th scope="col">Conferido</th></tr></thead><tbody id="protocols-fg-body"></tbody></table></div>
             </section>
           </section>
 
@@ -424,7 +429,7 @@
                 <label class="report-unit-filter" for="report-requests-year">Ano<select id="report-requests-year"><option value="">Todos os anos</option></select></label>
               </div>
               <div class="report-month-toolbar"><span class="task-count" id="report-requests-count">0 solicitações</span><div class="report-export-actions" data-report-export-table="report-requests-table" data-report-export-title="Relatório de solicitações"></div></div>
-              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-requests-table"><thead><tr><th scope="col">Servidor</th><th scope="col">CPF</th><th scope="col">Função exercida</th><th scope="col">Categoria</th><th scope="col">Tipo</th><th scope="col">Unidade</th><th scope="col">Período</th><th scope="col">Justificativa</th></tr></thead><tbody id="report-requests-body"></tbody></table></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-requests-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Função exercida</th><th scope="col">Categoria</th><th scope="col">Tipo</th><th scope="col">Unidade</th><th scope="col">Período</th></tr></thead><tbody id="report-requests-body"></tbody></table></div>
             </section>
           </section>
           <section class="view-panel" id="view-report-capacitacao" aria-label="Relatório de licença-capacitação">
@@ -472,6 +477,75 @@
               <div class="report-units-count" data-count-block="quadro"><h3 class="report-units-count-title">Quantitativo por quadro</h3><div class="report-export-actions" data-report-export-table="report-quadros-count-table" data-report-export-title="Quantitativo de servidores por quadro"></div><div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-quadros-count-table"><thead><tr><th scope="col">Quadro</th><th scope="col">Quantidade de servidores</th></tr></thead><tbody id="report-quadros-count-body"></tbody><tfoot><tr><th scope="col">Total</th><td id="report-quadros-count-total">0</td></tr></tfoot></table></div></div>
               <div class="report-export-actions" data-report-export-table="report-servers-table" data-report-export-title="Relatório - Servidores"></div>
               <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-servers-table"><thead><tr><th scope="col">Nome</th><th scope="col" id="report-servers-second-head">Unidade</th></tr></thead><tbody id="report-servers-body"></tbody></table></div>
+            </section>
+          </section>
+
+          <section class="view-panel" id="view-report-equipe" aria-label="Relatório por equipe">
+            <section class="panel detailed-reports-panel report-manager-panel" aria-labelledby="report-equipe-title">
+              <div class="panel-heading"><div><p class="section-kicker">FÉRIAS APROVADAS</p><h2 id="report-equipe-title">Relatório por equipe</h2><p class="server-registry-description">Férias aprovadas agrupadas pela equipe da escala (Alfa, Bravo, Charlie e Delta). Servidores sem equipe definida aparecem no grupo final — use o botão para atribuir.</p></div><button class="button button-secondary" type="button" id="equipe-assign-open" hidden><i data-lucide="users-round"></i><span>Atribuir equipes</span></button></div>
+              <div class="report-requests-filters">
+                <label class="table-search report-filter-search"><i data-lucide="search"></i><input id="report-equipe-search" type="search" placeholder="Filtrar servidor" aria-label="Filtrar servidor pelo nome" /></label>
+                <label class="report-unit-filter" for="report-equipe-select">Equipe<select id="report-equipe-select"><option value="">Todas as equipes</option></select></label>
+                <label class="report-unit-filter" for="report-equipe-year">Ano<select id="report-equipe-year"><option value="">Todos os anos</option></select></label>
+              </div>
+              <div class="report-month-toolbar"><span class="task-count" id="report-equipe-count">0 lançamentos</span><div class="report-export-actions" data-report-export-table="report-equipe-table" data-report-export-title="Relatório por equipe"></div></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-equipe-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Unidade de Lotação</th><th scope="col">Período de férias</th><th scope="col">Dias</th></tr></thead><tbody id="report-equipe-body"></tbody></table></div>
+            </section>
+          </section>
+          <section class="view-panel" id="view-report-vencimento" aria-label="Férias vencidas e a vencer">
+            <section class="panel detailed-reports-panel report-manager-panel" aria-labelledby="report-vencimento-title">
+              <div class="panel-heading"><div><p class="section-kicker">CONFORMIDADE</p><h2 id="report-vencimento-title">Férias vencidas e a vencer</h2><p class="server-registry-description">Considera <strong>vencida</strong> a partir de 12 meses sem fruir férias e <strong>a vencer</strong> quando faltam 90 dias ou menos para completar os 12 meses. O cálculo usa a data de início do último período de férias aprovado.</p></div></div>
+              <div class="report-requests-filters">
+                <label class="table-search report-filter-search"><i data-lucide="search"></i><input id="report-vencimento-search" type="search" placeholder="Filtrar servidor" aria-label="Filtrar servidor pelo nome" /></label>
+                <label class="report-unit-filter" for="report-vencimento-unit">Unidade<select id="report-vencimento-unit"><option value="">Todas as unidades</option></select></label>
+                <label class="report-unit-filter" for="report-vencimento-status">Situação<select id="report-vencimento-status"><option value="">Todas as situações</option></select></label>
+              </div>
+              <div class="report-month-toolbar"><span class="task-count" id="report-vencimento-count">0 servidores</span><div class="report-export-actions" data-report-export-table="report-vencimento-table" data-report-export-title="Férias vencidas e a vencer"></div></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-vencimento-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Unidade de Lotação</th><th scope="col">Quadro</th><th scope="col">Últimas férias</th><th scope="col">Meses sem fruir</th><th scope="col">Situação</th></tr></thead><tbody id="report-vencimento-body"></tbody></table></div>
+            </section>
+          </section>
+          <section class="view-panel" id="view-report-pendencias" aria-label="Pendências de cadastro">
+            <section class="panel detailed-reports-panel report-manager-panel" aria-labelledby="report-pendencias-title">
+              <div class="panel-heading"><div><p class="section-kicker">QUALIDADE DOS DADOS</p><h2 id="report-pendencias-title">Pendências de cadastro</h2><p class="server-registry-description">Mostra o que falta preencher: servidores sem cadastro, férias sem unidade ou CPF, férias de F.G. sem substituto e campos em branco no cadastro. Cada linha é um item para corrigir.</p></div></div>
+              <div class="report-requests-filters">
+                <label class="table-search report-filter-search"><i data-lucide="search"></i><input id="report-pendencias-search" type="search" placeholder="Filtrar servidor" aria-label="Filtrar servidor pelo nome" /></label>
+                <label class="report-unit-filter" for="report-pendencias-type">Pendência<select id="report-pendencias-type"><option value="">Todas as pendências</option></select></label>
+                <label class="report-unit-filter" for="report-pendencias-unit">Unidade<select id="report-pendencias-unit"><option value="">Todas as unidades</option></select></label>
+              </div>
+              <div class="report-month-toolbar"><span class="task-count" id="report-pendencias-count">0 pendências</span><div class="report-export-actions" data-report-export-table="report-pendencias-table" data-report-export-title="Pendências de cadastro"></div></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-pendencias-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Unidade</th><th scope="col">Pendência</th><th scope="col">Origem</th><th scope="col">Referência</th></tr></thead><tbody id="report-pendencias-body"></tbody></table></div>
+            </section>
+          </section>
+          <section class="view-panel" id="view-report-fg-exercicio" aria-label="F.G. em exercício hoje">
+            <section class="panel detailed-reports-panel report-manager-panel" aria-labelledby="report-fg-exercicio-title">
+              <div class="panel-heading"><div><p class="section-kicker">FUNÇÃO GRATIFICADA</p><h2 id="report-fg-exercicio-title">F.G. em exercício hoje</h2><p class="server-registry-description">Situação de hoje de quem possui Função Gratificada: <strong>em exercício</strong> ou <strong>de férias</strong> (com o substituto do período) e a próxima saída programada.</p></div></div>
+              <div class="report-requests-filters">
+                <label class="table-search report-filter-search"><i data-lucide="search"></i><input id="report-fg-exercicio-search" type="search" placeholder="Filtrar servidor" aria-label="Filtrar servidor pelo nome" /></label>
+                <label class="report-unit-filter" for="report-fg-exercicio-unit">Unidade<select id="report-fg-exercicio-unit"><option value="">Todas as unidades</option></select></label>
+                <label class="report-unit-filter" for="report-fg-exercicio-status">Situação<select id="report-fg-exercicio-status"><option value="">Todas as situações</option></select></label>
+              </div>
+              <div class="report-month-toolbar"><span class="task-count" id="report-fg-exercicio-count">0 com função gratificada</span><div class="report-export-actions" data-report-export-table="report-fg-exercicio-table" data-report-export-title="F.G. em exercício hoje"></div></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-fg-exercicio-table"><thead><tr><th scope="col">Servidor</th><th scope="col">Função exercida</th><th scope="col">Unidade</th><th scope="col">Situação hoje</th><th scope="col">Substituto atual</th><th scope="col">Próximas férias</th></tr></thead><tbody id="report-fg-exercicio-body"></tbody></table></div>
+              <div class="report-units-count">
+                <h3 class="report-units-count-title">Quantitativo por função gratificada</h3>
+                <div class="report-export-actions" data-report-export-table="report-fg-exercicio-funcoes-table" data-report-export-title="Quantitativo por função gratificada"></div>
+                <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-fg-exercicio-funcoes-table"><thead><tr><th scope="col">Função gratificada</th><th scope="col">Servidores</th><th scope="col">De férias hoje</th></tr></thead><tbody id="report-fg-exercicio-funcoes-body"></tbody></table></div>
+              </div>
+            </section>
+          </section>
+          <section class="view-panel" id="view-report-ficha" aria-label="Ficha do servidor">
+            <section class="panel detailed-reports-panel report-manager-panel" aria-labelledby="report-ficha-title">
+              <div class="panel-heading"><div><p class="section-kicker">HISTÓRICO FUNCIONAL</p><h2 id="report-ficha-title">Ficha do servidor</h2><p class="server-registry-description">Reúne os dados do cadastro e todo o histórico de férias, licenças, função gratificada e protocolos do servidor escolhido.</p></div></div>
+              <div class="report-unit-filters">
+                <div class="report-unit-person-field">
+                  <label for="report-ficha-search">Buscar servidor</label>
+                  <label class="table-search report-filter-search report-unit-person-filter"><i data-lucide="search"></i><input id="report-ficha-search" type="search" placeholder="Digite o nome do servidor" aria-label="Digite o nome do servidor" /></label>
+                </div>
+                <label class="report-unit-filter" for="report-ficha-select">Servidor<select id="report-ficha-select"><option value="">Nenhum servidor disponível</option></select></label>
+              </div>
+              <div class="ficha-panel" id="report-ficha-data"></div>
+              <div class="report-export-actions" data-report-export-table="report-ficha-history-table" data-report-export-title="Ficha do servidor"></div>
+              <div class="detailed-report-table-wrap"><table class="detailed-report-table" id="report-ficha-history-table"><thead><tr><th scope="col">Tipo</th><th scope="col">Período</th><th scope="col">Dias</th><th scope="col">Unidade</th><th scope="col">Função exercida</th><th scope="col">Substituto</th><th scope="col">Situação</th></tr></thead><tbody id="report-ficha-history-body"></tbody></table></div>
             </section>
           </section>
 
@@ -649,6 +723,19 @@
         <label for="request-edit-note">Observações<textarea id="request-edit-note" name="note" rows="3" maxlength="200"></textarea></label>
         <p id="request-edit-message" role="status" aria-live="polite"></p>
         <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="request-edit-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="save"></i><span>Salvar alterações</span></button></div>
+      </form>
+    </dialog>
+    <dialog class="account-password-dialog crud-dialog equipe-assign-dialog" id="equipe-assign-dialog" aria-labelledby="equipe-assign-title">
+      <div class="request-details-dialog-heading"><div><p class="section-kicker">RELATÓRIO POR EQUIPE</p><h2 id="equipe-assign-title">Atribuir equipes</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
+      <form id="equipe-assign-form">
+        <p class="empty-note">Estes servidores têm férias aprovadas e ainda não têm equipe definida. Escolha a equipe de cada um — a definição é gravada nos lançamentos de férias e vale para os relatórios.</p>
+        <div class="detailed-report-table-wrap equipe-assign-wrap">
+          <table class="detailed-report-table" id="equipe-assign-table">
+            <thead><tr><th scope="col">Servidor</th><th scope="col">Unidade</th><th scope="col">Equipe</th></tr></thead>
+            <tbody id="equipe-assign-list"></tbody>
+          </table>
+        </div>
+        <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="equipe-assign-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="save"></i><span>Salvar equipes</span></button></div>
       </form>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"><i data-lucide="circle-check"></i><span></span></div>

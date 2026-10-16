@@ -606,3 +606,47 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 #backup-message { min-height: 18px; margin: 10px 0 0; color: #2f6b45; font-size: 0.9rem; font-weight: 600; }
 #backup-message.error { color: #a0352b; }
 #view-backup .empty-note { margin-top: 12px; color: #5c665d; font-size: 11px; line-height: 1.5; }
+
+/* ---- Relatórios gerenciais: equipe, vencimento, pendências, F.G. e ficha ----
+   Seguem o mesmo padrão dos demais relatórios (painel escuro, tabela clara com
+   cabeçalho azulado), sem depender de classes novas por tela. */
+.report-manager-panel { border-color: #596168; background: #41474d; color: #f2f4f5; }
+.report-manager-panel .panel-heading { flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+.report-manager-panel .panel-heading h2 { color: #f2f4f5; }
+.report-manager-panel .section-kicker { color: #bec7cd; }
+.report-manager-panel .server-registry-description { color: #c2ccd3; }
+.report-manager-panel .empty-note { color: #c2ccd3; }
+.report-manager-panel .report-requests-filters { display: grid; grid-template-columns: minmax(200px, 1fr) repeat(2, minmax(150px, 220px)); align-items: end; gap: 12px; margin: 14px 0; }
+.report-manager-panel .report-unit-filter { color: #f2f4f5; }
+.report-manager-panel .report-unit-filter select { min-height: 38px; padding: 0 10px; border: 1px solid #9ba5ac; border-radius: 5px; background: #fff; color: #20272c; font: inherit; }
+.report-manager-panel .report-filter-search { width: 100%; margin: 0; border-color: #9ba5ac; background: #fff; }
+.report-manager-panel .report-filter-search input { color: #20272c; }
+.report-manager-panel .task-count { color: #e1e6e9; }
+.report-manager-panel .report-units-count { margin-top: 24px; }
+.report-manager-panel .report-units-count-title { margin: 0 0 8px; color: #f2f4f5; font-size: 16px; }
+.report-manager-panel .detailed-report-table th { border-bottom-color: #9fc4dc; background: #d7e9f4; color: #273945; text-align: left; }
+.report-manager-panel .detailed-report-table td { border-bottom-color: #68727a; color: #f2f4f5; text-align: left; }
+.report-manager-panel .detailed-report-table tbody tr:nth-child(even) { background: #50575d; }
+.report-manager-panel .detailed-report-table tbody tr:nth-child(odd) { background: #41474d; }
+.report-manager-panel .detailed-report-table th:nth-child(n),
+.report-manager-panel .detailed-report-table td:nth-child(n) { width: auto; text-align: left; }
+.report-manager-panel .detailed-report-empty { color: #f2f4f5; }
+.report-manager-panel .detailed-report-table tr.report-requests-group th { background: #9fc4dc; color: #10222d; font-weight: 700; text-align: left; }
+
+/* Ficha do servidor (cabeçalho de identificação, dados e indicadores). */
+.ficha-panel { display: grid; gap: 18px; margin: 6px 0 18px; }
+.ficha-identity { display: flex; align-items: center; gap: 12px; }
+.ficha-identity h3 { margin: 0; color: #fff; font-size: 20px; }
+.ficha-identity p { margin: 3px 0 0; color: #c2ccd3; font-size: 13px; }
+.ficha-data-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 20px; margin: 0; }
+.ficha-data-list div { display: flex; flex-direction: column; gap: 2px; }
+.ficha-data-list dt { color: #bec7cd; font-size: 11px; letter-spacing: .05em; text-transform: uppercase; }
+.ficha-data-list dd { margin: 0; color: #f2f4f5; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.ficha-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.ficha-stats div { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 12px; background: #50575d; }
+.ficha-stats strong { color: #fff; font-size: 22px; }
+.ficha-stats span { color: #c2ccd3; font-size: 12px; }
+
+/* Diálogo de atribuição de equipes. */
+.equipe-assign-dialog .equipe-assign-wrap { max-height: 50vh; overflow: auto; }
+.equipe-assign-dialog td select { min-height: 34px; padding: 0 8px; border: 1px solid #9ba5ac; border-radius: 5px; background: #fff; color: #20272c; font: inherit; }

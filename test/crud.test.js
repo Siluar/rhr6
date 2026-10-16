@@ -1357,7 +1357,7 @@ test("relatórios: a função exercida aparece nos protocolos F.G e nos relatór
     assert.equal(protocolRows.length, 1, "deveria haver o protocolo da Ana");
     const protocolCells = [...protocolRows[0].children].map(cell => cell.textContent.trim());
     assert.equal(protocolCells[0], "Ana Souza Fg");
-    assert.equal(protocolCells[2], "Coordenador", "a coluna Função exercida deveria vir do cadastro de FG");
+    assert.equal(protocolCells[1], "Coordenador", "a coluna Função exercida deveria vir do cadastro de FG");
 
     // Relatório de licença prêmio: função registrada na própria solicitação.
     app.click('[data-view="report-premio"]');
@@ -1382,8 +1382,161 @@ test("relatórios: a função exercida aparece nos protocolos F.G e nos relatór
     await app.settle();
     const requestsTable = app.byId("report-requests-body").textContent;
     assert.match(requestsTable, /Diretor/, "o relatório de solicitações deveria mostrar a função exercida");
-    assert.match(requestsTable, /Fabio OutrosCPF não informadoNão informado/,
+    assert.match(requestsTable, /Fabio OutrosNão informado/,
       "quem não tem função gratificada deveria aparecer como Não informado");
+  });
+});
+
+// =========================================================================
+// Relatórios novos: vencimento, pendências, F.G., ficha e equipe
+// =========================================================================
+
+// Data ISO deslocada de hoje, para os relatórios que usam a data atual.
+function isoDaysFromToday(days) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function approvedVacation(id, person, start, end, overrides = {}) {
+  return Object.assign({
+    id, person, initials: "TT", color: "#728e70",
+    start, end, days: 30, status: "approved", type: "férias",
+    created: "01/01", note: ""
+  }, overrides);
+}
+
+test("relatório de férias vencidas: classifica vencida, a vencer, regular e sem férias", async () => {
+  const seed = {
+    servidores: [
+      { id: "s-venc", name: "Vencida Um", unidadePenal: "CP A", quadro: "QPPP" },
+      { id: "s-avenc", name: "AVencer Dois", unidadePenal: "CP A", quadro: "QPPP" },
+      { id: "s-reg", name: "Regular Tres", unidadePenal: "CP B", quadro: "QPPP" },
+      { id: "s-sem", name: "SemFerias Quatro", unidadePenal: "CP B", quadro: "QPPP" }
+    ],
+    requests: [
+      approvedVacation("rv1", "Vencida Um", isoDaysFromToday(-400), isoDaysFromToday(-380)),
+      approvedVacation("rv2", "AVencer Dois", isoDaysFromToday(-300), isoDaysFromToday(-280)),
+      approvedVacation("rv3", "Regular Tres", isoDaysFromToday(-30), isoDaysFromToday(-10))
+    ]
+  };
+  await withApp({ seed }, async app => {
+    app.click('[data-view="report-vencimento"]');
+    await app.settle();
+    const text = app.byId("report-vencimento-body").textContent;
+    assert.match(text, /Vencida Um[\s\S]*?Vencida/, "quem não frui há mais de 12 meses aparece como vencida");
+    assert.match(text, /AVencer Dois[\s\S]*?A vencer/, "quem está a até 90 dias do vencimento aparece como a vencer");
+    assert.match(text, /Regular Tres[\s\S]*?Regular/, "quem frui dentro do prazo aparece como regular");
+    assert.match(text, /SemFerias Quatro[\s\S]*?Sem férias registradas/, "quem nunca registrou aparece sem férias");
+    assert.match(app.byId("report-vencimento-count").textContent, /1 vencida/, "o resumo deveria contar as vencidas");
+  });
+});
+
+test("relatório de pendências: aponta férias sem cadastro, sem CPF e sem unidade", async () => {
+  const seed = {
+    servidores: [
+      { id: "s-incompleto", name: "Cadastro Incompleto", cpf: "", rg: "", phone: "", email: "", unidadePenal: "", cargo: "", quadro: "" }
+    ],
+    requests: [
+      approvedVacation("p1", "Cadastro Incompleto", isoDaysFromToday(-20), isoDaysFromToday(-5), { unidade: "" }),
+      approvedVacation("p2", "Sem Cadastro", isoDaysFromToday(-20), isoDaysFromToday(-5), { unidade: "CP Z" })
+    ]
+  };
+  await withApp({ seed }, async app => {
+    app.click('[data-view="report-pendencias"]');
+    await app.settle();
+    const text = app.byId("report-pendencias-body").textContent;
+    assert.match(text, /Cadastro Incompleto[\s\S]*?Cadastro sem CPF/, "cadastro sem CPF deveria ser apontado");
+    assert.match(text, /Cadastro Incompleto[\s\S]*?Cadastro sem unidade/, "cadastro sem unidade deveria ser apontado");
+    assert.match(text, /Sem Cadastro[\s\S]*?Servidor sem cadastro/, "quem tem férias e não tem cadastro deveria aparecer");
+    assert.match(text, /Sem Cadastro[\s\S]*?Férias sem CPF/, "férias sem CPF deveria aparecer");
+  });
+});
+
+test("relatório de F.G. em exercício: mostra quem está de férias e o substituto", async () => {
+  const seed = {
+    fgServidores: [
+      { id: "fg1", name: "De Ferias Fg", cpf: "11111111111", funcaoExercida: "Coordenador" }
+    ],
+    requests: [
+      approvedVacation("f1", "De Ferias Fg", isoDaysFromToday(-2), isoDaysFromToday(2), { substituto: "Sub Um", funcaoExercida: "Coordenador" }),
+      approvedVacation("f2", "Em Exercicio Fg", isoDaysFromToday(30), isoDaysFromToday(45), { funcaoExercida: "Diretor" })
+    ]
+  };
+  await withApp({ seed }, async app => {
+    app.click('[data-view="report-fg-exercicio"]');
+    await app.settle();
+    const text = app.byId("report-fg-exercicio-body").textContent;
+    assert.match(text, /De Ferias Fg[\s\S]*?De férias[\s\S]*?Sub Um/, "quem está de férias hoje aparece com o substituto atual");
+    assert.match(text, /Em Exercicio Fg[\s\S]*?Em exercício/, "quem não está de férias aparece em exercício");
+    const funcoes = app.byId("report-fg-exercicio-funcoes-body").textContent;
+    assert.match(funcoes, /Coordenador/, "o quantitativo por função deveria listar Coordenador");
+    assert.match(funcoes, /Diretor/, "o quantitativo por função deveria listar Diretor");
+  });
+});
+
+test("ficha do servidor: reúne cadastro e histórico sem exibir CPF", async () => {
+  const seed = {
+    servidores: [
+      { id: "s1", name: "Ficha Um", cpf: "12345678909", rg: "1234567", email: "ficha@x.gov", phone: "4499999", quadro: "QPPP", cargo: "Policial Penal", unidadePenal: "CP Umuarama" }
+    ],
+    requests: [
+      approvedVacation("a1", "Ficha Um", isoDaysFromToday(-100), isoDaysFromToday(-80), { days: 30, unidade: "CP Umuarama" }),
+      Object.assign(approvedVacation("a2", "Ficha Um", isoDaysFromToday(40), isoDaysFromToday(60), { unidade: "CP Umuarama" }), { status: "rejected" })
+    ]
+  };
+  await withApp({ seed }, async app => {
+    app.click('[data-view="report-ficha"]');
+    await app.settle();
+    const data = app.byId("report-ficha-data").textContent;
+    assert.match(data, /Ficha Um/, "a ficha deveria identificar o servidor");
+    assert.match(data, /CP Umuarama/, "a ficha deveria mostrar a unidade");
+    assert.match(data, /Policial Penal/, "a ficha deveria mostrar a função do cadastro");
+    assert.doesNotMatch(data, /CPF/, "a ficha não deveria exibir o campo CPF");
+    assert.doesNotMatch(data, /123\.456\.789-09/, "a ficha não deveria exibir o número do CPF");
+    const history = app.byId("report-ficha-history-body").textContent;
+    assert.match(history, /Aprovada/, "o histórico deveria incluir a solicitação aprovada");
+    assert.match(history, /Recusada/, "o histórico deveria incluir a solicitação recusada");
+  });
+});
+
+test("relatório por equipe: agrupa por equipe e atribui a quem está sem", async () => {
+  const seed = {
+    requests: [
+      approvedVacation("e1", "Alfa Um", isoDaysFromToday(-20), isoDaysFromToday(-5), { equipe: "Alfa", unidade: "CP A" }),
+      approvedVacation("e2", "Sem Equipe", isoDaysFromToday(-20), isoDaysFromToday(-5), { unidade: "CP A" })
+    ]
+  };
+  await withApp({ seed }, async app => {
+    app.click('[data-view="report-equipe"]');
+    await app.settle();
+    const body = app.byId("report-equipe-body").textContent;
+    assert.match(body, /Equipe Alfa/, "deveria haver o grupo da equipe Alfa");
+    assert.match(body, /Sem equipe informada/, "quem não tem equipe deveria ficar no grupo final");
+    assert.match(body, /Alfa Um/, "o servidor com equipe deveria aparecer");
+    assert.match(body, /Sem Equipe/, "o servidor sem equipe deveria aparecer");
+
+    const assignButton = app.byId("equipe-assign-open");
+    assert.equal(assignButton.hidden, false, "deve haver botão para atribuir quando há servidor sem equipe");
+
+    app.click("#equipe-assign-open");
+    await app.settle();
+    assert.ok(app.byId("equipe-assign-dialog").hasAttribute("open"), "o diálogo de atribuição deveria abrir");
+    const list = app.byId("equipe-assign-list").textContent;
+    assert.match(list, /Sem Equipe/, "quem não tem equipe deveria aparecer na lista de atribuição");
+    assert.doesNotMatch(list, /Alfa Um/, "quem já tem equipe não deveria aparecer na lista");
+
+    const select = app.$('[data-equipe-assign-row="0"]');
+    assert.ok(select, "deveria haver um seletor de equipe por linha");
+    select.value = "Bravo";
+    app.submit(app.byId("equipe-assign-form"));
+    await app.settle();
+
+    const assigned = app.state().requests.filter(r => r.person === "Sem Equipe");
+    assert.ok(assigned.length && assigned.every(r => r.equipe === "Bravo"), "a equipe escolhida deve ser gravada em todas as solicitações do servidor");
+    assert.ok(app.sync._all("requests").some(r => r.person === "Sem Equipe" && r.equipe === "Bravo"), "a mudança deveria subir para a nuvem");
+    assert.equal(app.byId("equipe-assign-open").hidden, true, "sem pendentes, o botão de atribuir deveria sumir");
+    assert.match(app.byId("report-equipe-body").textContent, /Equipe Bravo/, "a equipe atribuída deveria aparecer no relatório");
   });
 });
 

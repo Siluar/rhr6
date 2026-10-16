@@ -18,6 +18,11 @@ O sistema permite:
 - Relatórios por mês, ano, unidade e servidor.
 - Relatório de solicitações com filtros de categoria (Férias, Licenças e Outros), status, tipo, ano e servidor.
 - Relatórios de licenças concedidas: prêmio, capacitação e médica.
+- Relatórios de gestão: **férias vencidas e a vencer**, **pendências de cadastro**,
+  **F.G. em exercício hoje**, **ficha do servidor** e **férias por equipe** (com o
+  botão **Atribuir equipes**, que grava a equipe em todos os lançamentos do servidor).
+- Os relatórios **não exibem CPF nem a justificativa** das solicitações (esses
+  campos continuam apenas no cadastro e no detalhe da solicitação).
 - Cada relatório pode ser **exportado em CSV, Excel (`.xlsx`) ou PDF**, a partir da
   própria tabela exibida na tela.
 - **Backup**: exportar/restaurar todos os dados em um arquivo `.json` (menu **Backup**).
@@ -177,8 +182,9 @@ editar e excluir), persistida nas coleções do Firestore:
   **Lançar período de férias**.
 
   A **Função exercida** aparece em todos os relatórios do painel — Protocolos
-  F.G, licença prêmio, licença capacitação, licença médica e o Relatório de
-  solicitações (todos os tipos) — inclusive nas exportações CSV, Excel e PDF,
+  F.G, licença prêmio, licença capacitação, licença médica, o Relatório de
+  solicitações (todos os tipos), a Ficha do servidor e o relatório de F.G. em
+  exercício — inclusive nas exportações CSV, Excel e PDF,
   que saem da própria tabela. Quando a solicitação não traz a função, ela é
   buscada no cadastro de Função Gratificada (pelo CPF ou pelo nome), de modo que
   os pedidos antigos também aparecem classificados.

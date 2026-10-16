@@ -303,11 +303,11 @@ test("painel: submenu de Solicitações traz as 5 telas de lançamento (férias 
 test("relatórios e protocolos: coluna Função exercida em todos os tipos de solicitação", () => {
   const html = read("index.html");
   const tables = [
-    ["protocols-fg-body", ["Servidor solicitante", "CPF do solicitante", "Função exercida", "Substituto", "CPF do substituto", "Mês", "Ano", "Início", "Fim", "Dias de fruição", "Status do protocolo", "Número do protocolo", "Conferido"]],
+    ["protocols-fg-body", ["Servidor solicitante", "Função exercida", "Substituto", "Mês", "Ano", "Início", "Fim", "Dias de fruição", "Status do protocolo", "Número do protocolo", "Conferido"]],
     ["report-premio-body", ["Servidor", "Função exercida", "Mês", "Unidade", "Período"]],
     ["report-capacitacao-body", ["Servidor", "Função exercida", "Mês", "Unidade", "Período"]],
     ["report-medica-body", ["Servidor", "Função exercida", "Mês", "Unidade", "Período"]],
-    ["report-requests-body", ["Servidor", "CPF", "Função exercida", "Categoria", "Tipo", "Unidade", "Período", "Justificativa"]]
+    ["report-requests-body", ["Servidor", "Função exercida", "Categoria", "Tipo", "Unidade", "Período"]]
   ];
   for (const [bodyId, expected] of tables) {
     const bodyIndex = html.indexOf(`id="${bodyId}"`);
