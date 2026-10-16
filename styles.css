@@ -407,6 +407,20 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 .detailed-report-table-wrap, .current-vacations-table-wrap { max-width: 100%; overflow-x: auto; }
 .detailed-report-table, .current-vacations-table { width: 100%; min-width: 0; }
 .detailed-report-table th, .detailed-report-table td, .current-vacations-table th, .current-vacations-table td { white-space: normal; overflow-wrap: anywhere; }
+/* Relatórios e cadastros de consulta: cada registro ocupa uma única linha.
+   Quando o conteúdo não couber na largura, aparece a barra de rolagem
+   horizontal em vez de as colunas quebrarem — era isso que deixava textos
+   estreitos "na vertical" (cada letra em uma linha) e alguns campos ilegíveis. */
+#view-reports .current-vacations-table,
+[id^="view-report"] .detailed-report-table,
+#view-server-data .detailed-report-table { width: max-content; min-width: 100%; }
+#view-reports .current-vacations-table th, #view-reports .current-vacations-table td,
+[id^="view-report"] .detailed-report-table th, [id^="view-report"] .detailed-report-table td,
+#view-server-data .detailed-report-table th, #view-server-data .detailed-report-table td { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+/* Sem larguras fixas nas colunas dos relatórios: quem manda é o conteúdo, para
+   nenhuma coluna ser espremida (ex.: "Mês de férias" ficava na vertical). */
+#view-reports .current-vacations-table th, #view-reports .current-vacations-table td,
+[id^="view-report"] .detailed-report-table th, [id^="view-report"] .detailed-report-table td { width: auto; }
 /* Controles dentro das células (seletores/entradas de edição) não podem alargar
    a coluna: encolhem junto com a célula para a tabela caber sem rolagem. */
 .detailed-report-table td select, .detailed-report-table td input,
