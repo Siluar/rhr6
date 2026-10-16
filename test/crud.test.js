@@ -78,6 +78,7 @@ async function bootApp(options = {}) {
   window.RH_CONFIG = {
     googleAdminEmails: ["admin@teste"],
     escala: DEFAULT_ESCALA,
+    equipesExtras: ["Expediente"],
     firebase: null
   };
   const sync = createFakeSync();
@@ -1582,6 +1583,22 @@ test("cadastro de servidores: equipe fica no cadastro e alimenta o relatório po
     assert.match(body, /Equipe Bravo/, "o servidor deveria aparecer no grupo da equipe do cadastro");
     assert.match(body, /Servidor Equipe/, "o servidor deveria aparecer no relatório");
     assert.equal(app.byId("equipe-assign-open").hidden, true, "com equipe definida, não deveria haver pendente de atribuição");
+  });
+});
+
+test("cadastro de servidores: Equipe inclui Expediente sem afetar a rotação da escala", async () => {
+  await withApp({}, async app => {
+    const select = app.byId("server-data-form").elements.namedItem("equipe");
+    assert.ok(select, "o campo Equipe deveria existir no cadastro");
+    const opcoes = [...select.options].map(option => option.value);
+    ["Alfa", "Bravo", "Charlie", "Delta", "Expediente"].forEach(team => {
+      assert.ok(opcoes.includes(team), `deveria haver a opção ${team}`);
+    });
+
+    // "Expediente" é só opção de cadastro: a rotação 24/72 continua começando
+    // por Bravo e não inclui Expediente.
+    const equipeDoDia = app.window.RH_LOGIC.getShiftTeamForDate("2026-10-01", app.window.RH_CONFIG.escala);
+    assert.equal(equipeDoDia, "Bravo", "a rotação deveria continuar começando por Bravo");
   });
 });
 

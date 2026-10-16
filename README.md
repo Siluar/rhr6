@@ -65,6 +65,7 @@ Toda a configuração fica em `config.js` (versionado):
 | `googleClientId` | Client ID do Google OAuth (Web). Usado só no fluxo antigo do Google Identity Services, quando o Firebase não está configurado |
 | `googleAdminEmails` | E-mails do Google com acesso de administrador (proprietários) |
 | `escala` | Escala de plantão: `equipes` (ordem da rotação), `dataBase` (AAAA-MM-DD em que a 1ª equipe está de serviço) e `cicloDias` (ex.: `4` = 24h de serviço + 72h de descanso). Ajuste aqui quando a escala mudar |
+| `equipesExtras` | Equipes que **não** entram na rotação 24/72 e servem só como opção no cadastro de servidores e nos relatórios. Por padrão, `["Expediente"]` (quem trabalha de segunda a sexta) |
 | `fgFunctions` | Lista **reserva** das funções gratificadas (Coordenador, Diretor, Chefe Administrativo, Chefe de Segurança). Na prática a lista vem do **Cadastro de Funções Gratificadas** (coleção `funcoesGratificadas`); este valor só é usado enquanto o cadastro estiver vazio |
 | `firebase` | Objeto `firebaseConfig`; quando preenchido, liga o backend (Auth + Firestore) |
 
@@ -190,7 +191,8 @@ editar e excluir), persistida nas coleções do Firestore:
   os pedidos antigos também aparecem classificados.
 
   O cadastro guarda ainda a **Equipe** (as equipes da escala — Alfa, Bravo,
-  Charlie e Delta —, configuráveis em `config.js`), logo depois da **Unidade**.
+  Charlie e Delta — e mais **Expediente**, para quem trabalha de segunda a
+  sexta; configuráveis em `config.js`), logo depois da **Unidade**.
   A equipe do cadastro é a fonte do relatório **Férias por equipe**: lançar
   férias copia a unidade e a equipe do servidor para a solicitação, e o próprio
   relatório consegue atribuir a equipe de quem ainda não tem cadastro.

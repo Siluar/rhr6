@@ -34,6 +34,11 @@ window.RH_CONFIG = Object.assign({}, window.RH_CONFIG, {
     cicloDias: 4
   },
 
+  // Equipes que NÃO entram na rotação 24/72 e aparecem apenas como opção no
+  // cadastro de servidores e nos relatórios. "Expediente" = quem trabalha de
+  // segunda a sexta. Acrescente aqui outras equipes fixas, se precisar.
+  equipesExtras: ["Expediente"],
+
   // Funções gratificadas disponíveis no cadastro de Função Gratificada do
   // painel e no formulário de solicitações. Para incluir outra função, basta
   // acrescentar aqui.

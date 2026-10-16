@@ -1328,7 +1328,7 @@ function fillServerDataReferenceSelects() {
       if (autoQuadro) serverDataQuadro.value = autoQuadro;
       else if (current) serverDataQuadro.value = current;
     }
-    // Equipe: as equipes da escala (config.js), iguais para todas as unidades.
+    // Equipe: escala + Expediente (config.js), iguais para todas as unidades.
     const equipeSelect = serverDataForm.elements.namedItem("equipe");
     if (equipeSelect) {
       const current = equipeSelect.value;
@@ -2471,13 +2471,25 @@ function formatIsoBr(iso) {
   return isIsoDate(String(iso || "")) ? formatDate(iso, { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
 }
 
-// Equipes da escala (config.js): a mesma rotação usada no calendário.
+// Equipes usadas nos selects de cadastro e nos relatórios: as equipes da
+// rotação 24/72 (config.js → escala.equipes) mais as equipes que NÃO entram na
+// rotação (config.js → equipesExtras, ex.: "Expediente" = quem trabalha de
+// segunda a sexta). A rotação do calendário continua usando apenas a escala.
 function getEquipeOptions() {
-  const configured = window.RH_CONFIG && window.RH_CONFIG.escala && Array.isArray(window.RH_CONFIG.escala.equipes)
-    ? window.RH_CONFIG.escala.equipes
+  const escala = (window.RH_CONFIG && window.RH_CONFIG.escala) || {};
+  const rotation = Array.isArray(escala.equipes) ? escala.equipes : [];
+  const extras = window.RH_CONFIG && Array.isArray(window.RH_CONFIG.equipesExtras)
+    ? window.RH_CONFIG.equipesExtras
     : [];
-  const base = configured.map(value => String(value || "").trim()).filter(Boolean);
-  return base.length ? base : ["Alfa", "Bravo", "Charlie", "Delta"];
+  const merged = [...rotation, ...extras].map(value => String(value || "").trim()).filter(Boolean);
+  const candidates = merged.length ? merged : ["Alfa", "Bravo", "Charlie", "Delta", "Expediente"];
+  const seen = new Set();
+  return candidates.filter(team => {
+    const key = team.toLocaleLowerCase("pt-BR");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 // --- Relatório: férias vencidas e a vencer --------------------------------
