@@ -83,7 +83,11 @@ test("o formulário usa as unidades da nuvem e avisa sobre conflitos", () => {
   assert.ok(html.includes("loadUnidadesFromCache"), "falta a reserva local das unidades");
   assert.ok(html.includes("checkScheduleConflict"), "falta o aviso de conflito");
   assert.ok(html.includes('id="conflict-warning"'), "falta o elemento de aviso de conflito");
-  assert.ok(html.includes("imc.sidnei@gmail.com"), "a lista de destinatários padrão deve incluir imc.sidnei@gmail.com");
+  // O envio de e-mail foi removido: a solicitação só é registrada no sistema.
+  assert.ok(!html.includes("mailto:"), "o formulário não deve mais abrir rascunho de e-mail (mailto:)");
+  assert.ok(!html.includes("submit-fallback"), "não deve haver mais o bloco de fallback de e-mail");
+  assert.ok(!html.includes("emailjs"), "não deve haver mais o envio automático por EmailJS");
+  assert.ok(html.includes("Solicitação registrada com sucesso"), "deve confirmar o registro na tela");
 });
 
 test("as regras do Firestore aplicam as melhorias de segurança", () => {

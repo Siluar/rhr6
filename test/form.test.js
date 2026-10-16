@@ -43,7 +43,6 @@ function loadForm({ sync, cache } = {}) {
   window.lucide = { createIcons() {} };
   window.RH_CONFIG = {
     googleAdminEmails: ["admin@teste"],
-    notificationEmails: ["destino@teste"],
     escala: null,
     firebase: null
   };

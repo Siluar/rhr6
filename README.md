@@ -58,9 +58,7 @@ Toda a configuração fica em `config.js` (versionado):
 | `googleClientId` | Client ID do Google OAuth (Web). Usado só no fluxo antigo do Google Identity Services, quando o Firebase não está configurado |
 | `googleAdminEmails` | E-mails do Google com acesso de administrador (proprietários) |
 | `escala` | Escala de plantão: `equipes` (ordem da rotação), `dataBase` (AAAA-MM-DD em que a 1ª equipe está de serviço) e `cicloDias` (ex.: `4` = 24h de serviço + 72h de descanso). Ajuste aqui quando a escala mudar |
-| `notificationEmails` | Destinatários das solicitações (`To`). O solicitante vai em cópia (`CC`) |
 | `fgFunctions` | Lista **reserva** das funções gratificadas (Coordenador, Diretor, Chefe Administrativo, Chefe de Segurança). Na prática a lista vem do **Cadastro de Funções Gratificadas** (coleção `funcoesGratificadas`); este valor só é usado enquanto o cadastro estiver vazio |
-| `emailjs` | Chaves opcionais do EmailJS para envio automático de e-mail (vazio = só abre o rascunho) |
 | `firebase` | Objeto `firebaseConfig`; quando preenchido, liga o backend (Auth + Firestore) |
 
 > `config.local.js` **não é mais carregado automaticamente** pelas páginas: por

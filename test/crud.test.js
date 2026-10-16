@@ -77,7 +77,6 @@ async function bootApp(options = {}) {
   window.lucide = { createIcons() {} };
   window.RH_CONFIG = {
     googleAdminEmails: ["admin@teste"],
-    notificationEmails: ["dest@teste"],
     escala: DEFAULT_ESCALA,
     firebase: null
   };
