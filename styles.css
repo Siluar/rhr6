@@ -253,9 +253,9 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 .current-vacations-table { width: 100%; min-width: 0; table-layout: auto; border-collapse: collapse; color: #000; }
 .current-vacations-table th { padding: 12px 10px; border-bottom: 1px solid #9ca99e; color: #000; font-size: 12px; text-align: left; }
 .current-vacations-table td { padding: 12px 10px; border-bottom: 1px solid #d3d9d2; color: #000; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; vertical-align: top; }
-.current-vacations-table th:first-child, .current-vacations-table td:first-child { width: 32%; }
-.current-vacations-table th:nth-child(2), .current-vacations-table td:nth-child(2) { width: 34%; }
-.current-vacations-table th:last-child, .current-vacations-table td:last-child { width: 34%; }
+/* Sem larguras fixas: as colunas se ajustam ao conteúdo. A 3ª coluna
+   ("Mês de férias") era espremida e o texto ficava na vertical. */
+.current-vacations-table th, .current-vacations-table td { width: auto; }
 .current-vacations-table th:last-child, .current-vacations-table td:last-child { text-align: center; }
 .current-vacation-person { display: flex; align-items: center; gap: 8px; }
 .current-vacation-person strong { color: #000; font-size: 13px; }
@@ -406,23 +406,14 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 .server-data-panel { margin-top: 14px; }
 .detailed-report-table-wrap, .current-vacations-table-wrap { max-width: 100%; overflow-x: auto; }
 .detailed-report-table, .current-vacations-table { width: 100%; min-width: 0; }
-.detailed-report-table th, .detailed-report-table td, .current-vacations-table th, .current-vacations-table td { white-space: normal; overflow-wrap: anywhere; }
-/* Relatórios e cadastros de consulta: cada registro ocupa uma única linha.
-   Quando o conteúdo não couber na largura, aparece a barra de rolagem
-   horizontal em vez de as colunas quebrarem — era isso que deixava textos
-   estreitos "na vertical" (cada letra em uma linha) e alguns campos ilegíveis. */
-#view-reports .current-vacations-table,
-[id^="view-report"] .detailed-report-table,
-#view-server-data .detailed-report-table { width: max-content; min-width: 100%; }
-#view-reports .current-vacations-table th, #view-reports .current-vacations-table td,
-[id^="view-report"] .detailed-report-table th, [id^="view-report"] .detailed-report-table td,
-#view-server-data .detailed-report-table th, #view-server-data .detailed-report-table td { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
-/* Sem larguras fixas nas colunas dos relatórios: quem manda é o conteúdo, para
-   nenhuma coluna ser espremida (ex.: "Mês de férias" ficava na vertical). */
-#view-reports .current-vacations-table th, #view-reports .current-vacations-table td,
-[id^="view-report"] .detailed-report-table th, [id^="view-report"] .detailed-report-table td { width: auto; }
-/* Controles dentro das células (seletores/entradas de edição) não podem alargar
-   a coluna: encolhem junto com a célula para a tabela caber sem rolagem. */
+/* Toda tabela do app: cada registro ocupa uma única linha. Quando o conteúdo
+   não couber na largura, aparece a barra de rolagem horizontal (nos contêineres
+   .*-table-wrap) em vez de as colunas quebrarem — era isso que deixava textos
+   estreitos "na vertical" (uma letra por linha) e alguns campos ilegíveis. */
+.detailed-report-table th, .detailed-report-table td,
+.current-vacations-table th, .current-vacations-table td { white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+/* Controles dentro das células (seletores/entradas de edição) acompanham a
+   largura da coluna. */
 .detailed-report-table td select, .detailed-report-table td input,
 .detailed-report-table td textarea { width: 100%; max-width: 100%; min-width: 0; }
 #view-report-unit .detailed-report-table { table-layout: auto; }
@@ -472,13 +463,8 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
   .task-calendar-day { padding: 3px; }
   .task-calendar-event { font-size: 8px; }
 }
-#view-server-fg .detailed-report-table { width: min(100%, 1000px); table-layout: fixed; }
+#view-server-fg .detailed-report-table { width: 100%; min-width: 0; }
 #view-server-fg .detailed-report-table th, #view-server-fg .detailed-report-table td { text-align: left; }
-#view-server-fg .detailed-report-table th:first-child, #view-server-fg .detailed-report-table td:first-child { width: 26%; }
-#view-server-fg .detailed-report-table th:nth-child(2), #view-server-fg .detailed-report-table td:nth-child(2) { width: 20%; }
-#view-server-fg .detailed-report-table th:nth-child(3), #view-server-fg .detailed-report-table td:nth-child(3) { width: 22%; }
-#view-server-fg .detailed-report-table th:nth-child(4), #view-server-fg .detailed-report-table td:nth-child(4) { width: 22%; }
-#view-server-fg .detailed-report-table th:last-child, #view-server-fg .detailed-report-table td:last-child { width: 10%; }
 #view-server-fg .detailed-report-table td.detailed-report-empty { width: auto; text-align: center; }
 .fg-function-select { width: 100%; max-width: 100%; min-width: 0; min-height: 32px; padding: 0 6px; border: 1px solid #c4cbc3; border-radius: 5px; background: #fff; color: #000; font: inherit; font-size: 12px; }
 .server-fg-form { display: flex; max-width: 1000px; align-items: end; gap: 12px; margin: 16px 0 22px; color: #000; font-size: 12px; font-weight: 600; }
@@ -556,12 +542,8 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 #view-report-servers[data-count-mode="quadro"] .report-units-count[data-count-block="quadro"] { display: block; }
 #view-report-servers[data-count-mode="role"] label[for="report-servers-unit"] { display: none; }
 #view-report-servers[data-count-mode="quadro"] label[for="report-servers-unit"] { display: none; }
-#view-server-fg .detailed-report-table { width: min(100%, 1000px); }
-#view-server-fg .detailed-report-table th:first-child, #view-server-fg .detailed-report-table td:first-child { width: 26%; }
-#view-server-fg .detailed-report-table th:nth-child(2), #view-server-fg .detailed-report-table td:nth-child(2) { width: 20%; }
-#view-server-fg .detailed-report-table th:nth-child(3), #view-server-fg .detailed-report-table td:nth-child(3) { width: 22%; }
-#view-server-fg .detailed-report-table th:nth-child(4), #view-server-fg .detailed-report-table td:nth-child(4) { width: 22%; }
-#view-server-fg .detailed-report-table th:last-child, #view-server-fg .detailed-report-table td:last-child { width: 10%; }
+/* (larguras das colunas de F.G. definidas pelo conteúdo — ver regra geral
+   das tabelas, que mantém cada registro em uma única linha) */
 #view-server-data .detailed-report-table th, #view-server-data .detailed-report-table td { text-align: center !important; vertical-align: middle; }
 #view-server-data .detailed-report-table .request-actions { justify-content: center; }
 .detailed-report-table th, .detailed-report-table td, .current-vacations-table th, .current-vacations-table td { text-align: center !important; vertical-align: middle; }
