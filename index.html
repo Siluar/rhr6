@@ -125,6 +125,7 @@
           <button class="nav-link" type="button" data-view="cadastro-unidades"><i data-lucide="building-2"></i><span>Unidades</span></button>
           <button class="nav-link" type="button" data-view="cadastro-cargos"><i data-lucide="briefcase-business"></i><span>Cargos</span></button>
           <button class="nav-link" type="button" data-view="cadastro-quadros"><i data-lucide="layers"></i><span>Quadros</span></button>
+           <button class="nav-link" type="button" data-view="cadastro-fg-functions"><i data-lucide="award"></i><span>Funções Gratificadas</span></button>
           <button class="nav-link" type="button" data-view="usuarios"><i data-lucide="users-round"></i><span>Usuários &amp; Acessos</span><span class="nav-count attention-count" id="nav-usuarios-pending" hidden>0</span></button>
           <button class="nav-link" type="button" data-view="backup"><i data-lucide="database-backup"></i><span>Backup</span></button>
           <p class="nav-label nav-label-spaced">RELATÓRIOS</p>
@@ -321,19 +322,32 @@
 
           <section class="view-panel" id="view-cadastro-quadros" aria-label="Cadastro de Quadros">
             <section class="panel detailed-reports-panel" aria-labelledby="cadastro-quadros-title">
-              <div class="panel-heading"><div><p class="section-kicker">CADASTRO BÁSICO</p><h2 id="cadastro-quadros-title">Cadastro de Quadros</h2><p class="server-registry-description">Quadros disponíveis para os cargos (ex.: QPPP, QPPE). O quadro do cargo preenche automaticamente o campo Quadro no formulário de dados dos servidores.</p></div></div>
+              <div class="panel-heading"><div><p class="section-kicker">CADASTRO B├üSICO</p><h2 id="cadastro-quadros-title">Cadastro de Quadros</h2><p class="server-registry-description">Quadros dispon├¡veis para os cargos (ex.: QPPP, QPPE). O quadro do cargo preenche automaticamente o campo Quadro no formul├írio de dados dos servidores.</p></div></div>
               <div class="server-data-content">
                 <div class="server-data-toolbar">
                   <label class="table-search server-registry-search"><i data-lucide="search"></i><input id="quadros-search" type="search" placeholder="Filtrar quadro" aria-label="Filtrar quadros pelo nome" /></label>
                   <button class="button button-secondary" id="quadro-import" type="button"><i data-lucide="clipboard-paste"></i><span>Colar lista</span></button>
                   <button class="button button-primary" id="quadro-add" type="button"><i data-lucide="layers"></i><span>Adicionar quadro</span></button>
                 </div>
-                <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Quadro</th><th scope="col">Observações</th><th scope="col">Ação</th></tr></thead><tbody id="quadros-body"></tbody></table></div>
+                <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Quadro</th><th scope="col">Observa├º├Áes</th><th scope="col">A├º├úo</th></tr></thead><tbody id="quadros-body"></tbody></table></div>
               </div>
             </section>
           </section>
 
-          <section class="view-panel" id="view-usuarios" aria-label="Usuários e Acessos">
+                    <section class="view-panel" id="view-cadastro-fg-functions" aria-label="Cadastro de Funções Gratificadas">
+            <section class="panel detailed-reports-panel" aria-labelledby="cadastro-fg-functions-title">
+              <div class="panel-heading"><div><p class="section-kicker">CADASTRO BÁSICO</p><h2 id="cadastro-fg-functions-title">Cadastro de Funções Gratificadas</h2><p class="server-registry-description">Cadastre as funções gratificadas (Coordenador, Diretor, Chefe Administrativo, Chefe de Segurança) que são usadas no cadastro de F.G., no lançamento de férias e no formulário de solicitação. Essa lista alimenta todos os seletores.</p></div></div>
+              <div class="server-data-content">
+                <div class="server-data-toolbar">
+                  <label class="table-search server-registry-search"><i data-lucide="search"></i><input id="fg-functions-search" type="search" placeholder="Filtrar função gratificada" aria-label="Filtrar funções gratificadas pelo nome" /></label>
+                  <button class="button button-secondary" id="fg-function-import" type="button"><i data-lucide="clipboard-paste"></i><span>Colar lista</span></button>
+                  <button class="button button-primary" id="fg-function-add" type="button"><i data-lucide="award"></i><span>Adicionar função gratificada</span></button>
+                </div>
+                <div class="detailed-report-table-wrap"><table class="detailed-report-table"><thead><tr><th scope="col">Função Gratificada</th><th scope="col">Em uso</th><th scope="col">Observações</th><th scope="col">Ação</th></tr></thead><tbody id="fg-functions-body"></tbody></table></div>
+              </div>
+            </section>
+          </section>
+<section class="view-panel" id="view-usuarios" aria-label="Usuários e Acessos">
             <section class="panel detailed-reports-panel" aria-labelledby="usuarios-title">
               <div class="panel-heading"><div><p class="section-kicker">CONTAS E PERMISSÕES</p><h2 id="usuarios-title">Usuários &amp; Acessos</h2><p class="server-registry-description">Gerencie quem acessa o sistema com o Google e qual perfil cada um possui. Ao entrar pela primeira vez, o usuário fica pendente até você permitir ou negar o acesso. O papel de administrador também pode ser concedido aqui.</p></div></div>
               <div class="server-data-content">
@@ -599,7 +613,24 @@
         <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="server-data-import-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="upload"></i><span>Importar servidores</span></button></div>
       </form>
     </dialog>
-    <dialog class="account-password-dialog crud-dialog" id="request-edit-dialog" aria-labelledby="request-edit-title">
+        <dialog class="account-password-dialog crud-dialog" id="fg-function-dialog" aria-labelledby="fg-function-dialog-title">
+      <div class="request-details-dialog-heading"><div><p class="section-kicker">FUNÇÃO GRATIFICADA</p><h2 id="fg-function-dialog-title">Adicionar função gratificada</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
+      <form id="fg-function-form">
+        <label for="fg-function-nome">Nome da função gratificada<input id="fg-function-nome" name="nome" type="text" autocomplete="off" placeholder="Ex.: Coordenador" required /></label>
+        <label for="fg-function-obs">Observações (opcional)<textarea id="fg-function-obs" name="observacoes" rows="2" maxlength="200" placeholder="Detalhes complementares sobre a função gratificada"></textarea></label>
+        <p id="fg-function-message" role="status" aria-live="polite"></p>
+        <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="fg-function-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="award"></i><span>Salvar função gratificada</span></button></div>
+      </form>
+    </dialog>
+    <dialog class="account-password-dialog crud-dialog import-dialog" id="fg-function-import-dialog" aria-labelledby="fg-function-import-dialog-title">
+      <div class="request-details-dialog-heading"><div><p class="section-kicker">FUNÇÃO GRATIFICADA</p><h2 id="fg-function-import-dialog-title">Importar funções gratificadas</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
+      <form id="fg-function-import-form">
+        <label for="fg-function-import-lista">Cole uma função por linha (nome da função gratificada)<textarea id="fg-function-import-lista" name="lista" rows="6" placeholder="Ex.: Coordenador&#10;Diretor&#10;Chefe Administrativo"></textarea></label>
+        <p id="fg-function-import-message" role="status" aria-live="polite"></p>
+        <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="fg-function-import-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="clipboard-paste"></i><span>Importar</span></button></div>
+      </form>
+    </dialog>
+    <dialog class="account-password-dialog crud-dialog" id="request-edit-dialog" aria-labelledby="request-edit-dialog-title">dialog class="account-password-dialog crud-dialog" id="request-edit-dialog" aria-labelledby="request-edit-title">
       <div class="request-details-dialog-heading"><div><p class="section-kicker">EDIÇÃO</p><h2 id="request-edit-title">Editar solicitação</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
       <form id="request-edit-form">
         <label for="request-edit-person">Servidor<input id="request-edit-person" name="person" type="text" autocomplete="off" required /></label>

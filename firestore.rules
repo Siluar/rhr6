@@ -123,6 +123,15 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // Cadastro das funcoes gratificadas (lista de funcoes: Coordenador, etc.).
+    // A LEITURA tambem e publica: o formulario de solicitacao monta o campo
+    // "Funcao exercida" com esta mesma lista (aqui so ha nomes de funcoes, sem
+    // dado pessoal). A escrita continua restrita ao admin.
+    match /funcoesGratificadas/{id} {
+      allow read, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
     // Cadastro de servidores com Funcao Gratificada (menu Servidores).
     match /fgServidores/{id} {
       allow read, list: if isApproved();

@@ -21,7 +21,7 @@ const readSource = file => fs.readFileSync(path.join(root, file), "utf8");
 
 // `let`/`const` de topo do app.js ficam presos ao escopo do eval. Este trecho é
 // anexado só nos testes para conseguirmos ler o estado interno do app.
-const STATE_SHIM = "\n;window.__state = () => ({ unidades, cargos, quadros, serverPersonalData, usuarios, tasks, fgServerRoster, requests, shownMonth, requestFilter, requestTypeFilter });\nwindow.__planServerImport = rows => planServerImport(rows);";
+const STATE_SHIM = "\n;window.__state = () => ({ unidades, cargos, quadros, funcoesGratificadas, fgFunctionOptions, serverPersonalData, usuarios, tasks, fgServerRoster, requests, shownMonth, requestFilter, requestTypeFilter });\nwindow.__planServerImport = rows => planServerImport(rows);";
 
 const DEFAULT_ESCALA = { equipes: ["Bravo", "Charlie", "Delta", "Alfa"], dataBase: "2026-10-01", cicloDias: 4 };
 
@@ -342,6 +342,91 @@ test("quadros: criar, ler, editar e excluir; bloqueia quadro usado por cargo", a
     app.click(`[data-remove-quadro="${qppp.id}"]`);
     await app.settle();
     assert.ok(state().quadros.some(q => q.id === qppp.id), "quadro em uso não deveria ser excluído");
+  });
+});
+
+// =========================================================================
+// Funções Gratificadas (a lista de funções em si, relacionada a todos os
+// seletores: cadastro de F.G., Lançar férias e formulário de solicitação)
+// =========================================================================
+
+test("funções gratificadas: guia nova, CRUD e lista alimentando os seletores", async () => {
+  await withApp({}, async app => {
+    const { state } = app;
+    const initial = state().funcoesGratificadas.length;
+    assert.ok(initial >= 4, "a lista inicial deve trazer as 4 funções padrão");
+
+    // A guia existe na barra lateral e abre a visão certa
+    const navLink = app.$('[data-view="cadastro-fg-functions"]');
+    assert.ok(navLink, "falta o item da barra lateral para Funções Gratificadas");
+    app.click('[data-view="cadastro-fg-functions"]');
+    assert.ok(app.byId("view-cadastro-fg-functions").classList.contains("active"));
+    assert.ok(app.byId("fg-function-add"), "falta o botão de adicionar");
+    assert.match(app.byId("cadastro-fg-functions-title").textContent, /Funções Gratificadas/);
+
+    // CRIAR
+    app.click("#fg-function-add");
+    const form = app.byId("fg-function-form");
+    app.setValue(form, "nome", "Chefe de Núcleo");
+    app.submit(form);
+    await app.settle();
+    assert.equal(state().funcoesGratificadas.length, initial + 1);
+    assert.match(app.byId("fg-functions-body").textContent, /Chefe de Núcleo/);
+    assert.ok(app.sync._all("funcoesGratificadas").some(f => f.name === "Chefe de Núcleo"), "deveria subir para a nuvem");
+    // Relação: o mesmo item aparece nos seletores
+    assert.ok(state().fgFunctionOptions.includes("Chefe de Núcleo"), "fgFunctionOptions deve acompanhar o cadastro");
+
+    // Nome repetido é recusado
+    const before = state().funcoesGratificadas.length;
+    app.click("#fg-function-add");
+    app.setValue(form, "nome", "chefe de núcleo");
+    app.submit(form);
+    await app.settle();
+    assert.equal(state().funcoesGratificadas.length, before, "nome repetido não deveria entrar");
+    assert.ok(app.byId("fg-function-message").textContent.length > 0, "falta o aviso de nome repetido");
+    app.click("#fg-function-cancel");
+    await app.settle();
+
+    // EDITAR (renomear propaga para quem já usa a função)
+    const id = findId(state().funcoesGratificadas, f => f.name === "Chefe de Núcleo");
+    app.click(`[data-edit-fg-function="${id}"]`);
+    app.setValue(form, "nome", "Chefe de Área");
+    app.submit(form);
+    await app.settle();
+    assert.ok(state().funcoesGratificadas.some(f => f.id === id && f.name === "Chefe de Área"));
+
+    // EXCLUIR função sem uso
+    app.click(`[data-remove-fg-function="${id}"]`);
+    await app.settle();
+    assert.ok(!state().funcoesGratificadas.some(f => f.id === id));
+    assert.ok(!app.sync._all("funcoesGratificadas").some(f => f.id === id), "a exclusão deveria refletir na nuvem");
+  });
+});
+
+test("funções gratificadas: não sai do cadastro enquanto um servidor a usa", async () => {
+  await withApp({}, async app => {
+    const { state } = app;
+    createServer(app, { name: "Servidor FG", cpf: "99988877766", email: "servidorfg@pp.pr.gov.br" });
+    await app.settle();
+    const servidor = state().serverPersonalData.find(s => s.name === "Servidor FG");
+    addFgServer(app, servidor.id, "Diretor");
+    await app.settle();
+    assert.ok(state().fgServerRoster.some(e => e.funcaoExercida === "Diretor"));
+
+    app.click('[data-view="cadastro-fg-functions"]');
+    const diretor = state().funcoesGratificadas.find(f => f.name === "Diretor");
+    assert.ok(diretor, "o Diretor deveria existir no cadastro de funções");
+    app.click(`[data-remove-fg-function="${diretor.id}"]`);
+    await app.settle();
+    assert.ok(state().funcoesGratificadas.some(f => f.id === diretor.id), "função em uso não deveria ser excluída");
+
+    // Renomear propaga para o cadastro de F.G.
+    app.click(`[data-edit-fg-function="${diretor.id}"]`);
+    const form = app.byId("fg-function-form");
+    app.setValue(form, "nome", "Diretor Geral");
+    app.submit(form);
+    await app.settle();
+    assert.ok(state().fgServerRoster.some(e => e.funcaoExercida === "Diretor Geral"), "a renomeação deve seguir para o cadastro de F.G.");
   });
 });
 

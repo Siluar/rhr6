@@ -69,6 +69,14 @@ const cloudUnits = [
   { id: "2", name: "UNIDADE DA NUVEM B" }
 ];
 
+// Lista de funções gratificadas "da nuvem" (coleção pública própria).
+const cloudFgFunctions = [
+  { id: "f1", name: "Coordenador" },
+  { id: "f2", name: "Diretor" },
+  { id: "f3", name: "Chefe Administrativo" },
+  { id: "f4", name: "Chefe de Segurança" }
+];
+
 function baseSync(overrides = {}) {
   return Object.assign({
     enabled: true,
@@ -76,7 +84,7 @@ function baseSync(overrides = {}) {
     loadRequests: () => Promise.resolve([]),
     addRequest: request => Promise.resolve(request),
     saveRequests: () => Promise.resolve(),
-    loadDocs: () => Promise.resolve(cloudUnits),
+    loadDocs: collection => Promise.resolve(collection === "funcoesGratificadas" ? cloudFgFunctions : cloudUnits),
     getDoc: () => Promise.resolve(null),
     saveDocs: () => Promise.resolve(),
     deleteDoc: () => Promise.resolve()
@@ -167,6 +175,27 @@ test("a função exercida é uma lista suspensa com as funções gratificadas", 
   assert.equal(select.tagName, "SELECT", "'Função exercida' deve ser uma lista, não texto livre");
   assert.deepEqual([...select.options].map(option => option.value),
     ["", "Coordenador", "Diretor", "Chefe Administrativo", "Chefe de Segurança"]);
+});
+
+test("a lista de funções gratificadas vem do cadastro da nuvem", () => {
+  const lista = [
+    { id: "x1", name: "Coordenador" },
+    { id: "x2", name: "Chefe de Núcleo" },
+    { id: "x3", name: "Diretor" }
+  ];
+  const sync = baseSync({
+    subscribeDocs: (collection, onData) => {
+      if (collection === "funcoesGratificadas") onData(lista);
+      if (collection === "unidades") onData(cloudUnits);
+      return () => {};
+    },
+    subscribeRequests: () => () => {}
+  });
+  const { window, thrown } = loadForm({ sync });
+  assert.equal(thrown, null);
+  const select = window.document.getElementById("funcao-exercida");
+  assert.deepEqual([...select.options].map(option => option.value),
+    ["", "Coordenador", "Chefe de Núcleo", "Diretor"]);
 });
 
 test("o bloco de Função Gratificada aparece em todos os tipos de solicitação", () => {

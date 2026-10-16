@@ -118,6 +118,13 @@ test("as regras do Firestore aplicam as melhorias de segurança", () => {
     "unidades deve ter leitura pública");
   assert.ok(unidadesBlock.slice(0, 200).includes("allow create, update, delete: if isAdmin();"),
     "a escrita de unidades continua restrita ao admin");
+  // As funções gratificadas seguem o mesmo desenho: leitura pública (o
+  // formulário monta o campo "Função exercida" com essa lista) e escrita admin.
+  const fgFunctionsBlock = rules.slice(rules.indexOf("match /funcoesGratificadas/"));
+  assert.ok(fgFunctionsBlock.slice(0, 120).includes("allow read, list: if true;"),
+    "funcoesGratificadas deve ter leitura pública");
+  assert.ok(fgFunctionsBlock.slice(0, 200).includes("allow create, update, delete: if isAdmin();"),
+    "a escrita de funcoesGratificadas continua restrita ao admin");
 });
 
 test("o submenu \"Solicitações\" oferece filtro por tipo de licença", () => {
@@ -185,6 +192,44 @@ test("cadastro de função gratificada: busca na lista, seletor de função e co
   // A busca da lista usa o mesmo componente dos outros cadastros.
   assert.ok(html.includes('class="table-search server-registry-search"><i data-lucide="search"></i><input id="server-fg-search"'),
     "a busca deve seguir o padrão dos outros cadastros");
+});
+
+test("cadastro de funções gratificadas: guia nova, CRUD e relação com os seletores", () => {
+  const html = read("index.html");
+  const app = read("app.js");
+  // Guia na barra lateral + visão + diálogos de cadastro e importação.
+  assert.ok(html.includes('data-view="cadastro-fg-functions"'), "falta a guia Funções Gratificadas na barra lateral");
+  assert.ok(html.includes('id="view-cadastro-fg-functions"'), "falta a visão do cadastro de funções gratificadas");
+  assert.ok(html.includes('id="fg-function-dialog"'), "falta o diálogo de cadastro");
+  assert.ok(html.includes('id="fg-function-import-dialog"'), "falta o diálogo de importação");
+  assert.ok(html.includes('id="fg-functions-body"'), "falta a tabela do cadastro");
+  assert.ok(html.includes('id="fg-functions-search"'), "falta a busca do cadastro");
+  // A coluna "Em uso" mostra a relação com o cadastro de servidores com F.G.
+  const bodyIndex = html.indexOf('id="fg-functions-body"');
+  const thead = html.slice(html.lastIndexOf("<thead>", bodyIndex), bodyIndex);
+  const headers = [...thead.matchAll(/<th[^>]*>([^<]*)<\/th>/g)].map(match => match[1].trim());
+  assert.deepEqual(headers, ["Função Gratificada", "Em uso", "Observações", "Ação"]);
+
+  // O painel guarda a lista em uma coleção própria e a usa como fonte dos
+  // seletores (relação): cadastro de F.G., lançamento de férias e relatórios.
+  assert.ok(app.includes('funcoesGratificadas = '), "o app deve manter a lista de funções gratificadas");
+  assert.ok(app.includes("function refreshFgFunctionOptions()"), "as opções dos seletores devem sair do cadastro");
+  assert.ok(app.includes("function refreshFgFunctionViews()"), "mudanças no cadastro devem atualizar as telas relacionadas");
+  assert.ok(app.includes('collectionSyncSources') && app.includes("funcoesGratificadas: () => funcoesGratificadas"),
+    "a coleção deve ser sincronizada com a nuvem");
+  assert.ok(app.includes('"funcoesGratificadas"'), "a coleção deve ser lida/gravada no Firestore");
+  assert.ok(app.includes('backupCollections') && app.includes('"funcoesGratificadas"'),
+    "a coleção deve entrar no backup");
+  // Seed vem do config.js (mesma lista padrão) com reserva nas quatro funções.
+  assert.ok(app.includes("function seedFgFunctions()"), "deve haver a lista inicial de funções gratuitas");
+  // Renomear uma função propaga para quem já a usa no cadastro de F.G.
+  assert.ok(app.includes("previousName !== name") && app.includes("funcaoExercida: name"),
+    "a renomeação deve acompanhar o cadastro de F.G.");
+
+  // O formulário público lê a mesma lista da coleção pública.
+  const form = read("solicitacao-ferias.html");
+  assert.ok(form.includes("funcoesGratificadas"), "o formulário deve ler as funções gratificadas da nuvem");
+  assert.ok(form.includes("loadFuncoesFromCloud"), "o formulário deve carregar as funções da nuvem");
 });
 
 test("formulário de solicitações: Função exercida é lista com as funções e vale em todos os tipos", () => {

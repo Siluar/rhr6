@@ -25,7 +25,8 @@ O sistema permite:
   (sem bloquear) quando outra pessoa da mesma equipe já pediu o mesmo período.
   A pergunta **"Possui Função Gratificada?"** (Sim/Não) aparece em **todos os
   tipos** de solicitação — férias, licença prêmio, capacitação, médica e outras —
-  e, com "Sim", pede a **Função exercida** (lista com as funções de `config.js`)
+  e, com "Sim", pede a **Função exercida** (lista vinda do Cadastro de Funções
+  Gratificadas, com reserva em `config.js`)
   e o **Substituto**.
 
 Por padrão, os dados são mantidos no navegador (`localStorage` / `sessionStorage`).
@@ -56,7 +57,7 @@ Toda a configuração fica em `config.js` (versionado):
 | `googleAdminEmails` | E-mails do Google com acesso de administrador (proprietários) |
 | `escala` | Escala de plantão: `equipes` (ordem da rotação), `dataBase` (AAAA-MM-DD em que a 1ª equipe está de serviço) e `cicloDias` (ex.: `4` = 24h de serviço + 72h de descanso). Ajuste aqui quando a escala mudar |
 | `notificationEmails` | Destinatários das solicitações (`To`). O solicitante vai em cópia (`CC`) |
-| `fgFunctions` | Funções gratificadas disponíveis (Coordenador, Diretor, Chefe Administrativo, Chefe de Segurança). É a mesma lista usada no painel, no **Lançar período de férias** e no formulário de solicitações |
+| `fgFunctions` | Lista **reserva** das funções gratificadas (Coordenador, Diretor, Chefe Administrativo, Chefe de Segurança). Na prática a lista vem do **Cadastro de Funções Gratificadas** (coleção `funcoesGratificadas`); este valor só é usado enquanto o cadastro estiver vazio |
 | `emailjs` | Chaves opcionais do EmailJS para envio automático de e-mail (vazio = só abre o rascunho) |
 | `firebase` | Objeto `firebaseConfig`; quando preenchido, liga o backend (Auth + Firestore) |
 
@@ -144,11 +145,11 @@ editar e excluir), persistida nas coleções do Firestore:
   A busca do cadastro procura em nome, CPF, RG, e-mail, telefone, quadro,
   função e unidade.
   No **Cadastro de Servidores com Função Gratificada** cada entrada guarda a
-  **Função exercida** (Coordenador, Diretor, Chefe Administrativo, Chefe de
-  Segurança), que pode ser trocada direto na tabela; o painel tem busca na
-  lista (nome, CPF, unidade ou função) e busca no seletor de servidores. A lista
-  de funções fica em `config.js` (`fgFunctions`) e é a mesma usada pelo
-  formulário de solicitações e pelo painel **Lançar período de férias**.
+  **Função exercida**, escolhida entre as funções do **Cadastro de Funções
+  Gratificadas** (ver abaixo), que pode ser trocada direto na tabela; o painel
+  tem busca na lista (nome, CPF, unidade ou função) e busca no seletor de
+  servidores. A mesma lista alimenta o formulário de solicitações e o painel
+  **Lançar período de férias**.
 
   A **Função exercida** aparece em todos os relatórios do painel — Protocolos
   F.G, licença prêmio, licença capacitação, licença médica e o Relatório de
@@ -181,6 +182,19 @@ editar e excluir), persistida nas coleções do Firestore:
   uso por algum cargo não pode ser excluído; renomear atualiza em cascata os
   cargos e os servidores. A ordem também pode ser ajustada com as setas ↑↓ e há
   importação em lote pelo botão **"Colar lista"**.
+- **Cadastro de Funções Gratificadas** — item **Funções Gratificadas** na barra
+  lateral para criar, editar e excluir as funções gratificadas (coleção
+  `funcoesGratificadas`), com **observações** opcionais. Esta é a lista de
+  referência que **alimenta todos os seletores de "Função exercida"**: o
+  Cadastro de Servidores com Função Gratificada, o painel **Lançar período de
+  férias** e o formulário de solicitação (que lê a lista direto da coleção
+  pública). A coluna **Em uso** mostra quantos servidores estão com aquela
+  função; uma função em uso não pode ser excluída e **renomear atualiza em
+  cascata** quem já a usa no cadastro de F.G. A ordem pode ser ajustada com as
+  setas ↑↓ de cada linha e há importação em lote pelo botão **"Colar lista"**
+  (uma função por linha). Na primeira abertura a lista vem pré-populada com
+  Coordenador, Diretor, Chefe Administrativo e Chefe de Segurança (as mesmas de
+  `config.js`, usadas só como reserva quando o cadastro está vazio).
 - **Usuários & Acessos** — nova seção no menu (reproduz o item "GESTÃO") para
   gerenciar quem pode entrar com o Google: nome, e-mail, perfil (usuário ou
   administrador) e situação (ativo/inativo/pendente), na coleção `usuarios`.
@@ -191,8 +205,8 @@ editar e excluir), persistida nas coleções do Firestore:
   continua firme: os proprietários (`googleAdminEmails`) sempre são tratados
   como administradores pelo login e pelas regras do Firestore.
 - **Backup** — item na barra lateral para **exportar** todos os dados
-  (solicitações, servidores, usuários, unidades, cargos, quadros, função
-  gratificada e tarefas) num único arquivo `.json`, e **restaurar** a partir
+  (solicitações, servidores, usuários, unidades, cargos, quadros, funções
+  gratificadas, função gratificada e tarefas) num único arquivo `.json`, e **restaurar** a partir
   desse arquivo. A restauração **atualiza/mescla** os registros com o mesmo
   identificador — ela não apaga o que não estiver no backup. Guarde o arquivo em
   local seguro (Drive, e-mail, pendrive).
@@ -206,14 +220,16 @@ editar e excluir), persistida nas coleções do Firestore:
 > perfil `admin` e ativos) pode aprovar, editar, apagar ou gerenciar os
 > cadastros. A **criação** de solicitações ainda passa por validação
 > (`isValidRequest()`): exige o campo `person` e limita o tamanho dos campos
-> livres, evitando documentos gigantes ou malformados. A coleção `unidades` pode
-> ser **lida por qualquer usuário aprovado** (o formulário de solicitação precisa
-> da lista), mas só o admin escreve. O `get` de `usuarios` é restrito ao **próprio
+> livres, evitando documentos gigantes ou malformados. As coleções `unidades` e
+> `funcoesGratificadas` podem
+> ser **lidas por qualquer pessoa** (o formulário de solicitação precisa das
+> listas mesmo antes do login), mas só o admin escreve. O `get` de `usuarios` é restrito ao **próprio
 > e-mail** (necessário no login) ou a um proprietário — um usuário comum não lê o
 > cadastro alheio. A autoinscrição é permitida somente para o próprio e-mail e
 > apenas como `ativo: false` / `pendente: true` / perfil `usuario` — ninguém
 > consegue se auto-aprovar. As coleções `servidores`, `unidades`, `cargos`,
-> `quadros`, `usuarios`, `fgServidores`, `tarefas`, `anexos` e `contasLegado` são
+> `funcoesGratificadas`, `usuarios`, `fgServidores`, `tarefas`, `anexos` e
+> `contasLegado` são
 > protegidas. **Publique estas regras** (console ou `firebase deploy --only
 > firestore:rules`) para que a validação, a leitura de `unidades` e o bloqueio
 > por situação funcionem na nuvem.
@@ -237,7 +253,7 @@ ficam **ligados ao Firestore em tempo real** (`onSnapshot`): o que muda em outro
 computador aparece na tela na hora, sem recarregar. Ao abrir o painel, os
 cadastros da nuvem são unidos ao que existir apenas naquele navegador — nada é
 descartado só porque o outro computador ainda não tinha o registro. Unidades,
-cargos, quadros e contas legadas são relidos/gravados a cada abertura e em cada
+cargos, quadros, funções gratificadas e contas legadas são relidos/gravados a cada abertura e em cada
 edição. Ícones e listas de referência são atualizados uma única vez por ciclo de
 renderização, e as buscas usam *debounce*.
 
@@ -319,11 +335,13 @@ npm test        # ou: node --test test/logic.test.js test/smoke.test.js test/cru
 - `test/crud.test.js` — testes **ponta a ponta** do CRUD. Carrega o `index.html`
   real dentro do `jsdom`, injeta um Firestore falso em memória (mesma API do
   `window.RH_SYNC`) e interage com a tela como um usuário: cria, lê, edita e
-  exclui **unidades, cargos, quadros, servidores, usuários, tarefas e Função
+  exclui **unidades, cargos, quadros, funções gratificadas, servidores, usuários,
+  tarefas e Função
   Gratificada**, lança/edita/exclui **solicitações**, confere o **sino** de
   pendentes, o **calendário** (mês atual e alinhamento do 1º dia) e o
   **backup** (exportar/restaurar). Também valida as travas (não excluir
-  unidade/cargo/quadro em uso; recusar CPF repetido, quadro incompatível, período
+  unidade/cargo/quadro/função gratificada em uso; recusar CPF repetido, quadro
+  incompatível, período
   inválido e férias sobrepostas).
 
 > Estes testes rodam sem navegador e sem o Firebase de verdade. O login do Google

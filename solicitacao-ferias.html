@@ -1303,6 +1303,82 @@
 
       loadUnidadesFromCache();
       loadUnidadesFromCloud();
+      // Lista de funções gratificadas (mesma lista do painel): a coleção pública
+      // "funcoesGratificadas" alimenta o campo "Função exercida". Sem nuvem, cai
+      // para a reserva local (cadastro salvo neste navegador).
+      const funcoesCacheKey = 'brisa-fg-functions-names-v1';
+      const funcoesCadastroKey = 'brisa-fg-functions-v1';
+
+      function normalizeFuncoesNomes(lista) {
+        const nomes = (Array.isArray(lista) ? lista : [])
+          .map(item => (typeof item === 'string' ? item : String((item && item.name) || '')))
+          .map(nome => nome.trim())
+          .filter(Boolean);
+        return Array.from(new Set(nomes));
+      }
+
+      function saveFuncoesCache(nomes) {
+        try {
+          localStorage.setItem(funcoesCacheKey, JSON.stringify(nomes));
+        } catch {}
+      }
+
+      function populateFuncoes(nomes) {
+        if (!fgFunctionSelect || !Array.isArray(nomes) || !nomes.length) return;
+        const atual = fgFunctionSelect.value;
+        fgFunctionSelect.innerHTML = '';
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Selecione a função exercida';
+        fgFunctionSelect.appendChild(placeholder);
+        nomes.forEach(nome => {
+          const option = document.createElement('option');
+          option.value = nome;
+          option.textContent = nome;
+          fgFunctionSelect.appendChild(option);
+        });
+        if (atual) fgFunctionSelect.value = atual;
+      }
+
+      function loadFuncoesFromCache() {
+        let nomes = [];
+        try {
+          nomes = normalizeFuncoesNomes(JSON.parse(localStorage.getItem(funcoesCadastroKey) || '[]'));
+        } catch {}
+        if (!nomes.length) {
+          try {
+            nomes = normalizeFuncoesNomes(JSON.parse(localStorage.getItem(funcoesCacheKey) || '[]'));
+          } catch {}
+        }
+        if (nomes.length) populateFuncoes(nomes);
+      }
+
+      function loadFuncoesFromCloud() {
+        if (!(window.RH_SYNC && window.RH_SYNC.enabled)) return;
+        const aplicar = lista => {
+          const unicos = normalizeFuncoesNomes(lista);
+          if (unicos.length) {
+            populateFuncoes(unicos);
+            saveFuncoesCache(unicos);
+          }
+        };
+        if (typeof window.RH_SYNC.subscribeDocs === 'function') {
+          try {
+            window.RH_SYNC.subscribeDocs('funcoesGratificadas', aplicar, error => {
+              console.warn('Assinatura de funções gratificadas falhou; usando a lista local.', error);
+            });
+            return;
+          } catch (error) {
+            console.warn('Não foi possível assinar as funções gratificadas; tentando leitura única.', error);
+          }
+        }
+        Promise.resolve(window.RH_SYNC.loadDocs('funcoesGratificadas')).then(aplicar).catch(error => {
+          console.warn('Não foi possível carregar as funções gratificadas; usando a lista local.', error);
+        });
+      }
+
+      loadFuncoesFromCache();
+      loadFuncoesFromCloud();
       loadRequestsForConflictCheck();
 
       // Rede de segurança: se depois de alguns segundos a lista continuar vazia,
