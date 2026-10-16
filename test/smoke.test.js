@@ -250,6 +250,30 @@ test("formulário de solicitações: Função exercida é lista com as funções
   assert.ok(read("index.html").includes('<select id="vacation-launch-function"'), "o painel de lançamento também deve usar a lista");
 });
 
+test("painel: submenu de Solicitações traz as 5 telas de lançamento (férias + 4 licenças/tipos)", () => {
+  const html = read("index.html");
+  const app = read("app.js");
+  // Os itens do submenu.
+  for (const view of ["vacation-launch", "vacation-launch-premio", "vacation-launch-capacitacao", "vacation-launch-medica", "vacation-launch-outros"]) {
+    assert.ok(html.includes(`data-view="${view}"`), `o submenu deve ter o item [${view}]`);
+  }
+  // "Lançar férias" vem antes dos filtros de tipo (mais usado no dia a dia).
+  const lancarFerias = html.indexOf('data-view="vacation-launch"');
+  const filtrarPremio = html.indexOf('data-request-type-filter="premio"');
+  assert.ok(lancarFerias > -1 && filtrarPremio > -1, "os itens devem existir");
+  assert.ok(lancarFerias < filtrarPremio, "'Lançar férias' deve vir antes dos filtros de tipo");
+  // Cada view nova reutiliza o MESMO painel (view-vacation-launch).
+  assert.ok((html.match(/id="view-vacation-launch"/g) || []).length === 1, "só deve haver um painel de lançamento");
+  // O app.js mapeia cada view para um tipo e a aplica no formulário.
+  assert.ok(app.includes("vacationLaunchViewConfigs"), "o app.js deve mapear as views de lançamento");
+  for (const tipo of ["Licença prêmio", "Licença capacitação", "Licença médica", "Outros"]) {
+    assert.ok(app.includes(`"${tipo}"`), `o tipo "${tipo}" deve estar nos configs de lançamento`);
+  }
+  assert.ok(app.includes("applyVacationLaunchConfig"), "o app.js deve aplicar título/textos do tipo");
+  // O tipo escolhido é o que vai para a solicitação gravada.
+  assert.ok(/type:\s*vacationLaunchType/.test(app), "a solicitação gravada deve usar o tipo do lançamento");
+});
+
 test("relatórios e protocolos: coluna Função exercida em todos os tipos de solicitação", () => {
   const html = read("index.html");
   const tables = [

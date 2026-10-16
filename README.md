@@ -12,6 +12,8 @@ O sistema permite:
 - Painel com visão geral, calendário de férias e tarefas.
 - Solicitações de férias (pendentes, aprovadas e recusadas).
 - Lançamento de férias e controle de saldos.
+- Lançamento das licenças prêmio, capacitação e médica e de outros tipos, com o
+  mesmo formulário do lançamento de férias (aba **Solicitações** do painel).
 - Cadastro de servidores, dados e funções gratificadas.
 - Relatórios por mês, ano, unidade e servidor.
 - Relatório de solicitações com filtros de categoria (Férias, Licenças e Outros), status, tipo, ano e servidor.
@@ -127,7 +129,12 @@ editar e excluir), persistida nas coleções do Firestore:
   de um pedido ou **excluí-lo** (coleção `requests`). O arquivo anexado na
   recusa é gravado na coleção `anexos` (em base64, até **700 KB** por arquivo)
   e recuperado de lá em qualquer computador; arquivos maiores continuam
-  disponíveis apenas no navegador onde foram anexados.
+  disponíveis apenas no navegador onde foram anexados. O submenu traz
+  **Lançar férias** e os lançamentos de **licença prêmio**, **capacitação**,
+  **médica** e **outros** — todos com o mesmo formulário (servidor com busca,
+  período, observação e bloco de Função Gratificada), mudando apenas o tipo
+  gravado — seguidos dos filtros que listam as solicitações de cada tipo em
+  qualquer situação.
 - **Servidores** — o cadastro de dados dos servidores é sincronizado com a
   coleção `servidores`; o **Cadastro de Servidores com Função Gratificada** usa
   a coleção `fgServidores` (a guia "Cadastro de Login", obsoleta com o acesso
@@ -187,7 +194,7 @@ editar e excluir), persistida nas coleções do Firestore:
   `funcoesGratificadas`), com **observações** opcionais. Esta é a lista de
   referência que **alimenta todos os seletores de "Função exercida"**: o
   Cadastro de Servidores com Função Gratificada, o painel **Lançar período de
-  férias** e o formulário de solicitação (que lê a lista direto da coleção
+  férias** (e as demais telas de lançamento) e o formulário de solicitação (que lê a lista direto da coleção
   pública). A coluna **Em uso** mostra quantos servidores estão com aquela
   função; uma função em uso não pode ser excluída e **renomear atualiza em
   cascata** quem já a usa no cadastro de F.G. A ordem pode ser ajustada com as

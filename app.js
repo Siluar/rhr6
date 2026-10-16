@@ -79,6 +79,9 @@ let requestFilter = "pending";
 // Filtro por tipo de solicitação (licença prêmio, capacitação, médica, outros).
 // Quando preenchido, a lista de "Solicitações" mostra TODAS as situações desse tipo.
 let requestTypeFilter = "";
+// Tipo da solicitação criada pelo formulário "Lançar ..." do painel admin.
+// O formulário é único (view-vacation-launch); só muda o tipo e os textos.
+let vacationLaunchType = "férias";
 let selectedReportYear = String(new Date().getFullYear());
 let selectedReportUnit = "";
 let selectedVacationMonth = String(new Date().getMonth());
@@ -2081,11 +2084,22 @@ function addVacationLaunch(event) {
     showToast("Informe um período válido: o término não pode ser anterior ao início.");
     return;
   }
-  const overlaps = getApprovedVacationRequests().some(request =>
+  // Só bloqueia colisão com outro lançamento do MESMO tipo (férias com férias,
+  // licença prêmio com licença prêmio, etc.), para não impedir lançamentos
+  // de tipos diferentes no mesmo período.
+  const launchTypeKey = normalizeTypeText(vacationLaunchType);
+  const overlapsLaunch = request =>
     String(request.person || "").trim().toLocaleLowerCase("pt-BR") === String(server.name || "").trim().toLocaleLowerCase("pt-BR")
-    && isIsoDate(request.start) && isIsoDate(request.end) && request.start <= end && request.end >= start);
-  if (overlaps) {
-    showToast("Esse servidor já possui férias aprovadas neste período.");
+    && isIsoDate(request.start) && isIsoDate(request.end) && request.start <= end && request.end >= start;
+  if (launchTypeKey === "ferias") {
+    // Férias: mantém a regra original, que também considera pedidos antigos
+    // sem tipo definido.
+    if (getApprovedVacationRequests().some(overlapsLaunch)) {
+      showToast("Esse servidor já possui férias aprovadas neste período.");
+      return;
+    }
+  } else if (requests.some(request => request.status === "approved" && normalizeRequestType(request) === launchTypeKey && overlapsLaunch(request))) {
+    showToast(`Esse servidor já possui ${String(vacationLaunchType).toLocaleLowerCase("pt-BR")} neste período.`);
     return;
   }
 
@@ -2099,6 +2113,8 @@ function addVacationLaunch(event) {
 
   const days = Math.round((new Date(`${end}T12:00:00`) - new Date(`${start}T12:00:00`)) / 86400000) + 1;
   const initials = String(server.name).split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0].toLocaleUpperCase("pt-BR")).join("") || "SV";
+  const launchLabel = String(vacationLaunchType).toLocaleLowerCase("pt-BR");
+  const startDate = new Date(`${start}T12:00:00`);
   const request = {
     id: `launch-${Date.now()}`,
     person: server.name,
@@ -2107,10 +2123,12 @@ function addVacationLaunch(event) {
     start,
     end,
     days,
-    note: note || "Lançado pelo administrador",
+    month: monthNames[startDate.getMonth()],
+    year: String(startDate.getFullYear()),
+    note: note || `Lançado pelo administrador (${launchLabel})`,
     created: "Lançamento do administrador",
     status: "approved",
-    type: "férias",
+    type: vacationLaunchType,
     cpf: server.cpf,
     unidade: server.unidadePenal || "",
     launchedByAdmin: true
@@ -2141,13 +2159,17 @@ function addVacationLaunch(event) {
   document.getElementById("vacation-launch-suggestions").hidden = true;
   syncVacationLaunchFg();
   const [startYear, startMonth] = start.split("-").map(Number);
-  shownMonth = new Date(startYear, startMonth - 1, 1);
-  selectedDate = start;
-  selectedVacationMonth = String(startMonth - 1);
-  selectedVacationYear = String(startYear);
+  // Só mexe no calendário quando o lançamento é de férias (as licenças não
+  // são exibidas no calendário de férias).
+  if (normalizeTypeText(vacationLaunchType) === "ferias") {
+    shownMonth = new Date(startYear, startMonth - 1, 1);
+    selectedDate = start;
+    selectedVacationMonth = String(startMonth - 1);
+    selectedVacationYear = String(startYear);
+  }
   renderAll();
   renderVacationLaunch();
-  showToast(`Férias de ${server.name} lançadas com sucesso.`);
+  showToast(`${launchLabel.charAt(0).toLocaleUpperCase("pt-BR")}${launchLabel.slice(1)} de ${server.name} lançada${normalizeTypeText(vacationLaunchType) === "ferias" ? "s" : ""} com sucesso.`);
 }
 
 function resetFgServerForm() {
@@ -2541,6 +2563,69 @@ const requestTypeFilterLabels = {
   medica: "Licença médica",
   outros: "Outros"
 };
+
+// Telas de lançamento do painel admin. Todas usam o mesmo formulário
+// (view-vacation-launch); cada uma só define o tipo gravado e os textos.
+const vacationLaunchConfigs = {
+  ferias: {
+    type: "férias",
+    title: "Lançar período de férias",
+    description: "Registre diretamente um período de férias para um servidor cadastrado. O lançamento já entra como aprovado nos relatórios.",
+    button: "Lançar férias",
+    notePlaceholder: "Ex.: férias lançadas conforme escala"
+  },
+  premio: {
+    type: "Licença prêmio",
+    title: "Lançar licença prêmio",
+    description: "Registre diretamente um período de licença prêmio para um servidor cadastrado. O lançamento já entra como aprovado nos relatórios.",
+    button: "Lançar licença prêmio",
+    notePlaceholder: "Ex.: licença prêmio lançada conforme escala"
+  },
+  capacitacao: {
+    type: "Licença capacitação",
+    title: "Lançar licença capacitação",
+    description: "Registre diretamente um período de licença de capacitação para um servidor cadastrado. O lançamento já entra como aprovado nos relatórios.",
+    button: "Lançar licença capacitação",
+    notePlaceholder: "Ex.: curso de capacitação"
+  },
+  medica: {
+    type: "Licença médica",
+    title: "Lançar licença médica",
+    description: "Registre diretamente um período de licença médica para um servidor cadastrado. O lançamento já entra como aprovado nos relatórios.",
+    button: "Lançar licença médica",
+    notePlaceholder: "Ex.: atestado médico anexado"
+  },
+  outros: {
+    type: "Outros",
+    title: "Lançar outro período",
+    description: "Registre diretamente um período de outro tipo (licença, compensação, etc.) para um servidor cadastrado. O lançamento já entra como aprovado nos relatórios.",
+    button: "Lançar período",
+    notePlaceholder: "Ex.: descreva o tipo de ausência"
+  }
+};
+
+// View da sidebar -> configuração de lançamento. "vacation-launch" é férias.
+const vacationLaunchViewConfigs = {
+  "vacation-launch": vacationLaunchConfigs.ferias,
+  "vacation-launch-premio": vacationLaunchConfigs.premio,
+  "vacation-launch-capacitacao": vacationLaunchConfigs.capacitacao,
+  "vacation-launch-medica": vacationLaunchConfigs.medica,
+  "vacation-launch-outros": vacationLaunchConfigs.outros
+};
+
+// Aplica título, descrição, botão e placeholder do tipo de lançamento escolhido.
+function applyVacationLaunchConfig(config) {
+  if (!config) return;
+  vacationLaunchType = config.type;
+  const title = document.getElementById("vacation-launch-title");
+  if (title) title.textContent = config.title;
+  const description = document.querySelector("#vacation-launch-panel-description");
+  if (description) description.textContent = config.description;
+  const submitLabel = document.querySelector("#vacation-launch-form .button-primary span");
+  if (submitLabel) submitLabel.textContent = config.button;
+  const noteInput = document.getElementById("vacation-launch-note");
+  if (noteInput) noteInput.placeholder = config.notePlaceholder;
+}
 
 function matchesRequestTypeFilter(request, filter) {
   if (!filter) return true;
@@ -3307,7 +3392,12 @@ function updateSelectedDay() {
   content.innerHTML = events.length ? events.map(request => `<article class="day-person">${avatar(request.initials, request.color)}<span><strong>${escapeHtml(request.person)}</strong><small>24h trabalhadas • 72h de descanso</small></span></article>`).join("") : `<p class="empty-note">Nenhuma equipe escalada para esta data.</p>`;
 }
 function setView(view) {
-  document.querySelectorAll(".view-panel").forEach(panel => panel.classList.toggle("active", panel.id === `view-${view}`));
+  // "Lançar ..." (férias e licenças) compartilham o mesmo painel; só mudam
+  // o tipo gravado e os textos do formulário.
+  const launchConfig = vacationLaunchViewConfigs[view];
+  if (launchConfig) applyVacationLaunchConfig(launchConfig);
+  const panelView = launchConfig ? "vacation-launch" : view;
+  document.querySelectorAll(".view-panel").forEach(panel => panel.classList.toggle("active", panel.id === `view-${panelView}`));
   document.querySelectorAll(".nav-link[data-view], .nav-submenu-link[data-view]").forEach(link => {
     const matchesView = link.dataset.view === view;
     // Situação: só fica ativo quando NÃO há filtro por tipo (o tipo mostra todas
@@ -3330,6 +3420,12 @@ function setView(view) {
   });
   const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Unidades", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Cargos", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "cadastro-quadros": ["Quadros", "Cadastro de Quadros", "Cadastre os quadros usados pelos cargos."], "cadastro-fg-functions": ["Funções Gratificadas", "Cadastro de Funções Gratificadas", "Cadastre as funções gratificadas. Esta lista é a mesma usada no cadastro de F.G., no lançamento de férias e no formulário de solicitação."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "backup": ["Gestão", "Backup e restauração", "Exporte uma cópia de segurança dos dados ou restaure a partir de um arquivo."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatórios", "Relatório de servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-requests": ["Solicitações", "Relatório de solicitações", "Consulte todas as solicitações agrupadas por situação."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-premio": ["Licença prêmio", "Relatório de licença prêmio", "Consulte as solicitações de licença prêmio aprovadas."], "report-medica": ["Licença médica", "Relatório de licença médica", "Consulte as solicitações de licença médica aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
   let [breadcrumb, title, subtitle] = titles[view] || (view === "tasks" ? ["Gestão", "Lista de tarefas", "Registre e acompanhe suas tarefas."] : view === "meta4" ? ["Solicitações", "META 4", "Consulte os pedidos de férias enviados pelos usuários."] : view === "protocols-fg" ? ["Solicitações", "Protocolos F.G", "Acompanhe o status e o número dos protocolos de férias com Função Gratificada."] : titles.overview);
+  // Telas de lançamento (férias e licenças) usam o mesmo painel; ajusta textos.
+  if (launchConfig) {
+    breadcrumb = "Solicitações";
+    title = launchConfig.title;
+    subtitle = launchConfig.description;
+  }
   // Filtro por tipo em "Solicitações": ajusta o título/subtítulo da página.
   if (view === "requests" && requestTypeFilter) {
     const typeLabel = requestTypeFilterLabels[requestTypeFilter] || "Solicitações";
@@ -3352,7 +3448,7 @@ function setView(view) {
   if (view === "cadastro-cargos") renderCargos();
   if (view === "cadastro-quadros") renderQuadros();
   if (view === "cadastro-fg-functions") renderFgFunctions();
-  if (view === "vacation-launch") renderVacationLaunch();
+  if (launchConfig) renderVacationLaunch();
   if (view === "report-year") renderReportYear();
   if (view === "report-unit") renderReportUnit();
   if (view === "report-person") renderReportPerson();
