@@ -49,6 +49,7 @@ const usuariosStorageKey = "brisa-usuarios-v1";
 const unidadesStorageKey = "brisa-unidades-v2";
 const cargosStorageKey = "brisa-cargos-v1";
 const quadrosStorageKey = "brisa-quadros-v1";
+const fgFunctionCatalogStorageKey = "brisa-fg-functions-v1";
 const requestAttachmentsDatabaseName = "brisa-request-attachments-v1";
 const requestAttachmentsStoreName = "attachments";
 let requests = [];
@@ -60,10 +61,14 @@ let usuarios = loadLocalUsuarios();
 let unidades = loadLocalReferenceList(unidadesStorageKey, seedUnidades());
 let cargos = loadLocalReferenceList(cargosStorageKey, seedCargos());
 let quadros = loadLocalReferenceList(quadrosStorageKey, seedQuadros());
+// Cadastro das funções gratificadas (a lista de funções em si: Coordenador,
+// Diretor, Chefe Administrativo, Chefe de Segurança, ...).
+let funcoesGratificadas = loadLocalReferenceList(fgFunctionCatalogStorageKey, seedFgFunctions());
 let editingUsuarioId = null;
 let editingUnidadeId = null;
 let editingCargoId = null;
 let editingQuadroId = null;
+let editingFgFunctionId = null;
 let editingRequestId = null;
 // Abre o calendário no mês atual (antes ficava fixo em outubro/2026).
 let shownMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
@@ -550,6 +555,7 @@ const collectionSyncSources = {
   unidades: () => unidades,
   cargos: () => cargos,
   quadros: () => quadros,
+  funcoesGratificadas: () => funcoesGratificadas,
   tarefas: () => tasks,
   fgServidores: () => fgServerRoster,
   contasLegado: () => serverAccounts
@@ -570,6 +576,7 @@ const collectionStorageKeys = {
   unidades: unidadesStorageKey,
   cargos: cargosStorageKey,
   quadros: quadrosStorageKey,
+  funcoesGratificadas: fgFunctionCatalogStorageKey,
   tarefas: taskStorageKey,
   fgServidores: fgRosterStorageKey,
   contasLegado: serverAccountsStorageKey
@@ -1007,6 +1014,16 @@ function seedQuadros() {
   ].map((item, index) => ({ id: `quadro-seed-${index}`, name: item.name, observacoes: "" }));
 }
 
+// Lista inicial das funções gratificadas. Vem do config.js (mesma lista usada
+// como reserva nos seletores) e cai para as quatro funções padrão.
+function seedFgFunctions() {
+  const configured = (window.RH_CONFIG && Array.isArray(window.RH_CONFIG.fgFunctions)) ? window.RH_CONFIG.fgFunctions : [];
+  const names = (configured.length ? configured : ["Coordenador", "Diretor", "Chefe Administrativo", "Chefe de Segurança"])
+    .map(value => String(value || "").trim())
+    .filter(Boolean);
+  return names.map((name, index) => ({ id: `fgfuncao-seed-${index}`, name, observacoes: "" }));
+}
+
 function loadLocalReferenceList(key, seeds) {
   try {
     const saved = JSON.parse(localStorage.getItem(key) || "[]");
@@ -1070,6 +1087,17 @@ function saveQuadros() {
     return false;
   }
   syncCollectionToFirestore("quadros", quadros);
+  return true;
+}
+
+function saveFgFunctions() {
+  try {
+    localStorage.setItem(fgFunctionCatalogStorageKey, JSON.stringify(funcoesGratificadas));
+  } catch {
+    showToast("Não foi possível salvar as funções gratificadas neste navegador.");
+    return false;
+  }
+  syncCollectionToFirestore("funcoesGratificadas", funcoesGratificadas);
   return true;
 }
 
@@ -1250,6 +1278,28 @@ function renderQuadros() {
   fillServerDataReferenceSelects();
 }
 
+function renderFgFunctions() {
+  const container = document.getElementById("fg-functions-body");
+  if (!container) return;
+  const query = (document.getElementById("fg-functions-search")?.value || "").trim().toLocaleLowerCase("pt-BR");
+  const filtered = funcoesGratificadas.filter(item => item.name.toLocaleLowerCase("pt-BR").includes(query));
+  if (filtered.length === 0) {
+    container.innerHTML = `<tr><td colspan="4" class="team-empty">Nenhuma função gratificada cadastrada.</td></tr>`;
+    refreshIcons();
+    return;
+  }
+  container.innerHTML = filtered.map((item, index) => {
+    const observacoesCell = item.observacoes ? `<span title="${escapeHtml(item.observacoes)}">${escapeHtml(item.observacoes)}</span>` : "—";
+    // Quantos servidores estão com esta função no cadastro de Função Gratificada.
+    const usedBy = fgServerRoster.filter(entry => String(entry.funcaoExercida || "") === item.name).length;
+    const usedCell = usedBy ? `<span class="status-pill status-approved">${usedBy} servidor${usedBy === 1 ? "" : "es"}</span>` : "—";
+    const upDisabled = index === 0;
+    const downDisabled = index === filtered.length - 1;
+    return `<tr><td><strong>${escapeHtml(item.name)}</strong></td><td>${usedCell}</td><td>${observacoesCell}</td><td><div class="request-actions"><button class="action-icon move" type="button" data-move-fg-function="${escapeHtml(item.id)}" data-direction="-1" aria-label="Mover ${escapeHtml(item.name)} para cima" title="Mover para cima"${upDisabled ? " disabled" : ""}><i data-lucide="chevron-up"></i></button><button class="action-icon move" type="button" data-move-fg-function="${escapeHtml(item.id)}" data-direction="1" aria-label="Mover ${escapeHtml(item.name)} para baixo" title="Mover para baixo"${downDisabled ? " disabled" : ""}><i data-lucide="chevron-down"></i></button><button class="action-icon approve" type="button" data-edit-fg-function="${escapeHtml(item.id)}" aria-label="Editar função gratificada ${escapeHtml(item.name)}" title="Editar"><i data-lucide="pencil"></i></button><button class="action-icon reject" type="button" data-remove-fg-function="${escapeHtml(item.id)}" aria-label="Remover função gratificada ${escapeHtml(item.name)}" title="Remover"><i data-lucide="trash-2"></i></button></div></td></tr>`;
+  }).join("");
+  refreshIcons();
+}
+
 // Evita reconstruir as listas de opções quando nada no cadastro mudou
 // (renderAll chama esta função várias vezes por ciclo).
 let referenceSelectsSignature = null;
@@ -1405,6 +1455,32 @@ function setReferenceImportMessage(type, message, isError) {
   if (!element) return;
   element.textContent = message || "";
   element.classList.toggle("error", Boolean(isError));
+}
+
+function setFgFunctionMessage(message, isError) {
+  const element = document.getElementById("fg-function-message");
+  if (!element) return;
+  element.textContent = message || "";
+  element.classList.toggle("error", Boolean(isError));
+}
+
+function openFgFunctionDialog(item) {
+  const dialog = document.getElementById("fg-function-dialog");
+  const title = document.getElementById("fg-function-dialog-title");
+  const form = document.getElementById("fg-function-form");
+  if (item) {
+    editingFgFunctionId = item.id;
+    title.textContent = "Editar função gratificada";
+    document.getElementById("fg-function-nome").value = item.name || "";
+    document.getElementById("fg-function-obs").value = item.observacoes || "";
+  } else {
+    editingFgFunctionId = null;
+    title.textContent = "Adicionar função gratificada";
+    form.reset();
+  }
+  setFgFunctionMessage("");
+  dialog.showModal();
+  refreshIcons();
 }
 
 function openReferenceImportDialog(type) {
@@ -1699,21 +1775,56 @@ function getApprovedVacationRequests() {
   });
 }
 
-// Funções gratificadas que podem ser registradas (lista em config.js, para o
-// painel e o formulário de solicitações usarem a mesma).
-const fgFunctionOptions = (() => {
+// Funções gratificadas que podem ser registradas. A lista "viva" vem do
+// cadastro de Funções Gratificadas (coleção "funcoesGratificadas"); se ele
+// estiver vazio, cai para a lista de config.js e, por fim, para as quatro
+// funções padrão — assim os seletores nunca ficam sem opções.
+const fgFunctionOptions = [];
+
+function defaultFgFunctionOptions() {
   const configured = typeof window !== "undefined" && window.RH_CONFIG && window.RH_CONFIG.fgFunctions;
   const list = Array.isArray(configured) ? configured.map(value => String(value || "").trim()).filter(Boolean) : [];
   return list.length ? list : ["Coordenador", "Diretor", "Chefe Administrativo", "Chefe de Segurança"];
-})();
+}
 
-// Monta (uma única vez) as opções de "Função exercida" em um <select>.
+// Recarrega `fgFunctionOptions` a partir do cadastro. Processa no lugar (splice)
+// para que as referências já existentes continuem válidas.
+function refreshFgFunctionOptions() {
+  const names = funcoesGratificadas
+    .map(item => String((item && item.name) || "").trim())
+    .filter(Boolean);
+  const list = names.length ? names : defaultFgFunctionOptions();
+  fgFunctionOptions.splice(0, fgFunctionOptions.length, ...list);
+}
+
+// Atualiza tudo que depende da lista de funções: os próprios seletores e as
+// telas que mostram a relação (cadastro de F.G. e lançamento de férias).
+function refreshFgFunctionViews() {
+  refreshFgFunctionOptions();
+  renderFgFunctions();
+  renderFgServerRoster();
+  syncVacationLaunchFg();
+}
+
+// Preenche as opções de "Função exercida" em um <select>. Reconstrói sempre que
+// a lista muda (assinatura em `data-fg-options`) e preserva a escolha atual.
 function fillFgFunctionSelect(select, placeholder = "Selecione a função exercida") {
-  if (!select || select.options.length > 1) return;
+  if (!select) return;
+  const signature = `${placeholder}\u0000${fgFunctionOptions.join("\u0000")}`;
+  if (select.dataset.fgOptions === signature) return;
+  const current = select.value;
   select.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>${fgFunctionOptions
     .map(option => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`)
     .join("")}`;
+  select.dataset.fgOptions = signature;
+  if (current && Array.from(select.options).some(option => option.value === current)) {
+    select.value = current;
+  }
 }
+
+// A lista já existe localmente na primeira carga: calcula as opções antes de
+// qualquer renderização.
+refreshFgFunctionOptions();
 
 // Identificador estável de uma entrada da lista de Função Gratificada. É usado
 // como id do documento na nuvem (CPF quando existir, senão o nome).
@@ -2653,6 +2764,7 @@ function renderAll() {
   renderUnidades();
   renderCargos();
   renderQuadros();
+  renderFgFunctions();
   renderVacationTodayStat();
   updateCounts();
   updateSelectedDay();
@@ -3216,7 +3328,7 @@ function setView(view) {
     toggle.setAttribute("aria-expanded", String(hasActiveItem));
     submenu.hidden = !hasActiveItem;
   });
-  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Unidades", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Cargos", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "cadastro-quadros": ["Quadros", "Cadastro de Quadros", "Cadastre os quadros usados pelos cargos."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "backup": ["Gestão", "Backup e restauração", "Exporte uma cópia de segurança dos dados ou restaure a partir de um arquivo."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatórios", "Relatório de servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-requests": ["Solicitações", "Relatório de solicitações", "Consulte todas as solicitações agrupadas por situação."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-premio": ["Licença prêmio", "Relatório de licença prêmio", "Consulte as solicitações de licença prêmio aprovadas."], "report-medica": ["Licença médica", "Relatório de licença médica", "Consulte as solicitações de licença médica aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
+  const titles = { overview: ["Visão geral", "", ""], calendar: ["Calendário", "Calendário da equipe", "Planeje as férias sem perder de vista a cobertura do time."], team: ["Equipe", "Sua equipe", "Saldo, disponibilidade e próximos períodos de descanso."], requests: ["Solicitações", "Solicitações", "Revise os pedidos e ajude o time a planejar com tranquilidade."],   "server-data": ["Servidores", "Cadastro de Dados dos Servidores", "Cadastre e consulte os dados funcionais dos servidores."], "cadastro-unidades": ["Unidades", "Cadastro de Unidades", "Cadastre as unidades penais usadas no sistema."], "cadastro-cargos": ["Cargos", "Cadastro de Cargos", "Cadastre os cargos usados no sistema."], "cadastro-quadros": ["Quadros", "Cadastro de Quadros", "Cadastre os quadros usados pelos cargos."], "cadastro-fg-functions": ["Funções Gratificadas", "Cadastro de Funções Gratificadas", "Cadastre as funções gratificadas. Esta lista é a mesma usada no cadastro de F.G., no lançamento de férias e no formulário de solicitação."], "vacation-launch": ["Solicitações", "Lançar férias", "Registre períodos de férias diretamente para os servidores."], "server-fg": ["Servidores", "Cadastro de Servidores com Função Gratificada", "Cadastre os servidores que possuem Função Gratificada."], reports: ["Relatórios", "Relatório de Férias Por mês", "Consulte os relatórios de férias."], "backup": ["Gestão", "Backup e restauração", "Exporte uma cópia de segurança dos dados ou restaure a partir de um arquivo."], "report-year": ["Relatório por ano", "Relatório por ano", "Consulte os servidores com férias aprovadas no ano escolhido."], "report-unit": ["Relatório por unidade", "Relatório por unidade", "Consulte as férias aprovadas agrupadas por unidade."], "report-person": ["Relatório por servidor", "Relatório por servidor", "Consulte as férias aprovadas de cada servidor."], "report-servers": ["Relatórios", "Relatório de servidores", "Consulte os dados funcionais dos servidores cadastrados."], "report-requests": ["Solicitações", "Relatório de solicitações", "Consulte todas as solicitações agrupadas por situação."], "report-capacitacao": ["Licença-capacitação", "Relatório de licença-capacitação", "Consulte as solicitações de licença-capacitação aprovadas."], "report-premio": ["Licença prêmio", "Relatório de licença prêmio", "Consulte as solicitações de licença prêmio aprovadas."], "report-medica": ["Licença médica", "Relatório de licença médica", "Consulte as solicitações de licença médica aprovadas."], usuarios: ["Gestão", "Usuários & Acessos", "Gerencie quem acessa o sistema com o Google e o perfil de cada um."] };
   let [breadcrumb, title, subtitle] = titles[view] || (view === "tasks" ? ["Gestão", "Lista de tarefas", "Registre e acompanhe suas tarefas."] : view === "meta4" ? ["Solicitações", "META 4", "Consulte os pedidos de férias enviados pelos usuários."] : view === "protocols-fg" ? ["Solicitações", "Protocolos F.G", "Acompanhe o status e o número dos protocolos de férias com Função Gratificada."] : titles.overview);
   // Filtro por tipo em "Solicitações": ajusta o título/subtítulo da página.
   if (view === "requests" && requestTypeFilter) {
@@ -3239,6 +3351,7 @@ function setView(view) {
   if (view === "cadastro-unidades") renderUnidades();
   if (view === "cadastro-cargos") renderCargos();
   if (view === "cadastro-quadros") renderQuadros();
+  if (view === "cadastro-fg-functions") renderFgFunctions();
   if (view === "vacation-launch") renderVacationLaunch();
   if (view === "report-year") renderReportYear();
   if (view === "report-unit") renderReportUnit();
@@ -4470,6 +4583,15 @@ document.addEventListener("click", event => {
       renderQuadros();
     }
   }
+  const fgFunctionMoveButton = event.target.closest("[data-move-fg-function]");
+  if (fgFunctionMoveButton && !fgFunctionMoveButton.disabled) {
+    const reordered = moveReferenceItem(funcoesGratificadas, fgFunctionMoveButton.dataset.moveFgFunction, Number(fgFunctionMoveButton.dataset.direction), "fg-functions-search", "name");
+    if (reordered) {
+      funcoesGratificadas = reordered;
+      saveFgFunctions();
+      refreshFgFunctionViews();
+    }
+  }
 });
 on("unidade-import", "click", () => openReferenceImportDialog("unidade"));
 on("unidade-import-cancel", "click", () => document.getElementById("unidade-import-dialog").close());
@@ -4613,6 +4735,96 @@ on("quadro-import-form", "submit", event => {
   form.closest("dialog").close();
   renderQuadros();
   showToast(`${names.length} quadro${names.length === 1 ? "" : "s"} importado${names.length === 1 ? "" : "s"}.`);
+});
+
+// ---- Cadastro das Funções Gratificadas (a lista de funções em si) ----
+// Esta lista é a fonte das opções de "Função exercida" do cadastro de F.G.,
+// do lançamento de férias e do formulário de solicitação.
+on("fg-function-add", "click", () => openFgFunctionDialog(null));
+on("fg-function-cancel", "click", () => document.getElementById("fg-function-dialog").close());
+on("fg-functions-search", "input", debounce(renderFgFunctions));
+on("fg-functions-body", "click", event => {
+  const editButton = event.target.closest("[data-edit-fg-function]");
+  const removeButton = event.target.closest("[data-remove-fg-function]");
+  if (editButton) {
+    const item = funcoesGratificadas.find(entry => entry.id === editButton.dataset.editFgFunction);
+    if (item) openFgFunctionDialog(item);
+    return;
+  }
+  if (!removeButton) return;
+  const id = removeButton.dataset.removeFgFunction;
+  const item = funcoesGratificadas.find(entry => entry.id === id);
+  if (!item) return;
+  const usedBy = fgServerRoster.filter(entry => String(entry.funcaoExercida || "") === item.name).length;
+  if (usedBy > 0) {
+    showToast(`Não é possível excluir: a função está em uso por ${usedBy} servidor${usedBy === 1 ? "" : "es"} no cadastro de Função Gratificada.`);
+    return;
+  }
+  if (!window.confirm(`Remover a função gratificada "${item.name}"?`)) return;
+  funcoesGratificadas = funcoesGratificadas.filter(entry => entry.id !== id);
+  saveFgFunctions();
+  deleteReferenceDocFromFirestore("funcoesGratificadas", id);
+  refreshFgFunctionViews();
+  showToast("Função gratificada removida.");
+});
+on("fg-function-form", "submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const name = String(form.elements.nome.value).trim();
+  const observacoes = String(form.elements.observacoes.value).trim();
+  if (!name) {
+    setFgFunctionMessage("Informe o nome da função gratificada.", true);
+    return;
+  }
+  if (funcoesGratificadas.some(item => item.id !== editingFgFunctionId && item.name.toLocaleLowerCase("pt-BR") === name.toLocaleLowerCase("pt-BR"))) {
+    setFgFunctionMessage("Já existe uma função gratificada cadastrada com esse nome.", true);
+    return;
+  }
+  if (editingFgFunctionId) {
+    const previousName = (funcoesGratificadas.find(item => item.id === editingFgFunctionId) || {}).name;
+    funcoesGratificadas = funcoesGratificadas.map(item => item.id === editingFgFunctionId ? Object.assign({}, item, { name, observacoes }) : item);
+    // Relação: renomear a função atualiza quem já a usa no cadastro de F.G.
+    if (previousName && previousName !== name) {
+      const previousRoster = fgServerRoster.map(entry => ({ ...entry }));
+      fgServerRoster = fgServerRoster.map(entry => String(entry.funcaoExercida || "") === previousName
+        ? Object.assign({}, entry, { funcaoExercida: name })
+        : entry);
+      if (!saveFgServerRoster()) fgServerRoster = previousRoster;
+    }
+  } else {
+    funcoesGratificadas.push({ id: crypto.randomUUID(), name, observacoes });
+  }
+  saveFgFunctions();
+  form.closest("dialog").close();
+  refreshFgFunctionViews();
+  showToast(editingFgFunctionId ? "Função gratificada atualizada." : "Função gratificada adicionada.");
+});
+on("fg-function-import", "click", () => openReferenceImportDialog("fg-function"));
+on("fg-function-import-cancel", "click", () => document.getElementById("fg-function-import-dialog").close());
+on("fg-function-import-form", "submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const raw = String(form.elements.lista.value || "");
+  const seen = new Set();
+  const names = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const name = line.trim();
+    if (!name) continue;
+    const key = name.toLocaleLowerCase("pt-BR");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (funcoesGratificadas.some(item => item.name.toLocaleLowerCase("pt-BR") === key)) continue;
+    names.push(name);
+  }
+  if (names.length === 0) {
+    setReferenceImportMessage("fg-function", "Nenhuma função nova na lista (linhas vazias, repetidas ou já cadastradas foram ignoradas).", true);
+    return;
+  }
+  names.forEach(name => funcoesGratificadas.push({ id: crypto.randomUUID(), name, observacoes: "" }));
+  saveFgFunctions();
+  form.closest("dialog").close();
+  refreshFgFunctionViews();
+  showToast(`${names.length} ${names.length === 1 ? "função" : "funções"} importada${names.length === 1 ? "" : "s"}.`);
 });
 on("request-edit-cancel", "click", () => document.getElementById("request-edit-dialog").close());
 on("request-edit-form", "submit", event => {
@@ -4844,7 +5056,7 @@ function applyRoleBasedNavigation() {
 }
 
 // ---- Backup e restauração (exportar/importar todos os dados) ----
-const backupCollections = ["requests", "usuarios", "servidores", "unidades", "cargos", "quadros", "fgServidores", "tarefas", "contasLegado"];
+const backupCollections = ["requests", "usuarios", "servidores", "unidades", "cargos", "quadros", "funcoesGratificadas", "fgServidores", "tarefas", "contasLegado"];
 
 function localCollectionSnapshot(collection) {
   const source = collectionSyncSources[collection];
@@ -5011,10 +5223,11 @@ async function loadServerRegistryFromFirestore() {
 async function loadReferenceDataFromFirestore() {
   if (window.RH_SYNC && window.RH_SYNC.enabled) {
     try {
-      const [remoteUnidades, remoteCargos, remoteQuadros] = await Promise.all([
+      const [remoteUnidades, remoteCargos, remoteQuadros, remoteFgFunctions] = await Promise.all([
         window.RH_SYNC.loadDocs("unidades"),
         window.RH_SYNC.loadDocs("cargos"),
-        window.RH_SYNC.loadDocs("quadros")
+        window.RH_SYNC.loadDocs("quadros"),
+        window.RH_SYNC.loadDocs("funcoesGratificadas")
       ]);
       if (remoteUnidades && remoteUnidades.length > 0) {
         unidades = mergeReferenceListWithCloud(unidades, remoteUnidades);
@@ -5031,9 +5244,15 @@ async function loadReferenceDataFromFirestore() {
         seedFirestoreSyncState("quadros", normalizeReferenceList(remoteQuadros));
         saveQuadros();
       }
+      if (remoteFgFunctions && remoteFgFunctions.length > 0) {
+        funcoesGratificadas = mergeReferenceListWithCloud(funcoesGratificadas, remoteFgFunctions);
+        seedFirestoreSyncState("funcoesGratificadas", normalizeReferenceList(remoteFgFunctions));
+        saveFgFunctions();
+      }
       if (!remoteUnidades?.length && unidades.length > 0) saveUnidades();
       if (!remoteCargos?.length && cargos.length > 0) saveCargos();
       if (!remoteQuadros?.length && quadros.length > 0) saveQuadros();
+      if (!remoteFgFunctions?.length && funcoesGratificadas.length > 0) saveFgFunctions();
     } catch (error) {
       const detail = error instanceof Error ? ` ${error.message}` : "";
       console.warn("Falha ao carregar cadastros básicos do Firestore:", error);
@@ -5044,6 +5263,7 @@ async function loadReferenceDataFromFirestore() {
   renderUnidades();
   renderCargos();
   renderQuadros();
+  refreshFgFunctionViews();
 }
 
 function mergeServerRecords(localList, remoteList, keyFor) {
