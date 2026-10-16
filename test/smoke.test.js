@@ -33,6 +33,22 @@ test("o login legado por CPF/senha foi removido", () => {
   assert.ok(!exists("intranet.html"), "intranet.html ainda existe");
 });
 
+test("a alteração de senha (fluxo legado) foi removida das páginas", () => {
+  const app = read("app.js");
+  assert.ok(!app.includes("hashServerPassword"), "app.js ainda tem hashServerPassword");
+  assert.ok(!app.includes("adminPasswordStorageKey"), "app.js ainda guarda a senha do admin");
+  assert.ok(!app.includes("open-password-change"), "app.js ainda trata o botão de senha");
+  // A classe .account-password-dialog é reaproveitada por outros diálogos, então
+  // conferimos os identificadores próprios do fluxo de senha em cada página.
+  for (const file of ["index.html", "recusada.html", "solicitacao-ferias.html"]) {
+    const html = read(file);
+    assert.ok(!html.includes('id="account-password-dialog"'), `${file} ainda tem o diálogo de senha`);
+    assert.ok(!html.includes('id="account-password-form"'), `${file} ainda tem o formulário de senha`);
+    assert.ok(!html.includes('id="open-password-change"'), `${file} ainda tem o botão "Alterar senha"`);
+    assert.ok(!html.includes('id="account-current-password"'), `${file} ainda tem o campo de senha atual`);
+  }
+});
+
 test("o calendário abre no mês atual", () => {
   const app = read("app.js");
   assert.ok(app.includes("let shownMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);"),
@@ -276,6 +292,12 @@ test("painel: submenu de Solicitações traz as 5 telas de lançamento (férias 
   assert.ok(app.includes("applyVacationLaunchConfig"), "o app.js deve aplicar título/textos do tipo");
   // O tipo escolhido é o que vai para a solicitação gravada.
   assert.ok(/type:\s*vacationLaunchType/.test(app), "a solicitação gravada deve usar o tipo do lançamento");
+  // Licenças concedidas por ciclo (prêmio/capacitação) têm seletor de ciclo.
+  assert.ok(html.includes('id="vacation-launch-cycle"'), "o painel deve ter o seletor de ciclo");
+  assert.ok(/vacation-launch-cycle-field\[hidden\]/.test(read("styles.css")), "o campo de ciclo deve poder ser ocultado");
+  assert.ok(/premio:\s*\{[\s\S]*?cycle:\s*true/.test(app), "licença prêmio deve exigir ciclo");
+  assert.ok(/capacitacao:\s*\{[\s\S]*?cycle:\s*true/.test(app), "licença capacitação deve exigir ciclo");
+  assert.ok(app.includes("if (cycle) request.ciclo = cycle;"), "o ciclo escolhido deve ser gravado na solicitação");
 });
 
 test("relatórios e protocolos: coluna Função exercida em todos os tipos de solicitação", () => {
@@ -313,4 +335,21 @@ test("cadastro de servidores: importação de planilha do Excel está disponíve
   const app = read("app.js");
   assert.ok(app.includes("function readSpreadsheetRows("), "deve ler o arquivo escolhido");
   assert.ok(app.includes("function planServerImport("), "deve validar as linhas antes de gravar");
+});
+
+test("relatórios: exportação em Excel (.xlsx) está disponível", () => {
+  const html = read("index.html");
+  const app = read("app.js");
+  // A biblioteca de Excel já é carregada para a importação; a exportação usa a mesma.
+  assert.ok(/cdnjs\.cloudflare\.com\/ajax\/libs\/xlsx\/[^"]+xlsx\.full\.min\.js/.test(html),
+    "a biblioteca do Excel deve ser carregada na página");
+  // O botão de Excel entra nas ações de exportação dos relatórios e do cadastro.
+  assert.ok(app.includes('data-report-export="xlsx"'), "os relatórios devem ter o botão de Excel");
+  assert.ok(html.includes('id="server-data-export-xlsx"'), "o cadastro de servidores deve ter o botão de Excel");
+  // A função de exportação usa o SheetJS e cai para CSV se ele faltar.
+  assert.ok(app.includes("function downloadReportXlsx("), "deve existir a exportação em .xlsx");
+  assert.ok(app.includes("xlsx.utils.aoa_to_sheet"), "deve montar a planilha com o SheetJS");
+  assert.ok(app.includes("xlsx.writeFile("), "deve baixar o arquivo .xlsx");
+  assert.ok(/Biblioteca do Excel indisponível[\s\S]{0,80}downloadReportCsv/.test(app),
+    "sem a biblioteca, deve cair para CSV em vez de falhar");
 });

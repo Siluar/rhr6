@@ -18,6 +18,8 @@ O sistema permite:
 - Relatórios por mês, ano, unidade e servidor.
 - Relatório de solicitações com filtros de categoria (Férias, Licenças e Outros), status, tipo, ano e servidor.
 - Relatórios de licenças concedidas: prêmio, capacitação e médica.
+- Cada relatório pode ser **exportado em CSV, Excel (`.xlsx`) ou PDF**, a partir da
+  própria tabela exibida na tela.
 - **Backup**: exportar/restaurar todos os dados em um arquivo `.json` (menu **Backup**).
 - **Avisos**: sino no topo com a contagem de solicitações pendentes (clique abre a
   lista).
@@ -131,8 +133,10 @@ editar e excluir), persistida nas coleções do Firestore:
   **Lançar férias** e os lançamentos de **licença prêmio**, **capacitação**,
   **médica** e **outros** — todos com o mesmo formulário (servidor com busca,
   período, observação e bloco de Função Gratificada), mudando apenas o tipo
-  gravado — seguidos dos filtros que listam as solicitações de cada tipo em
-  qualquer situação.
+  gravado. Nas licenças concedidas **por ciclo** (prêmio e capacitação) o
+  formulário pede também o **ciclo** (A, B ou C), que passa a identificar o
+  lançamento nos relatórios. Os lançamentos vêm seguidos dos filtros que listam
+  as solicitações de cada tipo em qualquer situação.
 - **Servidores** — o cadastro de dados dos servidores é sincronizado com a
   coleção `servidores`; o **Cadastro de Servidores com Função Gratificada** usa
   a coleção `fgServidores` (a guia "Cadastro de Login", obsoleta com o acesso
@@ -158,10 +162,10 @@ editar e excluir), persistida nas coleções do Firestore:
 
   A **Função exercida** aparece em todos os relatórios do painel — Protocolos
   F.G, licença prêmio, licença capacitação, licença médica e o Relatório de
-  solicitações (todos os tipos) — inclusive nas exportações CSV/PDF, que saem
-  da própria tabela. Quando a solicitação não traz a função, ela é buscada no
-  cadastro de Função Gratificada (pelo CPF ou pelo nome), de modo que os pedidos
-  antigos também aparecem classificados.
+  solicitações (todos os tipos) — inclusive nas exportações CSV, Excel e PDF,
+  que saem da própria tabela. Quando a solicitação não traz a função, ela é
+  buscada no cadastro de Função Gratificada (pelo CPF ou pelo nome), de modo que
+  os pedidos antigos também aparecem classificados.
 - **Cadastro de Unidades** — item **Unidades** próprio na barra lateral para
   criar, editar e excluir as unidades penais (coleção `unidades`). As unidades
   cadastradas alimentam o select "Unidade Penal" do formulário de dados dos
@@ -315,10 +319,11 @@ O site pode ser publicado diretamente do repositório via **GitHub Pages**
 | `config.local.example.js` | Modelo da configuração local (referência) |
 | `firebase-sync.js` | Camada de sincronização com o Firestore (backend opcional) |
 | `firestore.rules` | Regras de segurança do Firestore |
-| `package.json` | Scripts de teste (dependência de desenvolvimento: `jsdom`) |
+| `package.json` | Scripts de teste e de lint (dependências de desenvolvimento: `jsdom`, `eslint`) |
 | `package-lock.json` | Versões travadas das dependências de teste |
+| `eslint.config.mjs` | Configuração do ESLint (flat config) |
 | `test/` | Testes automatizados (`node --test`) |
-| `.github/workflows/test.yml` | CI: instala as dependências e roda os testes a cada push/PR |
+| `.github/workflows/test.yml` | CI: instala as dependências, roda o ESLint e os testes a cada push/PR |
 | `run-site.bat` | Atalho para iniciar o site no Windows |
 | `VS- CODE.code-workspace` | Workspace do VS Code |
 
@@ -328,7 +333,8 @@ A única dependência é o **`jsdom`** (apenas para desenvolvimento — não vai
 site). Com o **Node.js 22+** (o `jsdom` exige Node 22.22+/24+):
 
 ```bash
-npm install     # instala o jsdom (uma vez)
+npm install     # instala o jsdom e o ESLint (uma vez)
+npm run lint    # analisa os scripts do site e os testes com o ESLint
 npm test        # ou: node --test test/logic.test.js test/smoke.test.js test/crud.test.js
 ```
 
@@ -352,8 +358,8 @@ npm test        # ou: node --test test/logic.test.js test/smoke.test.js test/cru
 > Estes testes rodam sem navegador e sem o Firebase de verdade. O login do Google
 > e a gravação real no Firestore continuam exigindo um teste manual no navegador.
 
-O workflow em `.github/workflows/test.yml` roda os testes automaticamente no
-GitHub a cada `push`/`pull request` para a branch `main`.
+O workflow em `.github/workflows/test.yml` roda o **ESLint** e os testes
+automaticamente no GitHub a cada `push`/`pull request` para a branch `main`.
 
 ## Legado
 
@@ -362,10 +368,8 @@ Com o acesso **exclusivamente pelo Google**:
 - O **login por CPF/senha** (`submitCredentials` + `serverAccounts`) foi
   **removido** de `login.js`, e o arquivo `intranet.html` (órfão) foi **excluído**.
   Restou apenas o fluxo do Google.
-- O botão/diálogo **Alterar senha** no painel é o último vestígio do fluxo antigo:
-  compara a senha atual com `window.RH_CONFIG.initialAdminPassword` (hoje vazio)
-  ou com um hash salvo no navegador. Não afeta o login por Google e pode ser
-  removido numa limpeza futura.
+- O botão/diálogo **Alterar senha** e o fluxo de verificação por senha foram
+  **removidos**: o sistema já opera exclusivamente com o login do Google.
 - A visão **Equipe** é montada a partir dos servidores cadastrados (não há mais
   nomes fictícios); como não há item no menu, ela é acessível pela busca global.
 

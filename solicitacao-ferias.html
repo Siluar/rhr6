@@ -141,23 +141,6 @@
       }
 
       .user-actions { display: flex; align-items: center; gap: 8px; }
-      .password-change-dialog {
-        width: min(100% - 32px, 480px);
-        padding: 22px;
-        border: 1px solid rgba(0,0,0,0.14);
-        border-radius: 10px;
-        background: var(--panel);
-        color: var(--ink);
-        box-shadow: 0 20px 60px rgba(0,0,0,0.24);
-      }
-      .password-change-dialog::backdrop { background: rgba(20,25,22,0.55); }
-      .password-change-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-      .password-change-heading h2 { margin: 0 0 5px; font-size: 1.2rem; }
-      .password-change-heading p { margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.45; }
-      .password-change-close { width: 32px; height: 32px; flex: 0 0 auto; border: 0; border-radius: 6px; background: #e6e6e6; color: var(--ink); cursor: pointer; font-size: 20px; line-height: 1; }
-      .password-change-form { display: grid; gap: 12px; }
-      .password-change-message { min-height: 20px; margin: 0; color: var(--green); font-size: 0.88rem; }
-      .password-change-message.error { color: #a0352b; }
 
       .logout-button:hover {
         background: rgba(255, 255, 255, 0.8);
@@ -403,7 +386,6 @@
           <span class="user-avatar" id="user-avatar" aria-hidden="true">S</span>
           <span class="user-name" id="user-name">Servidor</span>
           <div class="user-actions">
-            <button class="logout-button" id="open-password-change" type="button" aria-haspopup="dialog">Alterar senha</button>
             <a class="logout-button" href="login.html" data-logout aria-label="Sair e voltar para o login">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
               <span>Sair</span>
@@ -529,20 +511,6 @@
       </main>
     </div>
 
-    <dialog class="password-change-dialog" id="password-change-dialog" aria-labelledby="password-change-title">
-      <div class="password-change-heading">
-        <div><h2 id="password-change-title">Alterar senha</h2><p>Confirme sua senha atual e informe uma nova senha.</p></div>
-        <button class="password-change-close" id="close-password-change" type="button" aria-label="Fechar">×</button>
-      </div>
-      <form class="password-change-form" id="password-change-form">
-        <div class="field"><label for="current-password">Senha atual</label><input id="current-password" type="password" autocomplete="current-password" minlength="6" required /></div>
-        <div class="field"><label for="new-password">Nova senha</label><input id="new-password" type="password" autocomplete="new-password" minlength="6" required /></div>
-        <div class="field"><label for="confirm-new-password">Confirme a nova senha</label><input id="confirm-new-password" type="password" autocomplete="new-password" minlength="6" required /></div>
-        <p class="password-change-message" id="password-change-message" aria-live="polite"></p>
-        <div class="actions"><button class="button button-secondary" type="button" id="cancel-password-change">Cancelar</button><button class="button button-primary" type="submit">Salvar nova senha</button></div>
-      </form>
-    </dialog>
-
     <script src="config.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
@@ -602,11 +570,6 @@
         if (emailInput && googleEmail) emailInput.value = googleEmail;
         document.getElementById('user-name').textContent = autoName;
         document.getElementById('user-avatar').textContent = autoName.trim().charAt(0).toLocaleUpperCase('pt-BR');
-        // "Alterar senha" só se aplica ao login legado por CPF/senha.
-        if (!String(serverProfile?.cpf || '').trim()) {
-          const passwordButton = document.getElementById('open-password-change');
-          if (passwordButton) passwordButton.style.display = 'none';
-        }
       }
 
       const selectionPanel = document.getElementById('selection-panel');
@@ -651,73 +614,6 @@
             + configuredFunctions.map(value => `<option value="${value}">${value}</option>`).join('');
         }
       }
-
-      const passwordChangeDialog = document.getElementById('password-change-dialog');
-      const passwordChangeForm = document.getElementById('password-change-form');
-      const passwordChangeMessage = document.getElementById('password-change-message');
-      const serverAccountsStorageKey = 'brisa-server-accounts-v1';
-
-      async function hashPassword(password, saltHex) {
-        if (!crypto.subtle) throw new Error('Criptografia segura indisponível neste navegador.');
-        const salt = new Uint8Array(saltHex.match(/.{2}/g).map(value => Number.parseInt(value, 16)));
-        const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
-        const digest = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, key, 256);
-        return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-      }
-
-      document.getElementById('open-password-change').addEventListener('click', () => {
-        passwordChangeForm.reset();
-        passwordChangeMessage.textContent = '';
-        passwordChangeMessage.classList.remove('error');
-        passwordChangeDialog.showModal();
-      });
-      document.getElementById('close-password-change').addEventListener('click', () => passwordChangeDialog.close());
-      document.getElementById('cancel-password-change').addEventListener('click', () => passwordChangeDialog.close());
-      passwordChangeForm.addEventListener('submit', async event => {
-        event.preventDefault();
-        passwordChangeMessage.textContent = '';
-        passwordChangeMessage.classList.remove('error');
-        const currentPassword = document.getElementById('current-password').value;
-        const newPassword = document.getElementById('new-password').value;
-        const confirmPassword = document.getElementById('confirm-new-password').value;
-        if (newPassword !== confirmPassword) {
-          passwordChangeMessage.textContent = 'A confirmação não corresponde à nova senha.';
-          passwordChangeMessage.classList.add('error');
-          return;
-        }
-        if (currentPassword === newPassword) {
-          passwordChangeMessage.textContent = 'A nova senha deve ser diferente da senha atual.';
-          passwordChangeMessage.classList.add('error');
-          return;
-        }
-
-        try {
-          const accounts = JSON.parse(localStorage.getItem(serverAccountsStorageKey) || '[]');
-          const cpfDigits = String(serverProfile?.cpf || '').replace(/\D/g, '');
-          const account = Array.isArray(accounts)
-            ? accounts.find(item => String(item.cpf || '').replace(/\D/g, '') === cpfDigits)
-            : null;
-          if (!account?.salt || !account.passwordHash) {
-            passwordChangeMessage.textContent = 'Não foi possível localizar as credenciais desta conta.';
-            passwordChangeMessage.classList.add('error');
-            return;
-          }
-          if (await hashPassword(currentPassword, account.salt) !== account.passwordHash) {
-            passwordChangeMessage.textContent = 'A senha atual está incorreta.';
-            passwordChangeMessage.classList.add('error');
-            return;
-          }
-          const salt = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
-          account.salt = salt;
-          account.passwordHash = await hashPassword(newPassword, salt);
-          localStorage.setItem(serverAccountsStorageKey, JSON.stringify(accounts));
-          passwordChangeForm.reset();
-          passwordChangeMessage.textContent = 'Senha alterada com sucesso.';
-        } catch {
-          passwordChangeMessage.textContent = 'Não foi possível salvar a nova senha neste navegador.';
-          passwordChangeMessage.classList.add('error');
-        }
-      });
 
       let currentOption = 'ferias';
 
@@ -931,7 +827,7 @@
 
         if (window.RH_SYNC && window.RH_SYNC.enabled) {
           window.RH_SYNC.waitForAuth().then(user => {
-            if (!user) return; // login por CPF/senha: mantém apenas local por enquanto
+            if (!user) return; // sem sessão: mantém apenas local por enquanto
             return window.RH_SYNC.addRequest(request);
           }).then(() => {
             submitMessage.classList.remove('error');

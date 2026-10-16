@@ -42,8 +42,6 @@ const storageKey = "brisa-vacation-requests-v1";
 const taskStorageKey = "brisa-tasks-v1";
 const fgRosterStorageKey = "brisa-fg-server-roster-v1";
 const serverAccountsStorageKey = "brisa-server-accounts-v1";
-const adminPasswordStorageKey = "brisa-admin-password-v1";
-const initialAdminPassword = (window.RH_CONFIG && window.RH_CONFIG.initialAdminPassword) || "";
 const serverDataStorageKey = "brisa-server-personal-data-v1";
 const usuariosStorageKey = "brisa-usuarios-v1";
 const unidadesStorageKey = "brisa-unidades-v2";
@@ -147,14 +145,10 @@ function saveRequests() {
 }
 
 function loadTasks() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(taskStorageKey) || "[]");
-    return Array.isArray(saved)
-      ? saved.filter(task => task && typeof task.id === "string" && typeof task.title === "string").map(task => ({ ...task, date: isIsoDate(task.date) ? task.date : "", completed: Boolean(task.completed) }))
-      : [];
-  } catch {
-    return [];
-  }
+  const saved = readLocalJson(taskStorageKey, []);
+  return Array.isArray(saved)
+    ? saved.filter(task => task && typeof task.id === "string" && typeof task.title === "string").map(task => ({ ...task, date: isIsoDate(task.date) ? task.date : "", completed: Boolean(task.completed) }))
+    : [];
 }
 
 function saveTasks() {
@@ -458,12 +452,8 @@ async function restoreRequestAttachment(requestId, attachment) {
 }
 
 function loadServerAccounts() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(serverAccountsStorageKey) || "[]");
-    return Array.isArray(saved) ? saved.filter(account => account && typeof account === "object") : [];
-  } catch {
-    return [];
-  }
+  const saved = readLocalJson(serverAccountsStorageKey, []);
+  return Array.isArray(saved) ? saved.filter(account => account && typeof account === "object") : [];
 }
 
 function saveServerAccounts() {
@@ -512,12 +502,8 @@ async function loadServerAccountsFromFirestore() {
 }
 
 function loadServerPersonalData() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(serverDataStorageKey) || "[]");
-    return Array.isArray(saved) ? saved.filter(record => record && typeof record === "object") : [];
-  } catch {
-    return [];
-  }
+  const saved = readLocalJson(serverDataStorageKey, []);
+  return Array.isArray(saved) ? saved.filter(record => record && typeof record === "object") : [];
 }
 
 function saveServerPersonalData() {
@@ -597,16 +583,12 @@ function persistCollectionLocally(collection) {
 }
 
 function loadPersistedFirestoreSyncState() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(firestoreSyncStateStorageKey) || "{}");
-    Object.keys(saved || {}).forEach(collection => {
-      const entries = saved[collection];
-      if (!entries || typeof entries !== "object") return;
-      firestoreSyncState.set(collection, new Map(Object.entries(entries)));
-    });
-  } catch {
-    // Sem retrato salvo: a primeira gravação de cada coleção envia a lista toda.
-  }
+  const saved = readLocalJson(firestoreSyncStateStorageKey, {});
+  Object.keys(saved || {}).forEach(collection => {
+    const entries = saved[collection];
+    if (!entries || typeof entries !== "object") return;
+    firestoreSyncState.set(collection, new Map(Object.entries(entries)));
+  });
 }
 
 function persistFirestoreSyncState() {
@@ -1029,7 +1011,7 @@ function seedFgFunctions() {
 
 function loadLocalReferenceList(key, seeds) {
   try {
-    const saved = JSON.parse(localStorage.getItem(key) || "[]");
+    const saved = readLocalJson(key, []);
     if (Array.isArray(saved) && saved.length > 0) return normalizeReferenceList(saved);
   } catch {
     // Ignora e usa a lista inicial abaixo.
@@ -1106,7 +1088,7 @@ function saveFgFunctions() {
 
 function loadLocalUsuarios() {
   try {
-    const saved = JSON.parse(localStorage.getItem(usuariosStorageKey) || "[]");
+    const saved = readLocalJson(usuariosStorageKey, []);
     if (Array.isArray(saved) && saved.length > 0) return saved.map(normalizeUsuario);
   } catch {
     // Ignora e usa a lista inicial abaixo.
@@ -1150,8 +1132,10 @@ function saveUsuarios() {
     localStorage.setItem(usuariosStorageKey, JSON.stringify(usuarios));
   } catch {
     showToast("Não foi possível salvar os usuários neste navegador.");
+    return false;
   }
   syncCollectionToFirestore("usuarios", usuarios);
+  return true;
 }
 
 function renderUsuarios() {
@@ -1539,16 +1523,19 @@ async function removeRequest(requestId) {
   showToast("Solicitação excluída.");
 }
 
-function toHex(bytes) {
-  return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function hashServerPassword(password, saltHex) {
-  if (!crypto.subtle) throw new Error("Criptografia segura indisponível neste navegador.");
-  const salt = new Uint8Array(saltHex.match(/.{2}/g).map(value => Number.parseInt(value, 16)));
-  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
-  const digest = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: 120000, hash: "SHA-256" }, key, 256);
-  return toHex(new Uint8Array(digest));
+// Lê um valor JSON do localStorage com proteção: se a chave não existir ou o
+// conteúdo estiver corrompido, devolve o valor padrão em vez de lançar erro.
+// É o único ponto que faz JSON.parse de dados guardados no navegador, o que
+// garante que um registro corrompido nunca derrube a tela inteira.
+function readLocalJson(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    const parsed = JSON.parse(raw);
+    return parsed === null || parsed === undefined ? fallback : parsed;
+  } catch {
+    return fallback;
+  }
 }
 
 // Busca do cadastro de servidores: procura em nome, CPF, RG, e-mail, telefone,
@@ -1673,8 +1660,7 @@ function normalizeRequest(request) {
 function legacyLoadRequests(includeSeed = true) {
   const fallback = () => (includeSeed ? seedRequests.map(request => ({ ...request })) : []);
   try {
-    const saved = localStorage.getItem(storageKey);
-    const parsed = saved ? JSON.parse(saved) : fallback();
+    const parsed = readLocalJson(storageKey, fallback());
     return (Array.isArray(parsed) ? parsed : fallback()).map(normalizeRequest);
   } catch {
     return fallback();
@@ -1881,7 +1867,7 @@ function mergeFgRoster(localList, remoteList) {
 
 function loadFgServerRoster() {
   try {
-    const saved = JSON.parse(localStorage.getItem(fgRosterStorageKey) || "[]");
+    const saved = readLocalJson(fgRosterStorageKey, []);
     return Array.isArray(saved) ? mergeFgRoster(saved, []) : [];
   } catch {
     return [];
@@ -2076,6 +2062,9 @@ function addVacationLaunch(event) {
   const start = document.getElementById("vacation-launch-start").value;
   const end = document.getElementById("vacation-launch-end").value;
   const note = document.getElementById("vacation-launch-note").value.trim();
+  const cycleSelect = document.getElementById("vacation-launch-cycle");
+  const usesCycle = Boolean(cycleSelect && cycleSelect.required);
+  const cycle = usesCycle ? cycleSelect.value.trim().toUpperCase() : "";
   if (!server) {
     showToast("Selecione um servidor cadastrado.");
     return;
@@ -2110,6 +2099,10 @@ function addVacationLaunch(event) {
     showToast("Informe a função exercida e o substituto.");
     return;
   }
+  if (usesCycle && !["A", "B", "C"].includes(cycle)) {
+    showToast("Selecione o ciclo da licença.");
+    return;
+  }
 
   const days = Math.round((new Date(`${end}T12:00:00`) - new Date(`${start}T12:00:00`)) / 86400000) + 1;
   const initials = String(server.name).split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0].toLocaleUpperCase("pt-BR")).join("") || "SV";
@@ -2137,6 +2130,7 @@ function addVacationLaunch(event) {
     request.funcaoExercida = functionName;
     request.substituto = substitute;
   }
+  if (cycle) request.ciclo = cycle;
   const addedToRoster = isFg && !isServerInFgRoster(server);
   if (addedToRoster) {
     fgServerRoster.push({ id: server.id, name: server.name, cpf: server.cpf, funcaoExercida: functionName });
@@ -2579,14 +2573,16 @@ const vacationLaunchConfigs = {
     title: "Lançar licença prêmio",
     description: "Registre diretamente um período de licença prêmio para um servidor cadastrado. O lançamento já entra como aprovado nos relatórios.",
     button: "Lançar licença prêmio",
-    notePlaceholder: "Ex.: licença prêmio lançada conforme escala"
+    notePlaceholder: "Ex.: licença prêmio lançada conforme escala",
+    cycle: true
   },
   capacitacao: {
     type: "Licença capacitação",
     title: "Lançar licença capacitação",
     description: "Registre diretamente um período de licença de capacitação para um servidor cadastrado. O lançamento já entra como aprovado nos relatórios.",
     button: "Lançar licença capacitação",
-    notePlaceholder: "Ex.: curso de capacitação"
+    notePlaceholder: "Ex.: curso de capacitação",
+    cycle: true
   },
   medica: {
     type: "Licença médica",
@@ -2625,6 +2621,14 @@ function applyVacationLaunchConfig(config) {
   if (submitLabel) submitLabel.textContent = config.button;
   const noteInput = document.getElementById("vacation-launch-note");
   if (noteInput) noteInput.placeholder = config.notePlaceholder;
+  // O ciclo só se aplica às licenças concedidas por ciclo (prêmio/capacitação).
+  const cycleField = document.querySelector(".vacation-launch-cycle-field");
+  const cycleSelect = document.getElementById("vacation-launch-cycle");
+  if (cycleField) cycleField.hidden = !config.cycle;
+  if (cycleSelect) {
+    cycleSelect.required = Boolean(config.cycle);
+    if (!config.cycle) cycleSelect.value = "";
+  }
 }
 
 function matchesRequestTypeFilter(request, filter) {
@@ -3534,13 +3538,40 @@ function downloadReportCsv(title, headers, rows, extraSections = []) {
   const csv = csvLines.join("\r\n");
   const downloadUrl = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
   const downloadLink = document.createElement("a");
-  const fileTitle = title.toLocaleLowerCase("pt-BR").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   downloadLink.href = downloadUrl;
-  downloadLink.download = `${fileTitle || "relatorio"}-${dateKey(new Date())}.csv`;
+  downloadLink.download = `${reportFileSlug(title)}-${dateKey(new Date())}.csv`;
   document.body.append(downloadLink);
   downloadLink.click();
   downloadLink.remove();
   setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+}
+// Nome de arquivo seguro e sem acentos, compartilhado por CSV e Excel.
+function reportFileSlug(title) {
+  const slug = String(title || "relatorio").toLocaleLowerCase("pt-BR").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return slug || "relatorio";
+}
+// Exporta o relatório em .xlsx (Excel) usando a biblioteca SheetJS já carregada
+// para a importação de planilhas. Se a biblioteca não estiver disponível, cai
+// para o CSV, para nunca deixar o usuário sem exportação.
+function downloadReportXlsx(title, headers, rows, extraSections = []) {
+  const xlsx = window.XLSX;
+  if (!xlsx || !xlsx.utils) {
+    showToast("Biblioteca do Excel indisponível; exportando em CSV.");
+    downloadReportCsv(title, headers, rows, extraSections);
+    return;
+  }
+  const aoa = [headers, ...rows];
+  extraSections.forEach(section => {
+    aoa.push([]);
+    aoa.push([section.label]);
+    aoa.push(section.headers);
+    section.rows.forEach(row => aoa.push(row));
+  });
+  const worksheet = xlsx.utils.aoa_to_sheet(aoa);
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(workbook, worksheet, "Relatório");
+  xlsx.writeFile(workbook, `${reportFileSlug(title)}-${dateKey(new Date())}.xlsx`);
 }
 function buildPrintReportHtml(title, recordCount, recordLabel, tableMarkup) {
   const crestUrl = new URL("brasao_ok.png", document.baseURI).href;
@@ -3588,7 +3619,7 @@ function printReportTable(title, headers, rows, extraSections = []) {
   openPrintReport(reportHtml, `Relatório para impressão: ${title}`);
 }
 document.querySelectorAll("[data-report-export-table]").forEach(exportControls => {
-  exportControls.innerHTML = '<button class="button button-secondary" type="button" data-report-export="csv"><i data-lucide="file-spreadsheet"></i><span>Exportar CSV</span></button><button class="button button-secondary" type="button" data-report-export="pdf"><i data-lucide="file-text"></i><span>Gerar PDF</span></button>';
+  exportControls.innerHTML = '<button class="button button-secondary" type="button" data-report-export="csv"><i data-lucide="file-spreadsheet"></i><span>Exportar CSV</span></button><button class="button button-secondary" type="button" data-report-export="xlsx"><i data-lucide="table"></i><span>Exportar Excel</span></button><button class="button button-secondary" type="button" data-report-export="pdf"><i data-lucide="file-text"></i><span>Gerar PDF</span></button>';
   exportControls.addEventListener("click", event => {
     const exportButton = event.target.closest("[data-report-export]");
     if (!exportButton) return;
@@ -3607,6 +3638,7 @@ document.querySelectorAll("[data-report-export-table]").forEach(exportControls =
       return;
     }
     if (exportButton.dataset.reportExport === "csv") downloadReportCsv(title, main.headers, main.rows, extraSections);
+    else if (exportButton.dataset.reportExport === "xlsx") downloadReportXlsx(title, main.headers, main.rows, extraSections);
     else printReportTable(title, main.headers, main.rows, extraSections);
   });
 });
@@ -3677,85 +3709,6 @@ on("meta4-body", "change", event => {
   showToast(control.matches("[data-meta4-launch]")
     ? `Lançamento de ${request.person || "servidor"} atualizado para ${request.meta4Launch === "sim" ? "Sim" : "Não"}.`
     : `Data M4 de ${request.person || "servidor"} atualizada.`);
-});
-const accountPasswordDialog = document.getElementById("account-password-dialog");
-const accountPasswordForm = document.getElementById("account-password-form");
-const accountPasswordMessage = document.getElementById("account-password-message");
-on("open-password-change", "click", () => {
-  accountPasswordForm.reset();
-  accountPasswordMessage.textContent = "";
-  accountPasswordMessage.classList.remove("error");
-  accountPasswordDialog.showModal();
-});
-on("account-password-cancel", "click", () => accountPasswordDialog.close());
-accountPasswordForm.addEventListener("submit", async event => {
-  event.preventDefault();
-  accountPasswordMessage.textContent = "";
-  accountPasswordMessage.classList.remove("error");
-  const currentPassword = document.getElementById("account-current-password").value;
-  const newPassword = document.getElementById("account-new-password").value;
-  const confirmPassword = document.getElementById("account-confirm-password").value;
-  if (newPassword !== confirmPassword) {
-    accountPasswordMessage.textContent = "A confirmação não corresponde à nova senha.";
-    accountPasswordMessage.classList.add("error");
-    return;
-  }
-  if (newPassword === currentPassword) {
-    accountPasswordMessage.textContent = "A nova senha deve ser diferente da senha atual.";
-    accountPasswordMessage.classList.add("error");
-    return;
-  }
-
-  try {
-    const username = String(sessionStorage.getItem("brisa-demo-username") || "").toLowerCase();
-    if (username === "centralrh") {
-      const savedCredential = localStorage.getItem(adminPasswordStorageKey);
-      let isCurrentPasswordValid = currentPassword === initialAdminPassword;
-      if (savedCredential) {
-        const credential = JSON.parse(savedCredential);
-        isCurrentPasswordValid = Boolean(credential?.salt && credential?.passwordHash)
-          && await hashServerPassword(currentPassword, credential.salt) === credential.passwordHash;
-      }
-      if (!isCurrentPasswordValid) {
-        accountPasswordMessage.textContent = "A senha atual está incorreta.";
-        accountPasswordMessage.classList.add("error");
-        return;
-      }
-      const salt = toHex(crypto.getRandomValues(new Uint8Array(16)));
-      const passwordHash = await hashServerPassword(newPassword, salt);
-      localStorage.setItem(adminPasswordStorageKey, JSON.stringify({ salt, passwordHash }));
-    } else {
-      const profile = JSON.parse(sessionStorage.getItem("brisa-demo-profile") || "null");
-      const cpfDigits = String(profile?.cpf || username).replace(/\D/g, "");
-      const account = serverAccounts.find(item => String(item.cpf || "").replace(/\D/g, "") === cpfDigits);
-      if (!account?.salt || !account.passwordHash) {
-        accountPasswordMessage.textContent = "Não foi possível localizar as credenciais desta conta.";
-        accountPasswordMessage.classList.add("error");
-        return;
-      }
-      if (await hashServerPassword(currentPassword, account.salt) !== account.passwordHash) {
-        accountPasswordMessage.textContent = "A senha atual está incorreta.";
-        accountPasswordMessage.classList.add("error");
-        return;
-      }
-      const previousSalt = account.salt;
-      const previousPasswordHash = account.passwordHash;
-      account.salt = toHex(crypto.getRandomValues(new Uint8Array(16)));
-      account.passwordHash = await hashServerPassword(newPassword, account.salt);
-      if (!saveServerAccounts()) {
-        account.salt = previousSalt;
-        account.passwordHash = previousPasswordHash;
-        accountPasswordMessage.textContent = "Não foi possível salvar a nova senha.";
-        accountPasswordMessage.classList.add("error");
-        return;
-      }
-    }
-    accountPasswordForm.reset();
-    accountPasswordMessage.textContent = "Senha alterada com sucesso.";
-  } catch {
-    accountPasswordMessage.textContent = "Não foi possível alterar a senha neste navegador.";
-    accountPasswordMessage.classList.add("error");
-  }
 });
 on("task-entry-form", "submit", addTask);
 on("task-list", "change", event => {
@@ -3873,6 +3826,17 @@ on("server-data-export-csv", "click", () => {
   downloadLink.click();
   downloadLink.remove();
   setTimeout(() => URL.revokeObjectURL(downloadUrl), 0);
+});
+on("server-data-export-xlsx", "click", () => {
+  const records = getFilteredServerPersonalData();
+  if (!records.length) {
+    showToast("Não há servidores para exportar com o filtro atual.");
+    return;
+  }
+  const columns = serverDataExportColumns;
+  const headers = columns.map(([title]) => title);
+  const rows = records.map(record => columns.map(([, valueOf]) => valueOf(record) || ""));
+  downloadReportXlsx("Cadastro de servidores", headers, rows);
 });
 on("server-data-export-pdf", "click", () => {
   const records = getFilteredServerPersonalData();
@@ -4452,7 +4416,11 @@ on("usuarios-body", "change", event => {
   }
   const previousPerfil = user.perfil;
   user.perfil = perfilSelect.value === "admin" ? "admin" : "usuario";
-  saveUsuarios();
+  if (!saveUsuarios()) {
+    user.perfil = previousPerfil;
+    renderUsuarios();
+    return;
+  }
   renderUsuarios();
   showToast(`Perfil de ${user.name} atualizado para ${user.perfil === "admin" ? "Administrador" : "Usuário"}.`);
 });

@@ -30,6 +30,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
     <script src="firebase-sync.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
     <script src="app.js" defer></script>
   </head>
   <body>
@@ -100,7 +101,6 @@
             <button class="icon-button notification-button" aria-label="Notificações"><i data-lucide="bell"></i><span></span></button>
             <div class="topbar-account">
               <button class="topbar-profile" type="button" aria-label="Perfil do usuário"><span class="avatar avatar-profile" id="profile-avatar">A</span><span class="profile-copy"><strong id="profile-name">Administrador</strong><small id="profile-role">Acesso administrativo</small></span></button>
-              <button class="logout-button" id="open-password-change" type="button">Alterar senha</button>
               <a class="logout-button topbar-logout" href="login.html" data-logout><i data-lucide="log-out"></i><span>Sair</span></a>
             </div>
           </div>
@@ -341,16 +341,6 @@
         </form>
       </section>
       <div class="request-details-dialog-actions" id="request-details-actions"></div>
-    </dialog>
-    <dialog class="account-password-dialog" id="account-password-dialog" aria-labelledby="account-password-title">
-      <div class="request-details-dialog-heading"><div><p class="section-kicker">CONTA</p><h2 id="account-password-title">Alterar senha</h2></div><form method="dialog"><button class="icon-button" aria-label="Fechar"><i data-lucide="x"></i></button></form></div>
-      <form id="account-password-form">
-        <label for="account-current-password">Senha atual<input id="account-current-password" type="password" autocomplete="current-password" minlength="6" required /></label>
-        <label for="account-new-password">Nova senha<input id="account-new-password" type="password" autocomplete="new-password" minlength="6" required /></label>
-        <label for="account-confirm-password">Confirme a nova senha<input id="account-confirm-password" type="password" autocomplete="new-password" minlength="6" required /></label>
-        <p id="account-password-message" role="status" aria-live="polite"></p>
-        <div class="request-details-dialog-actions"><button class="button button-secondary" type="button" id="account-password-cancel">Cancelar</button><button class="button button-primary" type="submit"><i data-lucide="key-round"></i><span>Salvar nova senha</span></button></div>
-      </form>
     </dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"><i data-lucide="circle-check"></i><span></span></div>
   </body>

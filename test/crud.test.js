@@ -21,7 +21,7 @@ const readSource = file => fs.readFileSync(path.join(root, file), "utf8");
 
 // `let`/`const` de topo do app.js ficam presos ao escopo do eval. Este trecho é
 // anexado só nos testes para conseguirmos ler o estado interno do app.
-const STATE_SHIM = "\n;window.__state = () => ({ unidades, cargos, quadros, funcoesGratificadas, fgFunctionOptions, serverPersonalData, usuarios, tasks, fgServerRoster, requests, shownMonth, requestFilter, requestTypeFilter });\nwindow.__planServerImport = rows => planServerImport(rows);";
+const STATE_SHIM = "\n;window.__state = () => ({ unidades, cargos, quadros, funcoesGratificadas, fgFunctionOptions, serverPersonalData, usuarios, tasks, fgServerRoster, requests, shownMonth, requestFilter, requestTypeFilter });\nwindow.__planServerImport = rows => planServerImport(rows);\nwindow.__exportXlsx = (title, headers, rows, extra) => downloadReportXlsx(title, headers, rows, extra);";
 
 const DEFAULT_ESCALA = { equipes: ["Bravo", "Charlie", "Delta", "Alfa"], dataBase: "2026-10-01", cicloDias: 4 };
 
@@ -92,6 +92,12 @@ async function bootApp(options = {}) {
     return "blob:test";
   };
   window.URL.revokeObjectURL = () => {};
+  // Permite semear o localStorage antes do app.js rodar (ex.: dados corrompidos).
+  if (options.localStorage) {
+    for (const [key, value] of Object.entries(options.localStorage)) {
+      window.localStorage.setItem(key, value);
+    }
+  }
 
   const dialogProto = window.HTMLDialogElement && window.HTMLDialogElement.prototype;
   if (dialogProto) {
@@ -989,6 +995,7 @@ test("solicitações: lançar, listar, editar e excluir", async () => {
     assert.ok(request, "a solicitação deveria ser criada");
     assert.equal(request.status, "approved");
     assert.equal(request.days, 11);
+    assert.ok(!request.ciclo, "férias não deve gravar ciclo");
     assert.ok(app.sync._all("requests").some(r => r.id === request.id), "deveria ir para a nuvem");
 
     // Listar as aprovadas (a lista "full" renderiza as ações de editar/excluir)
@@ -1013,6 +1020,59 @@ test("solicitações: lançar, listar, editar e excluir", async () => {
     assert.ok(!state().requests.some(r => r.id === request.id));
     assert.equal(state().requests.length, initial);
     assert.ok(!app.sync._all("requests").some(r => r.id === request.id), "a exclusão deveria refletir na nuvem");
+  });
+});
+
+test("solicitações: lançar licença prêmio grava o ciclo escolhido", async () => {
+  await withApp({}, async app => {
+    const { state } = app;
+    createServer(app, { name: "Servidor Premio", cpf: "85274196300", email: "servidor.premio@pp.pr.gov.br" });
+    await app.settle();
+    const serverId = findId(state().serverPersonalData, s => s.name === "Servidor Premio");
+
+    // A tela de lançamento de licença prêmio usa o mesmo painel, com o seletor de ciclo.
+    app.click('[data-view="vacation-launch-premio"]');
+    await app.settle();
+    const cycleSelect = app.byId("vacation-launch-cycle");
+    assert.ok(cycleSelect, "deve existir o seletor de ciclo");
+    assert.equal(cycleSelect.required, true, "o ciclo deve ser obrigatório na licença prêmio");
+
+    const launchForm = app.byId("vacation-launch-form");
+    app.byId("vacation-launch-server").value = serverId;
+    launchForm.elements["vacation-launch-start"].value = "2026-12-01";
+    launchForm.elements["vacation-launch-end"].value = "2026-12-05";
+    launchForm.elements["vacation-launch-cycle"].value = "A";
+    app.submit(launchForm);
+    await app.settle();
+
+    const request = state().requests.find(r => r.person === "Servidor Premio");
+    assert.ok(request, "a licença prêmio deveria ser criada");
+    assert.equal(request.type, "Licença prêmio");
+    assert.equal(request.ciclo, "A");
+  });
+});
+
+test("solicitações: lançar licença prêmio sem ciclo é recusado", async () => {
+  await withApp({}, async app => {
+    const { state } = app;
+    const initial = state().requests.length;
+    createServer(app, { name: "Servidor Sem Ciclo", cpf: "96385274100", email: "servidor.sem.ciclo@pp.pr.gov.br" });
+    await app.settle();
+    const serverId = findId(state().serverPersonalData, s => s.name === "Servidor Sem Ciclo");
+
+    app.click('[data-view="vacation-launch-premio"]');
+    await app.settle();
+
+    const launchForm = app.byId("vacation-launch-form");
+    app.byId("vacation-launch-server").value = serverId;
+    launchForm.elements["vacation-launch-start"].value = "2026-12-10";
+    launchForm.elements["vacation-launch-end"].value = "2026-12-15";
+    launchForm.elements["vacation-launch-cycle"].value = "";
+    app.submit(launchForm);
+    await app.settle();
+
+    assert.equal(state().requests.length, initial, "não deveria lançar sem o ciclo");
+    assert.ok(!state().requests.some(r => r.person === "Servidor Sem Ciclo"));
   });
 });
 
@@ -1278,5 +1338,71 @@ test("backup: exporta um JSON com os dados e restaura na nuvem", async () => {
     await app.settle();
     assert.match(app.byId("backup-message").textContent, /Restauração concluída/);
     assert.ok(app.sync._all("unidades").some(u => u.name === "Unidade Restaurada"), "a unidade restaurada deveria ir para a nuvem");
+  });
+});
+
+// =========================================================================
+// Resiliência do armazenamento local
+// =========================================================================
+
+test("resiliência: localStorage corrompido não quebra o carregamento", async () => {
+  // Simula um navegador com dados inválidos gravados (ex.: versão antiga,
+  // escrita interrompida ou edição manual). O app deve carregar normalmente,
+  // caindo para os valores padrão em vez de lançar erro.
+  await withApp({
+    localStorage: {
+      "brisa-vacation-requests-v1": "{isto não é json",
+      "brisa-server-personal-data-v1": "não-e-array[",
+      "brisa-unidades-v2": "{{{",
+      "brisa-cargos-v1": "]",
+      "brisa-quadros-v1": "null-null",
+      "brisa-fg-functions-v1": "corrompido",
+      "brisa-fg-server-roster-v1": "]",
+      "brisa-server-accounts-v1": "@@@",
+      "brisa-firestore-sync-state-v1": "quebrado"
+    }
+  }, async app => {
+    // A tela precisa existir e o estado interno deve ser utilizável.
+    assert.ok(app.byId("vacation-launch-form"), "a página deveria carregar mesmo com o armazenamento corrompido");
+    assert.ok(Array.isArray(app.state().requests), "as solicitações deveriam cair para o padrão");
+    assert.ok(Array.isArray(app.state().serverPersonalData), "os servidores deveriam cair para o padrão");
+    assert.ok(Array.isArray(app.state().unidades), "as unidades deveriam cair para o padrão");
+    assert.ok(app.state().unidades.length > 0, "as unidades padrão deveriam ser carregadas");
+    assert.ok(Array.isArray(app.state().fgServerRoster), "a lista de Função Gratificada deveria cair para o padrão");
+  });
+});
+
+// =========================================================================
+// Exportação em Excel
+// =========================================================================
+
+test("relatórios: exportação em .xlsx monta a planilha e baixa o arquivo", async () => {
+  await withApp({}, async app => {
+    // Substitui o SheetJS (não carregado no jsdom) por um espião.
+    const writeCalls = [];
+    let sheetAoa = null;
+    app.window.XLSX = {
+      utils: {
+        aoa_to_sheet: aoa => { sheetAoa = aoa; return { aoa }; },
+        book_new: () => ({}),
+        book_append_sheet: () => {}
+      },
+      writeFile: (workbook, filename) => writeCalls.push(filename)
+    };
+
+    app.window.__exportXlsx(
+      "Relatório por ano",
+      ["Ano", "Total"],
+      [["2026", "5"]],
+      [{ label: "Servidores com Função Gratificada", headers: ["Nome"], rows: [["Ana"]] }]
+    );
+
+    // Montou o cabeçalho + linhas e anexou a seção extra abaixo.
+    assert.deepEqual(sheetAoa[0], ["Ano", "Total"]);
+    assert.deepEqual(sheetAoa[1], ["2026", "5"]);
+    assert.ok(sheetAoa.some(row => row[0] === "Servidores com Função Gratificada"), "deve incluir a seção extra");
+    // Baixou um único arquivo .xlsx com o nome do relatório.
+    assert.equal(writeCalls.length, 1);
+    assert.match(writeCalls[0], /^relatorio-por-ano-\d{4}-\d{2}-\d{2}\.xlsx$/);
   });
 });

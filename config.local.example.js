@@ -9,9 +9,6 @@
  * `googleAdminEmails` em config.js); não há mais senha padrão de administrador.
  */
 window.RH_CONFIG = Object.assign({}, window.RH_CONFIG, {
-  // (legado) Senha inicial do administrador (usuário "centralrh").
-  initialAdminPassword: "defina-uma-senha-forte"
-
   // Opcional: sobrescrever valores públicos (normalmente definidos em config.js)
   // googleClientId: "SEU-CLIENT-ID.apps.googleusercontent.com",
   // googleAdminEmails: ["voce@exemplo.com"]

@@ -17,5 +17,7 @@ jobs:
           cache: npm
       - name: Instalar dependências de teste
         run: npm ci
+      - name: Rodar o linter (ESLint)
+        run: npm run lint
       - name: Rodar testes (funções puras + fumaça + CRUD)
         run: npm test

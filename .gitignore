@@ -20,11 +20,11 @@ $RECYCLE.BIN/
 *.tmp
 *.bak
 
-# Dependências de desenvolvimento (testes)
+# Dependências de desenvolvimento (testes e lint)
 node_modules/
 
 # Rascunhos locais
 .tmp-check/
 
-# Configuração local com segredos (senha inicial do administrador)
+# Configuração local com segredos (credenciais do Firebase)
 config.local.js
