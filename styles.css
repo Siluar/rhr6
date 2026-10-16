@@ -250,7 +250,7 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 .current-vacations-filter input { min-width: 0; color: #000; font-size: 12px; }
 .current-month-label { color: #000; font-size: 13px; font-weight: 700; }
 .current-vacations-table-wrap { width: 100%; }
-.current-vacations-table { width: max-content; min-width: 100%; table-layout: auto; border-collapse: collapse; color: #000; }
+.current-vacations-table { width: 100%; min-width: 0; table-layout: auto; border-collapse: collapse; color: #000; }
 .current-vacations-table th { padding: 12px 10px; border-bottom: 1px solid #9ca99e; color: #000; font-size: 12px; text-align: left; }
 .current-vacations-table td { padding: 12px 10px; border-bottom: 1px solid #d3d9d2; color: #000; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; vertical-align: top; }
 .current-vacations-table th:first-child, .current-vacations-table td:first-child { width: 32%; }
@@ -280,7 +280,7 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 .report-capacitacao-name-filter input { color: #000; font-size: 12px; }
 #view-report-capacitacao .report-capacitacao-filters .report-unit-filter, #view-report-especial .report-capacitacao-filters .report-unit-filter { color: #f2f4f5; }
 #view-report-capacitacao .report-capacitacao-filters select, #view-report-especial .report-capacitacao-filters select { min-height: 38px; padding: 0 10px; border: 1px solid #9ba5ac; border-radius: 5px; background: #fff; color: #20272c; font: inherit; }
-.detailed-report-table { width: max-content; min-width: 100%; border-collapse: collapse; color: #000; font-size: 12px; text-align: left; }
+.detailed-report-table { width: 100%; min-width: 0; border-collapse: collapse; color: #000; font-size: 12px; text-align: left; }
 .detailed-report-table th, .detailed-report-table td { padding: 11px 10px; border-bottom: 1px solid #d3d9d2; }
 .detailed-report-table thead th { border-bottom-color: #9ca99e; font-size: 11px; }
 .detailed-report-table tbody th { font-weight: 600; }
@@ -405,8 +405,12 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 .usuario-perfil-select { min-height: 32px; padding: 4px 8px; border: 1px solid #c4cbc3; border-radius: 5px; background: #fff; color: #20272c; font: inherit; font-size: 12px; }
 .server-data-panel { margin-top: 14px; }
 .detailed-report-table-wrap, .current-vacations-table-wrap { max-width: 100%; overflow-x: auto; }
-.detailed-report-table, .current-vacations-table { min-width: max-content; }
-.detailed-report-table th, .detailed-report-table td, .current-vacations-table th, .current-vacations-table td { white-space: nowrap; overflow-wrap: normal; }
+.detailed-report-table, .current-vacations-table { width: 100%; min-width: 0; }
+.detailed-report-table th, .detailed-report-table td, .current-vacations-table th, .current-vacations-table td { white-space: normal; overflow-wrap: anywhere; }
+/* Controles dentro das células (seletores/entradas de edição) não podem alargar
+   a coluna: encolhem junto com a célula para a tabela caber sem rolagem. */
+.detailed-report-table td select, .detailed-report-table td input,
+.detailed-report-table td textarea { width: 100%; max-width: 100%; min-width: 0; }
 #view-report-unit .detailed-report-table { table-layout: auto; }
 .server-fg-content { padding-top: 8px; }
 .task-list-panel { width: 100%; max-width: none; }
@@ -462,7 +466,7 @@ h1 { margin-bottom: 6px; font-family: "Fraunces", Georgia, serif; font-size: 32p
 #view-server-fg .detailed-report-table th:nth-child(4), #view-server-fg .detailed-report-table td:nth-child(4) { width: 22%; }
 #view-server-fg .detailed-report-table th:last-child, #view-server-fg .detailed-report-table td:last-child { width: 10%; }
 #view-server-fg .detailed-report-table td.detailed-report-empty { width: auto; text-align: center; }
-.fg-function-select { width: 100%; min-height: 32px; padding: 0 6px; border: 1px solid #c4cbc3; border-radius: 5px; background: #fff; color: #000; font: inherit; font-size: 12px; }
+.fg-function-select { width: 100%; max-width: 100%; min-width: 0; min-height: 32px; padding: 0 6px; border: 1px solid #c4cbc3; border-radius: 5px; background: #fff; color: #000; font: inherit; font-size: 12px; }
 .server-fg-form { display: flex; max-width: 1000px; align-items: end; gap: 12px; margin: 16px 0 22px; color: #000; font-size: 12px; font-weight: 600; }
 .server-fg-form label { display: grid; min-width: 0; flex: 1; gap: 6px; }
 .server-fg-form input, .server-fg-form select { width: 100%; min-height: 38px; padding: 0 10px; border: 1px solid #c4cbc3; border-radius: 5px; background: #fff; color: #000; font: inherit; }
